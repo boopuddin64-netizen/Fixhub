@@ -1,0 +1,6 @@
+{
+  "name": "Fix Hub",
+  "description": "Location-based phone repair marketplace connecting customers with vetted nearby technicians with transparent quotes, secure escrow payments, device check-in, repair passport, and warranty records.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
