@@ -32,11 +32,12 @@ export const RepairChatDrawer: React.FC<RepairChatDrawerProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const fetchMessages = async () => {
+    if (!user) return;
     try {
       const list = await ApiClient.getMessages(repairId);
-      setMessages(list);
+      setMessages(list || []);
     } catch (err) {
-      console.error(err);
+      // Silently catch in polling loop
     }
   };
 

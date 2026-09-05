@@ -20,14 +20,14 @@ export const WarrantyPassportView: React.FC = () => {
 
   useEffect(() => {
     Promise.all([
-      ApiClient.getMyWarranties(),
-      ApiClient.getJobs(),
+      ApiClient.getMyWarranties().catch(() => []),
+      ApiClient.getJobs().catch(() => []),
     ])
       .then(([wList, jList]) => {
-        setWarranties(wList);
-        setCompletedJobs(jList.filter((j) => j.status === 'COMPLETED'));
+        setWarranties(wList || []);
+        setCompletedJobs((jList || []).filter((j) => j.status === 'COMPLETED'));
       })
-      .catch(console.error)
+      .catch(() => {})
       .finally(() => setIsLoading(false));
   }, []);
 

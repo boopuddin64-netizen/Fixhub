@@ -1,17 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { ApiClient } from '../../api/client';
 import {
   Wrench,
   User as UserIcon,
   Bell,
-  Sparkles,
   RotateCcw,
   Smartphone,
   ShieldCheck,
   Check,
   LogOut,
-  AlertCircle
+  AlertCircle,
+  Building2,
+  ChevronDown
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -20,45 +21,10 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenNotifications, unreadNotifsCount }) => {
-  const { user, role, switchDemoUser, logout, isBorrowedDevice } = useAuth();
-  const [showSwitcher, setShowSwitcher] = useState(false);
+  const { user, role, logout, isBorrowedDevice } = useAuth();
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
-
-  const demoAccounts = [
-    {
-      name: 'Tunde Adebayo',
-      role: 'Customer',
-      email: 'customer@test.fixhub.local',
-      location: 'Allen Avenue, Ikeja, Lagos',
-      badge: 'Active iPhone 13 Screen Repair',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    },
-    {
-      name: 'Emeka Okafor (Emeka Phone Labs)',
-      role: 'Technician',
-      email: 'technician@test.fixhub.local',
-      location: 'Computer Village, Ikeja (0.8 km)',
-      badge: '⭐ 4.9 • 214 Completed • Verified Shop',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    },
-    {
-      name: 'Kolawole Balogun (VI Hub)',
-      role: 'Technician',
-      email: 'kola@test.fixhub.local',
-      location: 'Victoria Island, Lagos',
-      badge: '⭐ 4.8 • 165 Completed',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-    },
-    {
-      name: 'Fatima Ibrahim (Yaba Express)',
-      role: 'Technician',
-      email: 'fatima@test.fixhub.local',
-      location: 'Herbert Macaulay, Yaba',
-      badge: '⭐ 4.7 • 142 Completed',
-      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
-    },
-  ];
 
   const handleResetData = async () => {
     setIsResetting(true);
@@ -119,18 +85,21 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNotifications, unreadNotif
 
           {/* Right Action Controls */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* 1-Click Role/Account Switcher */}
+            {/* User Account & Switcher Menu Button */}
             <button
-              id="open-demo-switcher-btn"
-              onClick={() => setShowSwitcher(true)}
+              id="open-account-menu-btn"
+              onClick={() => setShowAccountMenu(true)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-all cursor-pointer"
-              title="Switch between Customer & Technician Demo Accounts"
             >
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden sm:inline">Role Switcher:</span>
-              <span className="text-white font-semibold capitalize max-w-[120px] truncate">
-                {user?.name?.split(' ')[0] || 'Demo User'}
+              {role === 'technician' ? (
+                <Wrench className="w-3.5 h-3.5 text-indigo-400" />
+              ) : (
+                <UserIcon className="w-3.5 h-3.5 text-blue-400" />
+              )}
+              <span className="text-white font-semibold max-w-[120px] truncate">
+                {user?.name || 'Account'}
               </span>
+              <ChevronDown className="w-3 h-3 text-slate-400" />
             </button>
 
             {/* Notifications Bell */}
@@ -151,99 +120,71 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNotifications, unreadNotif
         </div>
       </header>
 
-      {/* Demo Switcher & Seed Reset Modal */}
-      {showSwitcher && (
+      {/* Account Menu & Logout Modal */}
+      {showAccountMenu && (
         <div
-          id="demo-switcher-modal"
+          id="account-menu-modal"
           className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4"
         >
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 text-slate-900 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+          <div className="bg-slate-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-800 text-white animate-in fade-in zoom-in-95 duration-150 space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <Sparkles className="w-4 h-4" />
+                <div className="w-9 h-9 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center">
+                  <UserIcon className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-slate-900">1-Click Test Account Switcher</h3>
-                  <p className="text-xs text-slate-500">Instantly experience both sides of Fix Hub</p>
+                  <h3 className="font-bold text-sm text-white">Active Account Session</h3>
+                  <p className="text-xs text-slate-400">Authenticated user details</p>
                 </div>
               </div>
               <button
-                onClick={() => setShowSwitcher(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 text-sm font-semibold cursor-pointer"
+                onClick={() => setShowAccountMenu(false)}
+                className="text-slate-400 hover:text-white p-1 text-sm font-semibold cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <div className="py-4 space-y-2.5">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Select Active Persona:</p>
-              {demoAccounts.map((acc) => {
-                const isActive = user?.email === acc.email;
-                return (
-                  <button
-                    key={acc.email}
-                    onClick={() => {
-                      switchDemoUser(acc.email);
-                      setShowSwitcher(false);
-                    }}
-                    className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between gap-3 cursor-pointer ${
-                      isActive
-                        ? 'border-blue-600 bg-blue-50/50 shadow-xs'
-                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <img
-                        src={acc.avatar}
-                        alt={acc.name}
-                        className="w-10 h-10 rounded-full object-cover shrink-0 border border-slate-200"
-                      />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-semibold text-slate-900 truncate">{acc.name}</p>
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                              acc.role === 'Customer'
-                                ? 'bg-indigo-100 text-indigo-700'
-                                : 'bg-emerald-100 text-emerald-800'
-                            }`}
-                          >
-                            {acc.role}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 truncate">{acc.location}</p>
-                        <p className="text-[11px] text-blue-600 font-medium truncate mt-0.5">{acc.badge}</p>
-                      </div>
-                    </div>
-                    {isActive && (
-                      <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0">
-                        <Check className="w-3.5 h-3.5" />
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
+            {/* User Details */}
+            <div className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold text-sm text-white">{user?.name}</span>
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    role === 'customer'
+                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                      : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                  }`}
+                >
+                  {role === 'customer' ? 'Customer' : 'Certified Technician'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 font-mono">{user?.email}</p>
+              {user?.phone && <p className="text-xs text-slate-400">{user.phone}</p>}
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+            {/* Action Buttons */}
+            <div className="space-y-2 pt-2 border-t border-slate-800">
+              <button
+                id="switch-account-logout-btn"
+                onClick={() => {
+                  setShowAccountMenu(false);
+                  logout();
+                }}
+                className="w-full py-3 bg-red-600/20 hover:bg-red-600/30 text-red-300 hover:text-red-200 border border-red-500/30 font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Log Out & Return to Login Switch</span>
+              </button>
+
               <button
                 id="reset-seed-data-btn"
                 onClick={handleResetData}
                 disabled={isResetting}
-                className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-rose-600 font-medium py-2 px-2.5 rounded-lg border border-slate-200 hover:border-rose-200 hover:bg-rose-50/50 transition-colors cursor-pointer"
-                title="Reset database to initial seed"
+                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all"
               >
                 <RotateCcw className={`w-3.5 h-3.5 ${isResetting ? 'animate-spin' : ''}`} />
                 <span>{resetSuccess ? 'Reset Complete!' : 'Reset Demo Database'}</span>
-              </button>
-
-              <button
-                onClick={logout}
-                className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 font-medium py-2 px-3 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Log Out</span>
               </button>
             </div>
           </div>

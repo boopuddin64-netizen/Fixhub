@@ -42,9 +42,12 @@ export class ApiClient {
       headers,
     });
 
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
+      if (response.status === 401) {
+        ApiClient.removeToken();
+      }
       throw new Error(data.error || data.message || `Request failed with status ${response.status}`);
     }
 
@@ -110,6 +113,13 @@ export class ApiClient {
     return this.request<any>('/technicians/availability', {
       method: 'POST',
       body: JSON.stringify({ status }),
+    });
+  }
+
+  public static updateTechnicianProfile(data: any) {
+    return this.request<any>('/technicians/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
     });
   }
 

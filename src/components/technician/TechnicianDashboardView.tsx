@@ -36,10 +36,11 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
   const [isUpdatingAvail, setIsUpdatingAvail] = useState(false);
 
   const fetchDashboardData = async () => {
+    if (!user) return;
     try {
       const [reqList, jobList] = await Promise.all([
-        ApiClient.getRepairRequests(),
-        ApiClient.getJobs(),
+        ApiClient.getRepairRequests().catch(() => []),
+        ApiClient.getJobs().catch(() => []),
       ]);
       setRequests(reqList);
       setJobs(jobList);
@@ -50,7 +51,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [user]);
 
   const handleToggleAvailability = async (newStatus: string) => {
     setIsUpdatingAvail(true);
@@ -171,14 +172,14 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
                     </p>
                   </div>
                   <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">
-                    {req.quotes.length} Quote(s)
+                    {req.quotes?.length ?? req.quotesCount ?? 0} Quote(s)
                   </span>
                 </div>
 
                 <div className="flex flex-wrap gap-1.5">
-                  {req.issues.map((iss, i) => (
+                  {(req.issues || []).map((iss, i) => (
                     <span key={i} className="text-[11px] bg-slate-100 text-slate-800 px-2 py-0.5 rounded font-medium">
-                      {iss.replace('_', ' ')}
+                      {(iss || '').replace(/_/g, ' ')}
                     </span>
                   ))}
                 </div>
@@ -231,7 +232,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
                     <StatusBadge status={job.status} size="sm" />
                   </div>
                   <p className="text-xs text-slate-500 mt-1">
-                    Job ID: <span className="font-mono text-slate-700">{job.id}</span> • Escrow: <strong className="text-emerald-700">₦{job.finalAmount.toLocaleString()}</strong>
+                    Job ID: <span className="font-mono text-slate-700">{job.id}</span> • Escrow: <strong className="text-emerald-700">₦{(job.finalAmount || job.originalQuoteAmount || 0).toLocaleString()}</strong>
                   </p>
                 </div>
 

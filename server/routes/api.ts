@@ -673,20 +673,25 @@ apiRouter.get('/parts/technician/:id', (req: Request, res: Response) => {
 });
 
 apiRouter.post('/parts', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
-  const { name, deviceBrand, deviceModel, quality, priceNaira, inStockCount, warrantyDays, photoUrl } = req.body;
-  if (!name || priceNaira === undefined) {
+  const { name, partName, deviceBrand, deviceModel, quality, priceNaira, inStockCount, stockQuantity, warrantyDays, photoUrl } = req.body;
+  const resolvedName = name || partName;
+  if (!resolvedName || priceNaira === undefined) {
     return res.status(400).json({ error: 'Part name and price are required.' });
   }
+
+  const resolvedStock = inStockCount !== undefined ? Number(inStockCount) : (stockQuantity !== undefined ? Number(stockQuantity) : 5);
 
   const part = {
     id: `part_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     technicianId: req.user!.id,
-    name,
+    name: resolvedName,
+    partName: resolvedName,
     deviceBrand: deviceBrand || 'All',
     deviceModel: deviceModel || 'All Models',
     quality: quality || 'PREMIUM_AFTERMARKET',
     priceNaira: Number(priceNaira),
-    inStockCount: inStockCount !== undefined ? Number(inStockCount) : 5,
+    inStockCount: resolvedStock,
+    stockQuantity: resolvedStock,
     warrantyDays: warrantyDays !== undefined ? Number(warrantyDays) : 60,
     photoUrl,
   };
@@ -694,6 +699,43 @@ apiRouter.post('/parts', requireAuth, requireRole(['technician']), (req: Authent
   db.technicianParts.push(part);
   db.save();
   return res.status(201).json(part);
+});
+
+apiRouter.put('/technicians/profile', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
+  const tech = db.technicianProfiles.find((t) => t.userId === req.user!.id);
+  const user = db.users.find((u) => u.id === req.user!.id);
+  if (!tech || !user) return res.status(404).json({ error: 'Technician not found.' });
+
+  const { businessName, bio, shopLocation, businessHours, phone, supportedBrands, bankDetails } = req.body;
+  if (businessName) {
+    tech.businessName = businessName;
+    user.name = businessName;
+  }
+  if (bio !== undefined) tech.bio = bio;
+  if (businessHours) tech.businessHours = businessHours;
+  if (phone) {
+    tech.phone = phone;
+    user.phone = phone;
+  }
+  if (supportedBrands) tech.supportedBrands = supportedBrands;
+  if (shopLocation) {
+    tech.shopLocation = {
+      ...tech.shopLocation,
+      ...shopLocation,
+    };
+  }
+  if (bankDetails) {
+    tech.bankDetails = {
+      bankName: bankDetails.bankName || 'Access Bank',
+      accountNumber: bankDetails.accountNumber || '',
+      accountName: bankDetails.accountName || businessName || user.name,
+      verified: true,
+    };
+    tech.verificationStatus.payoutVerified = true;
+  }
+
+  db.save();
+  return res.json({ success: true, profile: tech, user });
 });
 
 apiRouter.post('/technicians/availability', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {

@@ -83,15 +83,15 @@ export const QuoteComparisonView: React.FC<QuoteComparisonViewProps> = ({
               {request.deviceBrand} {request.deviceModel}
             </h2>
             <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/30 text-cyan-300 font-semibold border border-blue-400/30">
-              {request.issues.length} Issue(s)
+              {(request.issues || []).length} Issue(s)
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
-            {request.customerLocation.address} ({request.customerLocation.area || request.customerLocation.city})
+            {request.customerLocation?.address || 'Lagos'} ({request.customerLocation?.area || request.customerLocation?.city || 'Lagos'})
           </p>
         </div>
         <div className="text-right">
-          <span className="text-2xl font-extrabold text-cyan-400">{quotes.length}</span>
+          <span className="text-2xl font-extrabold text-cyan-400">{(quotes || []).length}</span>
           <p className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Quote(s) Received</p>
         </div>
       </div>

@@ -34,31 +34,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setTechnicianProfile(data.technicianProfile || null);
       setIsBorrowedDevice(ApiClient.isBorrowedDevice());
     } catch {
+      ApiClient.removeToken();
       setUser(null);
       setCustomerProfile(null);
       setTechnicianProfile(null);
-      ApiClient.removeToken();
+      setIsBorrowedDevice(false);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    // Initial check or default login for instant evaluation
     const token = localStorage.getItem('fixhub_token');
     if (token) {
       refreshUser();
     } else {
-      // Default to Tunde (Customer) so evaluator sees a ready-to-use live app immediately
-      ApiClient.login('customer@test.fixhub.local', 'password123')
-        .then((data) => {
-          ApiClient.setToken(data.token);
-          setUser(data.user);
-          setCustomerProfile(data.customerProfile || null);
-          setTechnicianProfile(data.technicianProfile || null);
-        })
-        .catch(() => {})
-        .finally(() => setIsLoading(false));
+      setUser(null);
+      setCustomerProfile(null);
+      setTechnicianProfile(null);
+      setIsLoading(false);
     }
   }, [refreshUser]);
 

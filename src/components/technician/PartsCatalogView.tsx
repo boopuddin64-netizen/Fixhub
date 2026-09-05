@@ -50,12 +50,14 @@ export const PartsCatalogView: React.FC = () => {
     setIsAdding(true);
     try {
       await ApiClient.addTechnicianPart({
+        name: partName,
+        partName,
         deviceBrand,
         deviceModel,
         partCategory,
-        partName,
         quality,
         priceNaira: Number(priceNaira),
+        inStockCount: Number(stockQuantity),
         stockQuantity: Number(stockQuantity),
         warrantyDays: Number(warrantyDays),
       });
@@ -68,9 +70,9 @@ export const PartsCatalogView: React.FC = () => {
 
   const filteredParts = parts.filter(
     (p) =>
-      p.partName.toLowerCase().includes(search.toLowerCase()) ||
-      p.deviceModel.toLowerCase().includes(search.toLowerCase()) ||
-      p.deviceBrand.toLowerCase().includes(search.toLowerCase())
+      ((p.name || p.partName || '')).toLowerCase().includes(search.toLowerCase()) ||
+      ((p.deviceModel || '')).toLowerCase().includes(search.toLowerCase()) ||
+      ((p.deviceBrand || '')).toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -122,19 +124,19 @@ export const PartsCatalogView: React.FC = () => {
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   {part.deviceBrand} {part.deviceModel}
                 </span>
-                <h4 className="font-extrabold text-sm text-slate-900 mt-0.5">{part.partName}</h4>
+                <h4 className="font-extrabold text-sm text-slate-900 mt-0.5">{part.name || part.partName || 'Replacement Part'}</h4>
               </div>
-              <span className="text-sm font-extrabold text-blue-700">₦{part.priceNaira.toLocaleString()}</span>
+              <span className="text-sm font-extrabold text-blue-700">₦{Number(part.priceNaira).toLocaleString()}</span>
             </div>
 
             <div className="grid grid-cols-3 gap-2 text-center text-xs pt-2 border-t border-slate-100">
               <div className="p-2 bg-slate-50 rounded-lg">
                 <span className="block text-[10px] text-slate-400 font-semibold uppercase">Grade</span>
-                <span className="font-bold text-slate-800 text-[11px] truncate block">{part.quality.replace('_', ' ')}</span>
+                <span className="font-bold text-slate-800 text-[11px] truncate block">{(part.quality || 'STANDARD').replace(/_/g, ' ')}</span>
               </div>
               <div className="p-2 bg-slate-50 rounded-lg">
                 <span className="block text-[10px] text-slate-400 font-semibold uppercase">In Stock</span>
-                <span className="font-bold text-slate-800">{part.stockQuantity} units</span>
+                <span className="font-bold text-slate-800">{part.inStockCount ?? part.stockQuantity ?? 0} units</span>
               </div>
               <div className="p-2 bg-emerald-50 rounded-lg text-emerald-900 border border-emerald-200">
                 <span className="block text-[10px] text-emerald-700 font-semibold uppercase">Warranty</span>

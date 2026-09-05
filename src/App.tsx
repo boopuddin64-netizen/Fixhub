@@ -3,6 +3,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { Header } from './components/common/Header';
 import { BottomNav } from './components/common/BottomNav';
 import { NotificationDrawer } from './components/common/NotificationDrawer';
+import { WorkflowProgressRibbon } from './components/common/WorkflowProgressRibbon';
+import { AuthAndOnboardingGateway } from './components/auth/AuthAndOnboardingGateway';
 import { CustomerHomeView } from './components/customer/CustomerHomeView';
 import { RepairRequestWizard } from './components/customer/RepairRequestWizard';
 import { QuoteComparisonView } from './components/customer/QuoteComparisonView';
@@ -13,6 +15,7 @@ import { WarrantyPassportView } from './components/customer/WarrantyPassportView
 import { CustomerProfileView } from './components/customer/CustomerProfileView';
 import { TechnicianDashboardView } from './components/technician/TechnicianDashboardView';
 import { TechnicianJobWorkspace } from './components/technician/TechnicianJobWorkspace';
+import { TechnicianStoreSetupView } from './components/technician/TechnicianStoreSetupView';
 import { PartsCatalogView } from './components/technician/PartsCatalogView';
 import { TechnicianProfileView } from './components/technician/TechnicianProfileView';
 import { RepairChatDrawer } from './components/messaging/RepairChatDrawer';
@@ -21,7 +24,7 @@ import { RepairJob, RepairRequest, RepairQuote, NotificationItem, TechnicianProf
 import { Wrench, Plus, Sparkles, AlertCircle, Clock } from 'lucide-react';
 
 function MainAppContent() {
-  const { user, role } = useAuth();
+  const { user, role, logout } = useAuth();
 
   // Navigation State
   const [currentTab, setCurrentTab] = useState<string>('home');
@@ -43,6 +46,12 @@ function MainAppContent() {
 
   const loadData = useCallback(async () => {
     try {
+      if (!user) {
+        const techList = await ApiClient.getTechnicians().catch(() => []);
+        setTechnicians(techList);
+        return;
+      }
+
       const [jobList, reqList, notifList, techList] = await Promise.all([
         ApiClient.getJobs().catch(() => []),
         ApiClient.getRepairRequests().catch(() => []),
@@ -56,7 +65,7 @@ function MainAppContent() {
     } catch (err) {
       console.error('Failed to load application state:', err);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     loadData();
@@ -73,6 +82,11 @@ function MainAppContent() {
     }
   }, [role]);
 
+  // If user is unauthenticated, show the complete Split Onboarding & Registration Screen
+  if (!user) {
+    return <AuthAndOnboardingGateway onComplete={() => loadData()} />;
+  }
+
   const activeJobs = jobs.filter((j) => j.status !== 'COMPLETED' && j.status !== 'CANCELLED');
   const activeJob = jobs.find((j) => j.id === selectedJobId) || activeJobs[0] || jobs[0];
   const activeRequest = requests.find((r) => r.id === selectedRequestId) || requests[0];
@@ -84,6 +98,30 @@ function MainAppContent() {
       <Header
         onOpenNotifications={() => setIsNotifsOpen(true)}
         unreadNotifsCount={notifications.filter((n) => !n.read).length}
+      />
+
+      {/* Guided Workflow Progress Ribbon */}
+      <WorkflowProgressRibbon
+        currentTab={currentTab}
+        onNavigateTab={(tab) => {
+          if (tab === 'home' && role === 'customer') {
+            setShowWizard(true);
+          } else {
+            setShowWizard(false);
+          }
+          if (tab === 'warranties') {
+            setCurrentTab('passport');
+          } else if (tab === 'parts') {
+            setCurrentTab('catalog');
+          } else if (tab === 'tracking') {
+            setCurrentTab('repairs');
+          } else {
+            setCurrentTab(tab);
+          }
+        }}
+        onRestartOnboarding={() => {
+          logout();
+        }}
       />
 
       {/* Main Container */}
@@ -190,7 +228,14 @@ function MainAppContent() {
         {/* ===================== TECHNICIAN EXPERIENCE ===================== */}
         {role === 'technician' && (
           <>
-            {currentTab === 'dashboard' ? (
+            {currentTab === 'store_setup' ? (
+              <TechnicianStoreSetupView
+                onSetupCompleted={() => {
+                  setCurrentTab('dashboard');
+                  loadData();
+                }}
+              />
+            ) : currentTab === 'dashboard' ? (
               <TechnicianDashboardView
                 onOpenJob={(jobId) => {
                   setSelectedJobId(jobId);

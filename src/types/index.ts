@@ -148,6 +148,7 @@ export interface RepairRequest {
   voiceNoteUrl?: string;
   status: RepairLifecycleStatus;
   quotesCount: number;
+  quotes?: RepairQuote[];
   selectedTechnicianId?: string;
   selectedQuoteId?: string;
   createdAt: string;
@@ -282,11 +283,13 @@ export interface TechnicianPart {
   id: string;
   technicianId: string;
   name: string;
+  partName?: string;
   deviceBrand: string;
   deviceModel: string;
   quality: PartsQuality;
   priceNaira: number;
   inStockCount: number;
+  stockQuantity?: number;
   warrantyDays: number;
   photoUrl?: string;
 }
