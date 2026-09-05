@@ -86,6 +86,19 @@ export class PaymentService {
       return { success: false, error: 'Payment record not found.' };
     }
 
+    if (params.actorRole === 'customer' && payment.customerId !== params.actorId) {
+      return { success: false, error: 'Unauthorized: Payment does not belong to you.' };
+    }
+
+    const job = db.repairJobs.find((j) => j.id === payment.repairId);
+    if (!job) {
+      return { success: false, error: 'Associated repair job not found.' };
+    }
+
+    if (params.actorRole === 'customer' && job.customerId !== params.actorId) {
+      return { success: false, error: 'Unauthorized: Repair job does not belong to you.' };
+    }
+
     if (payment.status === 'ESCROW_HELD') {
       return { success: true, payment };
     }
@@ -94,15 +107,13 @@ export class PaymentService {
     payment.paidAt = new Date().toISOString();
 
     // Update job status to PAYMENT_CONFIRMED -> BOOKED
-    const job = db.repairJobs.find((j) => j.id === payment.repairId);
-    if (job) {
-      job.status = 'PAYMENT_CONFIRMED';
-      job.statusHistory.push({
-        status: 'PAYMENT_CONFIRMED',
-        timestamp: payment.paidAt,
-        actorRole: 'customer',
-        note: `₦${payment.amountNaira.toLocaleString()} secured in Fix Hub Escrow (Ref: ${payment.transactionRef})`,
-      });
+    job.status = 'PAYMENT_CONFIRMED';
+    job.statusHistory.push({
+      status: 'PAYMENT_CONFIRMED',
+      timestamp: payment.paidAt,
+      actorRole: 'customer',
+      note: `₦${payment.amountNaira.toLocaleString()} secured in Fix Hub Escrow (Ref: ${payment.transactionRef})`,
+    });
 
       // Notify technician
       NotificationService.send({
@@ -121,7 +132,6 @@ export class PaymentService {
         type: 'PAYMENT',
         repairId: job.id,
       });
-    }
 
     AuditService.log({
       actorId: params.actorId,

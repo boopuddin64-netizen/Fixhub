@@ -6,12 +6,26 @@ import { PaymentService } from '../services/paymentService';
 import { RepairWorkflowService } from '../services/repairWorkflowService';
 import { AuditService } from '../services/auditService';
 import { NotificationService } from '../services/notificationService';
-import { UserRole, RepairLifecycleStatus, ConditionReport } from '../../src/types/index';
+import { calculateDistanceKm } from '../services/technicianMatchingService';
+import {
+  UserRole,
+  RepairLifecycleStatus,
+  ConditionReport,
+  PartsQuality,
+} from '../../src/types/index';
+import {
+  isNonEmptyString,
+  sanitizeString,
+  validateNumber,
+  isValidCoordinates,
+  sanitizeCustomerLocationForTechnician,
+  sanitizeRepairRequestForTechnician,
+} from '../utils/validation';
 
 export const apiRouter = Router();
 
 // Authentication Middleware
-interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
     email: string;
@@ -20,7 +34,7 @@ interface AuthenticatedRequest extends Request {
   };
 }
 
-function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized: Authentication token required.' });
@@ -36,10 +50,12 @@ function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunctio
   next();
 }
 
-function requireRole(allowedRoles: UserRole[]) {
+export function requireRole(allowedRoles: UserRole[]) {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (!req.user || !allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({ error: `Forbidden: Requires one of [${allowedRoles.join(', ')}] role.` });
+      return res.status(403).json({
+        error: `Forbidden: Access restricted to [${allowedRoles.join(', ')}] role(s).`,
+      });
     }
     next();
   };
@@ -50,20 +66,20 @@ function requireRole(allowedRoles: UserRole[]) {
  * ----------------------------------------------------------- */
 apiRouter.post('/auth/register-customer', (req: Request, res: Response) => {
   const { name, phone, email, password, address, landmark, city, state, isBorrowedDevice } = req.body;
-  if (!name || !phone || !email) {
+  if (!isNonEmptyString(name) || !isNonEmptyString(phone) || !isNonEmptyString(email)) {
     return res.status(400).json({ error: 'Name, phone, and email are required.' });
   }
 
   const result = AuthService.registerCustomer({
-    name,
-    phone,
-    email,
-    password,
-    address,
-    landmark,
-    city,
-    state,
-    isBorrowedDevice,
+    name: sanitizeString(name, 100),
+    phone: sanitizeString(phone, 30),
+    email: sanitizeString(email, 120),
+    password: password ? String(password) : undefined,
+    address: address ? sanitizeString(address, 200) : undefined,
+    landmark: landmark ? sanitizeString(landmark, 100) : undefined,
+    city: city ? sanitizeString(city, 80) : undefined,
+    state: state ? sanitizeString(state, 80) : undefined,
+    isBorrowedDevice: !!isBorrowedDevice,
   });
 
   if ('error' in result) {
@@ -75,22 +91,22 @@ apiRouter.post('/auth/register-customer', (req: Request, res: Response) => {
 
 apiRouter.post('/auth/register-technician', (req: Request, res: Response) => {
   const { name, phone, email, businessName, password, shopAddress, landmark, area, city, state, supportedBrands } = req.body;
-  if (!name || !phone || !email || !businessName || !shopAddress) {
+  if (!isNonEmptyString(name) || !isNonEmptyString(phone) || !isNonEmptyString(email) || !isNonEmptyString(businessName) || !isNonEmptyString(shopAddress)) {
     return res.status(400).json({ error: 'Name, phone, email, business name, and shop address are required.' });
   }
 
   const result = AuthService.registerTechnician({
-    name,
-    phone,
-    email,
-    businessName,
-    password,
-    shopAddress,
-    landmark,
-    area,
-    city,
-    state,
-    supportedBrands,
+    name: sanitizeString(name, 100),
+    phone: sanitizeString(phone, 30),
+    email: sanitizeString(email, 120),
+    businessName: sanitizeString(businessName, 120),
+    password: password ? String(password) : undefined,
+    shopAddress: sanitizeString(shopAddress, 200),
+    landmark: landmark ? sanitizeString(landmark, 100) : undefined,
+    area: area ? sanitizeString(area, 80) : undefined,
+    city: city ? sanitizeString(city, 80) : undefined,
+    state: state ? sanitizeString(state, 80) : undefined,
+    supportedBrands: Array.isArray(supportedBrands) ? supportedBrands.map((b) => sanitizeString(b, 50)) : undefined,
   });
 
   if ('error' in result) {
@@ -102,11 +118,11 @@ apiRouter.post('/auth/register-technician', (req: Request, res: Response) => {
 
 apiRouter.post('/auth/login', (req: Request, res: Response) => {
   const { emailOrPhone, password, isBorrowedDevice } = req.body;
-  if (!emailOrPhone) {
-    return res.status(400).json({ error: 'Email or phone is required.' });
+  if (!isNonEmptyString(emailOrPhone)) {
+    return res.status(400).json({ error: 'Email or phone number is required.' });
   }
 
-  const result = AuthService.login(emailOrPhone, password, !!isBorrowedDevice);
+  const result = AuthService.login(sanitizeString(emailOrPhone, 120), password ? String(password) : undefined, !!isBorrowedDevice);
   if ('error' in result) {
     return res.status(400).json({ error: result.error });
   }
@@ -123,7 +139,7 @@ apiRouter.get('/auth/me', requireAuth, (req: AuthenticatedRequest, res: Response
 });
 
 /* -------------------------------------------------------------
- * 2. DEVICES & CATALOG
+ * 2. DEVICES & CATALOG (Public Discovery)
  * ----------------------------------------------------------- */
 apiRouter.get('/devices/brands', (_req: Request, res: Response) => {
   return res.json(db.deviceBrands);
@@ -142,7 +158,7 @@ apiRouter.get('/devices/issues', (_req: Request, res: Response) => {
 });
 
 /* -------------------------------------------------------------
- * 3. TECHNICIAN DISCOVERY & MATCHING
+ * 3. TECHNICIAN DISCOVERY & MATCHING (Public / Lead Matching)
  * ----------------------------------------------------------- */
 apiRouter.get('/technicians', (_req: Request, res: Response) => {
   return res.json(db.technicianProfiles);
@@ -151,7 +167,7 @@ apiRouter.get('/technicians', (_req: Request, res: Response) => {
 apiRouter.get('/technicians/:id', (req: Request, res: Response) => {
   const tech = db.technicianProfiles.find((t) => t.userId === req.params.id);
   if (!tech) {
-    return res.status(404).json({ error: 'Technician not found.' });
+    return res.status(404).json({ error: 'Technician profile not found.' });
   }
   const parts = db.technicianParts.filter((p) => p.technicianId === tech.userId);
   const reviews = db.reviews.filter((r) => r.technicianId === tech.userId);
@@ -160,46 +176,72 @@ apiRouter.get('/technicians/:id', (req: Request, res: Response) => {
 
 apiRouter.post('/technicians/match', (req: Request, res: Response) => {
   const { customerLocation, deviceBrand, deviceModel, issues, maxDistanceKm } = req.body;
-  if (!customerLocation || !customerLocation.lat || !customerLocation.lng) {
-    return res.status(400).json({ error: 'Valid customer location coordinates are required.' });
+  if (!customerLocation || !isValidCoordinates(customerLocation.lat, customerLocation.lng)) {
+    return res.status(400).json({ error: 'Valid customer location GPS coordinates (lat, lng) are required.' });
   }
 
   const results = TechnicianMatchingService.matchTechnicians({
-    customerLocation,
-    deviceBrand: deviceBrand || 'Other',
-    deviceModel,
-    issues: issues || [],
-    maxDistanceKm: maxDistanceKm ? Number(maxDistanceKm) : 30,
+    customerLocation: {
+      lat: Number(customerLocation.lat),
+      lng: Number(customerLocation.lng),
+      address: sanitizeString(customerLocation.address, 200) || 'Lagos, Nigeria',
+      area: sanitizeString(customerLocation.area, 80),
+      city: sanitizeString(customerLocation.city, 80) || 'Lagos',
+      state: sanitizeString(customerLocation.state, 80) || 'Lagos State',
+    },
+    deviceBrand: sanitizeString(deviceBrand, 80) || 'Other',
+    deviceModel: sanitizeString(deviceModel, 80),
+    issues: Array.isArray(issues) ? issues.map((i) => sanitizeString(i, 80)) : [],
+    maxDistanceKm: maxDistanceKm ? Math.min(Math.max(Number(maxDistanceKm), 1), 100) : 30,
   });
 
   return res.json(results);
 });
 
 /* -------------------------------------------------------------
- * 4. REPAIR REQUESTS & QUOTING
+ * 4. REPAIR REQUESTS & QUOTING (Strict Role & Ownership Isolation)
  * ----------------------------------------------------------- */
 apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
   const { customerLocation, deviceBrand, deviceModel, issues, description, photos, voiceNoteUrl } = req.body;
-  if (!customerLocation || !deviceBrand || !deviceModel || !issues || issues.length === 0) {
-    return res.status(400).json({ error: 'Location, device brand, model, and at least one issue are required.' });
+
+  if (!customerLocation || !isValidCoordinates(customerLocation.lat, customerLocation.lng)) {
+    return res.status(400).json({ error: 'Valid customer location coordinates are required.' });
+  }
+
+  if (!isNonEmptyString(deviceBrand) || !isNonEmptyString(deviceModel)) {
+    return res.status(400).json({ error: 'Device brand and model are required.' });
+  }
+
+  if (!Array.isArray(issues) || issues.length === 0) {
+    return res.status(400).json({ error: 'At least one diagnosed issue is required.' });
   }
 
   const user = db.users.find((u) => u.id === req.user!.id);
   const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
   const now = new Date().toISOString();
 
+  const validatedLocation = {
+    lat: Number(customerLocation.lat),
+    lng: Number(customerLocation.lng),
+    address: sanitizeString(customerLocation.address, 200) || `${customerLocation.area || 'Lagos'}, ${customerLocation.city || 'Lagos'}`,
+    landmark: sanitizeString(customerLocation.landmark, 100),
+    area: sanitizeString(customerLocation.area, 80),
+    city: sanitizeString(customerLocation.city, 80) || 'Lagos',
+    state: sanitizeString(customerLocation.state, 80) || 'Lagos State',
+  };
+
   const request = {
     id: requestId,
     customerId: req.user!.id,
     customerName: user?.name || 'Customer',
     customerPhone: user?.phone || '',
-    customerLocation,
-    deviceBrand,
-    deviceModel,
-    issues,
-    description: description || '',
-    photos: photos || [],
-    voiceNoteUrl,
+    customerLocation: validatedLocation,
+    deviceBrand: sanitizeString(deviceBrand, 80),
+    deviceModel: sanitizeString(deviceModel, 80),
+    issues: issues.map((i) => sanitizeString(i, 80)),
+    description: sanitizeString(description, 2000),
+    photos: Array.isArray(photos) ? photos.filter((p) => typeof p === 'string') : [],
+    voiceNoteUrl: voiceNoteUrl ? sanitizeString(voiceNoteUrl, 500) : undefined,
     status: 'REQUESTED' as RepairLifecycleStatus,
     quotesCount: 0,
     createdAt: now,
@@ -208,12 +250,12 @@ apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req
 
   db.repairRequests.unshift(request);
 
-  // Notify matching nearby technicians
+  // Notify matching nearby eligible technicians
   const matched = TechnicianMatchingService.matchTechnicians({
-    customerLocation,
-    deviceBrand,
-    deviceModel,
-    issues,
+    customerLocation: validatedLocation,
+    deviceBrand: request.deviceBrand,
+    deviceModel: request.deviceModel,
+    issues: request.issues,
     maxDistanceKm: 25,
   });
 
@@ -221,7 +263,7 @@ apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req
     NotificationService.send({
       userId: match.technicianId,
       title: 'New Nearby Repair Request',
-      message: `New request: ${deviceBrand} ${deviceModel} (${issues.join(', ')}) at ${customerLocation.area || customerLocation.city} (~${match.distanceKm} km). Send a quote!`,
+      message: `New repair request: ${request.deviceBrand} ${request.deviceModel} (${request.issues.join(', ')}) in ${validatedLocation.area || validatedLocation.city} (~${match.distanceKm} km). Submit a quote!`,
       type: 'QUOTE',
       repairId: requestId,
     });
@@ -233,7 +275,7 @@ apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req
     action: 'REPAIR_REQUEST_CREATED',
     resourceType: 'REPAIR_REQUEST',
     resourceId: requestId,
-    details: { deviceBrand, deviceModel, issuesCount: issues.length },
+    details: { deviceBrand: request.deviceBrand, deviceModel: request.deviceModel, issuesCount: issues.length },
   });
 
   db.save();
@@ -242,16 +284,56 @@ apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req
 
 apiRouter.get('/repairs/requests', requireAuth, (req: AuthenticatedRequest, res: Response) => {
   if (req.user!.role === 'customer') {
+    // Customers only see their own requests with full location data
     const requests = db.repairRequests.filter((r) => r.customerId === req.user!.id);
     return res.json(requests);
   } else if (req.user!.role === 'technician') {
-    // Return requests within technician's territory or active requests
+    // Technicians only see ELIGIBLE requests (matching service radius + supported brand)
     const tech = db.technicianProfiles.find((t) => t.userId === req.user!.id);
     if (!tech) return res.json([]);
-    const requests = db.repairRequests.filter((r) => r.status === 'REQUESTED' || r.status === 'QUOTING');
-    return res.json(requests);
+
+    const visibleRequests: any[] = [];
+
+    for (const r of db.repairRequests) {
+      const hasQuoted = db.repairQuotes.some((q) => q.requestId === r.id && q.technicianId === req.user!.id);
+      const isAssigned = r.selectedTechnicianId === req.user!.id;
+      const isOpen = r.status === 'REQUESTED' || r.status === 'QUOTING';
+
+      let isEligible = false;
+      let distanceKm: number | undefined;
+
+      if (isOpen) {
+        const eligibility = TechnicianMatchingService.isTechnicianEligible(tech, r);
+        isEligible = eligibility.eligible;
+        distanceKm = eligibility.distanceKm;
+      }
+
+      // Technician can view request if open & eligible, or if already quoted/assigned
+      if (isEligible || hasQuoted || isAssigned) {
+        if (!distanceKm && r.customerLocation && tech.shopLocation) {
+          distanceKm = calculateDistanceKm(
+            r.customerLocation.lat,
+            r.customerLocation.lng,
+            tech.shopLocation.lat,
+            tech.shopLocation.lng
+          );
+        }
+
+        // Apply Location & Quote Privacy Sanitization
+        const sanitized = sanitizeRepairRequestForTechnician(
+          r,
+          req.user!.id,
+          db.repairQuotes,
+          distanceKm
+        );
+        visibleRequests.push(sanitized);
+      }
+    }
+
+    return res.json(visibleRequests);
   }
-  return res.json(db.repairRequests);
+
+  return res.status(403).json({ error: 'Forbidden.' });
 });
 
 apiRouter.get('/repairs/requests/:id', requireAuth, (req: AuthenticatedRequest, res: Response) => {
@@ -259,33 +341,128 @@ apiRouter.get('/repairs/requests/:id', requireAuth, (req: AuthenticatedRequest, 
   if (!request) {
     return res.status(404).json({ error: 'Repair request not found.' });
   }
-  const quotes = db.repairQuotes.filter((q) => q.requestId === request.id);
-  return res.json({ request, quotes });
+
+  if (req.user!.role === 'customer') {
+    // Customer must own the request
+    if (request.customerId !== req.user!.id) {
+      return res.status(404).json({ error: 'Repair request not found.' });
+    }
+
+    const quotes = db.repairQuotes.filter((q) => q.requestId === request.id);
+    return res.json({ request, quotes });
+  } else if (req.user!.role === 'technician') {
+    const tech = db.technicianProfiles.find((t) => t.userId === req.user!.id);
+    if (!tech) {
+      return res.status(404).json({ error: 'Repair request not found.' });
+    }
+
+    const hasQuoted = db.repairQuotes.some((q) => q.requestId === request.id && q.technicianId === req.user!.id);
+    const isAssigned = request.selectedTechnicianId === req.user!.id;
+    const isOpen = request.status === 'REQUESTED' || request.status === 'QUOTING';
+
+    const eligibility = TechnicianMatchingService.isTechnicianEligible(tech, request);
+    if (!isOpen && !hasQuoted && !isAssigned) {
+      return res.status(404).json({ error: 'Repair request not found.' });
+    }
+
+    if (isOpen && !eligibility.eligible && !hasQuoted && !isAssigned) {
+      return res.status(404).json({ error: 'Repair request not found.' });
+    }
+
+    const sanitizedReq = sanitizeRepairRequestForTechnician(
+      request,
+      req.user!.id,
+      db.repairQuotes,
+      eligibility.distanceKm
+    );
+
+    return res.json({ request: sanitizedReq, quotes: sanitizedReq.quotes });
+  }
+
+  return res.status(403).json({ error: 'Forbidden.' });
 });
 
 /* -------------------------------------------------------------
- * 5. TECHNICIAN QUOTES
+ * 5. TECHNICIAN QUOTES (Strict Validation & Anti-Tampering)
  * ----------------------------------------------------------- */
 apiRouter.post('/quotes/submit', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
   const { requestId, partsCost, laborCost, otherCost, estimatedTimeHours, warrantyDays, partsQuality, notes } = req.body;
-  if (!requestId || partsCost === undefined || laborCost === undefined) {
-    return res.status(400).json({ error: 'Request ID, parts cost, and labor cost are required.' });
+
+  if (!isNonEmptyString(requestId)) {
+    return res.status(400).json({ error: 'Request ID is required.' });
   }
 
   const tech = db.technicianProfiles.find((t) => t.userId === req.user!.id);
   const user = db.users.find((u) => u.id === req.user!.id);
   const request = db.repairRequests.find((r) => r.id === requestId);
 
-  if (!tech || !user || !request) {
-    return res.status(404).json({ error: 'Technician profile or repair request not found.' });
+  if (!tech || !user) {
+    return res.status(404).json({ error: 'Technician profile not found.' });
   }
 
-  const parts = Number(partsCost) || 0;
-  const labor = Number(laborCost) || 0;
-  const other = Number(otherCost) || 0;
-  const total = parts + labor + other;
+  if (!request) {
+    return res.status(404).json({ error: 'Repair request not found.' });
+  }
 
-  const quoteId = `quote_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+  // 1. Verify request is open for quotes
+  if (request.status !== 'REQUESTED' && request.status !== 'QUOTING') {
+    return res.status(400).json({
+      error: `Cannot submit quote: Repair request is not open for quoting (current status: ${request.status}).`,
+    });
+  }
+
+  // 2. Verify technician eligibility
+  const eligibility = TechnicianMatchingService.isTechnicianEligible(tech, request);
+  if (!eligibility.eligible) {
+    return res.status(403).json({
+      error: `Ineligible to quote: ${eligibility.reason}`,
+    });
+  }
+
+  // 3. Strict Server-Side Numerical Validation
+  const partsVal = validateNumber(partsCost, 'Parts cost', { min: 0, max: 10_000_000 });
+  if (partsVal.valid === false) return res.status(400).json({ error: partsVal.error });
+
+  const laborVal = validateNumber(laborCost, 'Labor cost', { min: 0, max: 10_000_000 });
+  if (laborVal.valid === false) return res.status(400).json({ error: laborVal.error });
+
+  const otherVal = otherCost !== undefined && otherCost !== null && otherCost !== ''
+    ? validateNumber(otherCost, 'Other cost', { min: 0, max: 10_000_000 })
+    : { valid: true as const, value: 0 };
+  if (otherVal.valid === false) return res.status(400).json({ error: otherVal.error });
+
+  const hoursVal = validateNumber(estimatedTimeHours || 2, 'Estimated time', { min: 1, max: 720, integerOnly: true });
+  if (hoursVal.valid === false) return res.status(400).json({ error: hoursVal.error });
+
+  const warrantyVal = validateNumber(warrantyDays || 60, 'Warranty days', { min: 30, max: 365, integerOnly: true });
+  if (warrantyVal.valid === false) return res.status(400).json({ error: warrantyVal.error });
+
+  // Server-Authoritative Total Calculation (never trust client total)
+  const totalAmount = partsVal.value + laborVal.value + otherVal.value;
+
+  const allowedQualities: PartsQuality[] = [
+    'ORIGINAL_OEM',
+    'PREMIUM_AFTERMARKET',
+    'STANDARD_AFTERMARKET',
+    'REFURBISHED',
+  ];
+  const resolvedQuality: PartsQuality = allowedQualities.includes(partsQuality)
+    ? partsQuality
+    : 'PREMIUM_AFTERMARKET';
+
+  const distanceKm = eligibility.distanceKm || calculateDistanceKm(
+    request.customerLocation.lat,
+    request.customerLocation.lng,
+    tech.shopLocation.lat,
+    tech.shopLocation.lng
+  );
+
+  // Check for existing pending quote from this technician
+  const existingQuote = db.repairQuotes.find(
+    (q) => q.requestId === requestId && q.technicianId === req.user!.id && q.status === 'PENDING'
+  );
+
+  const quoteId = existingQuote ? existingQuote.id : `quote_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
   const now = new Date().toISOString();
 
   const quote = {
@@ -298,27 +475,33 @@ apiRouter.post('/quotes/submit', requireAuth, requireRole(['technician']), (req:
     technicianAvatar: user.avatarUrl,
     technicianRating: tech.rating,
     technicianReviewsCount: tech.reviewCount,
-    distanceKm: 2.5,
-    partsCost: parts,
-    laborCost: labor,
-    otherCost: other,
-    totalAmount: total,
-    estimatedTimeHours: Number(estimatedTimeHours) || 2,
-    warrantyDays: Number(warrantyDays) || 60,
-    partsQuality: partsQuality || 'PREMIUM_AFTERMARKET',
-    notes: notes || '',
+    distanceKm: Math.round(distanceKm * 10) / 10,
+    partsCost: partsVal.value,
+    laborCost: laborVal.value,
+    otherCost: otherVal.value,
+    totalAmount,
+    estimatedTimeHours: hoursVal.value,
+    warrantyDays: warrantyVal.value,
+    partsQuality: resolvedQuality,
+    notes: sanitizeString(notes, 1000),
     status: 'PENDING' as const,
-    createdAt: now,
+    createdAt: existingQuote ? existingQuote.createdAt : now,
   };
 
-  db.repairQuotes.push(quote);
-  request.quotesCount = (request.quotesCount || 0) + 1;
+  if (existingQuote) {
+    Object.assign(existingQuote, quote);
+  } else {
+    db.repairQuotes.push(quote);
+    request.quotesCount = (request.quotesCount || 0) + 1;
+  }
+
   request.status = 'QUOTING';
+  request.updatedAt = now;
 
   NotificationService.send({
     userId: request.customerId,
     title: 'New Quote Received!',
-    message: `${tech.businessName} submitted a quote of ₦${total.toLocaleString()} (${quote.warrantyDays} days warranty) for your ${request.deviceBrand} ${request.deviceModel}.`,
+    message: `${tech.businessName} submitted a quote of ₦${totalAmount.toLocaleString()} (${quote.warrantyDays} days warranty) for your ${request.deviceBrand} ${request.deviceModel}.`,
     type: 'QUOTE',
     repairId: request.id,
   });
@@ -329,7 +512,7 @@ apiRouter.post('/quotes/submit', requireAuth, requireRole(['technician']), (req:
     action: 'QUOTE_SUBMITTED',
     resourceType: 'REPAIR_QUOTE',
     resourceId: quoteId,
-    details: { requestId, totalAmount: total, partsQuality },
+    details: { requestId, totalAmount, partsQuality: resolvedQuality },
   });
 
   db.save();
@@ -338,7 +521,7 @@ apiRouter.post('/quotes/submit', requireAuth, requireRole(['technician']), (req:
 
 apiRouter.post('/quotes/accept', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
   const { requestId, quoteId } = req.body;
-  if (!requestId || !quoteId) {
+  if (!isNonEmptyString(requestId) || !isNonEmptyString(quoteId)) {
     return res.status(400).json({ error: 'Request ID and Quote ID are required.' });
   }
 
@@ -356,19 +539,22 @@ apiRouter.post('/quotes/accept', requireAuth, requireRole(['customer']), (req: A
 });
 
 /* -------------------------------------------------------------
- * 6. PAYMENTS & ESCROW
+ * 6. PAYMENTS & ESCROW (Server-Authoritative Amounts & Ownership)
  * ----------------------------------------------------------- */
 apiRouter.post('/payments/create-intent', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
   const { repairJobId, idempotencyKey, paymentMethod } = req.body;
-  if (!repairJobId || !idempotencyKey) {
+  if (!isNonEmptyString(repairJobId) || !isNonEmptyString(idempotencyKey)) {
     return res.status(400).json({ error: 'Repair Job ID and Idempotency Key are required.' });
   }
+
+  const allowedMethods = ['CARD', 'BANK_TRANSFER', 'USSD'] as const;
+  const resolvedMethod = allowedMethods.includes(paymentMethod) ? paymentMethod : 'CARD';
 
   const result = PaymentService.createPaymentIntent({
     repairJobId,
     customerId: req.user!.id,
-    idempotencyKey,
-    paymentMethod,
+    idempotencyKey: sanitizeString(idempotencyKey, 100),
+    paymentMethod: resolvedMethod,
   });
 
   if ('error' in result) {
@@ -385,8 +571,8 @@ apiRouter.post('/payments/verify-mock', requireAuth, requireRole(['customer']), 
   }
 
   const result = PaymentService.verifyAndHoldInEscrow({
-    paymentId,
-    transactionRef,
+    paymentId: paymentId ? String(paymentId) : '',
+    transactionRef: transactionRef ? String(transactionRef) : '',
     actorId: req.user!.id,
     actorRole: req.user!.role,
   });
@@ -399,7 +585,7 @@ apiRouter.post('/payments/verify-mock', requireAuth, requireRole(['customer']), 
 });
 
 /* -------------------------------------------------------------
- * 7. REPAIR JOBS & WORKFLOW
+ * 7. REPAIR JOBS & WORKFLOW (Strict Object-Level Authorization)
  * ----------------------------------------------------------- */
 apiRouter.get('/jobs', requireAuth, (req: AuthenticatedRequest, res: Response) => {
   if (req.user!.role === 'customer') {
@@ -409,7 +595,7 @@ apiRouter.get('/jobs', requireAuth, (req: AuthenticatedRequest, res: Response) =
     const jobs = db.repairJobs.filter((j) => j.technicianId === req.user!.id);
     return res.json(jobs);
   }
-  return res.json(db.repairJobs);
+  return res.status(403).json({ error: 'Forbidden.' });
 });
 
 apiRouter.get('/jobs/:id', requireAuth, (req: AuthenticatedRequest, res: Response) => {
@@ -418,12 +604,12 @@ apiRouter.get('/jobs/:id', requireAuth, (req: AuthenticatedRequest, res: Respons
     return res.status(404).json({ error: 'Repair job not found.' });
   }
 
-  // Check authorization
+  // Object-level ownership check
   if (req.user!.role === 'customer' && job.customerId !== req.user!.id) {
-    return res.status(403).json({ error: 'Forbidden: Access to another customer’s repair is prohibited.' });
+    return res.status(404).json({ error: 'Repair job not found.' });
   }
   if (req.user!.role === 'technician' && job.technicianId !== req.user!.id) {
-    return res.status(403).json({ error: 'Forbidden: Access to another technician’s repair is prohibited.' });
+    return res.status(404).json({ error: 'Repair job not found.' });
   }
 
   const customer = db.users.find((u) => u.id === job.customerId);
@@ -441,15 +627,54 @@ apiRouter.get('/jobs/:id', requireAuth, (req: AuthenticatedRequest, res: Respons
 });
 
 apiRouter.post('/jobs/:id/check-in', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
-  const report = req.body.report as ConditionReport;
-  if (!report || !report.frontCondition) {
-    return res.status(400).json({ error: 'Physical condition assessment report required.' });
+  const job = db.repairJobs.find((j) => j.id === req.params.id);
+  if (!job) {
+    return res.status(404).json({ error: 'Repair job not found.' });
   }
+
+  if (job.technicianId !== req.user!.id) {
+    return res.status(404).json({ error: 'Repair job not found.' });
+  }
+
+  const report = req.body.report as Partial<ConditionReport>;
+  if (!report || !report.frontCondition) {
+    return res.status(400).json({ error: 'Physical condition intake assessment report required.' });
+  }
+
+  const allowedFrontBack = ['PERFECT', 'MINOR_SCRATCHES', 'CRACKED', 'SHATTERED'] as const;
+  const allowedFrame = ['PRISTINE', 'SCUFFED', 'BENT', 'DENTED'] as const;
+
+  const resolvedFront = allowedFrontBack.includes(report.frontCondition as any)
+    ? (report.frontCondition as 'PERFECT' | 'MINOR_SCRATCHES' | 'CRACKED' | 'SHATTERED')
+    : 'CRACKED';
+  const resolvedBack = allowedFrontBack.includes(report.backCondition as any)
+    ? (report.backCondition as 'PERFECT' | 'MINOR_SCRATCHES' | 'CRACKED' | 'SHATTERED')
+    : 'PERFECT';
+  const resolvedFrame = allowedFrame.includes(report.frameCondition as any)
+    ? (report.frameCondition as 'PRISTINE' | 'SCUFFED' | 'BENT' | 'DENTED')
+    : 'PRISTINE';
+
+  const conditionReport: ConditionReport = {
+    timestamp: new Date().toISOString(),
+    frontCondition: resolvedFront,
+    backCondition: resolvedBack,
+    frameCondition: resolvedFrame,
+    screenPowersOn: !!report.screenPowersOn,
+    touchResponsive: report.touchResponsive !== undefined ? !!report.touchResponsive : true,
+    cameraWorking: report.cameraWorking !== undefined ? !!report.cameraWorking : true,
+    existingDamageNotes: sanitizeString(report.existingDamageNotes, 1000),
+    accessoriesReceived: Array.isArray(report.accessoriesReceived)
+      ? report.accessoriesReceived.map((a) => sanitizeString(a, 100))
+      : [],
+    photos: Array.isArray(report.photos) ? report.photos.filter((p) => typeof p === 'string') : [],
+    technicianNotes: sanitizeString(report.technicianNotes, 1000),
+    confirmedByCustomer: !!report.confirmedByCustomer,
+  };
 
   const result = RepairWorkflowService.checkInDevice({
     jobId: req.params.id,
     technicianId: req.user!.id,
-    report,
+    report: conditionReport,
   });
 
   if (!result.success) {
@@ -462,16 +687,47 @@ apiRouter.post('/jobs/:id/check-in', requireAuth, requireRole(['technician']), (
 apiRouter.patch('/jobs/:id/status', requireAuth, (req: AuthenticatedRequest, res: Response) => {
   const { newStatus, note } = req.body;
   const job = db.repairJobs.find((j) => j.id === req.params.id);
-  if (!job) return res.status(404).json({ error: 'Job not found.' });
+  if (!job) return res.status(404).json({ error: 'Repair job not found.' });
 
-  // Role validation
-  if (req.user!.role === 'technician' && job.technicianId !== req.user!.id) {
-    return res.status(403).json({ error: 'Unauthorized.' });
-  }
-  if (req.user!.role === 'customer' && job.customerId !== req.user!.id) {
-    return res.status(403).json({ error: 'Unauthorized.' });
+  // Ownership verification
+  if (req.user!.role === 'technician') {
+    if (job.technicianId !== req.user!.id) {
+      return res.status(404).json({ error: 'Repair job not found.' });
+    }
+
+    // Technicians can only initiate specific operational status updates
+    const allowedTechStatuses: RepairLifecycleStatus[] = [
+      'DEVICE_RECEIVED',
+      'DIAGNOSING',
+      'REPAIR_IN_PROGRESS',
+      'READY_FOR_PICKUP',
+    ];
+    if (!allowedTechStatuses.includes(newStatus)) {
+      return res.status(403).json({
+        error: `Forbidden: Technicians cannot transition status to ${newStatus}. Completion requires customer confirmation, and payment requires escrow verification.`,
+      });
+    }
+  } else if (req.user!.role === 'customer') {
+    if (job.customerId !== req.user!.id) {
+      return res.status(404).json({ error: 'Repair job not found.' });
+    }
+
+    // Customers can only initiate handoff/pickup updates
+    const allowedCustomerStatuses: RepairLifecycleStatus[] = [
+      'DEVICE_DROPPED_OFF',
+      'PICKED_UP',
+      'CANCELLED',
+    ];
+    if (!allowedCustomerStatuses.includes(newStatus)) {
+      return res.status(403).json({
+        error: `Forbidden: Customers cannot transition status to ${newStatus} directly.`,
+      });
+    }
+  } else {
+    return res.status(403).json({ error: 'Forbidden.' });
   }
 
+  // State machine transition verification
   const valid = RepairWorkflowService.isValidTransition(job.status, newStatus);
   if (!valid) {
     return res.status(400).json({
@@ -498,7 +754,7 @@ apiRouter.patch('/jobs/:id/status', requireAuth, (req: AuthenticatedRequest, res
     status: newStatus,
     timestamp: now,
     actorRole: req.user!.role,
-    note: note || `Status updated to ${newStatus}`,
+    note: sanitizeString(note, 500) || `Status updated to ${newStatus}`,
   });
 
   AuditService.log({
@@ -507,7 +763,7 @@ apiRouter.patch('/jobs/:id/status', requireAuth, (req: AuthenticatedRequest, res
     action: `STATUS_CHANGED_${newStatus}`,
     resourceType: 'REPAIR_JOB',
     resourceId: job.id,
-    details: { oldStatus: job.status, newStatus, note },
+    details: { oldStatus: job.status, newStatus, note: sanitizeString(note, 200) },
   });
 
   db.save();
@@ -516,22 +772,37 @@ apiRouter.patch('/jobs/:id/status', requireAuth, (req: AuthenticatedRequest, res
 
 apiRouter.post('/jobs/:id/add-part', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
   const { partName, deviceModel, quality, priceNaira, warrantyDays, supplier, beforePhotoUrl, afterPhotoUrl } = req.body;
-  if (!partName || priceNaira === undefined) {
-    return res.status(400).json({ error: 'Part name and price are required.' });
+
+  if (!isNonEmptyString(partName)) {
+    return res.status(400).json({ error: 'Part name is required.' });
   }
+
+  const priceVal = validateNumber(priceNaira, 'Part price', { min: 0, max: 10_000_000 });
+  if (priceVal.valid === false) return res.status(400).json({ error: priceVal.error });
+
+  const warrantyVal = validateNumber(warrantyDays || 60, 'Warranty days', { min: 0, max: 365, integerOnly: true });
+  if (warrantyVal.valid === false) return res.status(400).json({ error: warrantyVal.error });
+
+  const allowedQualities: PartsQuality[] = [
+    'ORIGINAL_OEM',
+    'PREMIUM_AFTERMARKET',
+    'STANDARD_AFTERMARKET',
+    'REFURBISHED',
+  ];
+  const resolvedQuality: PartsQuality = allowedQualities.includes(quality) ? quality : 'PREMIUM_AFTERMARKET';
 
   const result = RepairWorkflowService.addPartUsed({
     jobId: req.params.id,
     technicianId: req.user!.id,
     part: {
-      partName,
-      deviceModel: deviceModel || 'Standard',
-      quality: quality || 'PREMIUM_AFTERMARKET',
-      priceNaira: Number(priceNaira),
-      warrantyDays: Number(warrantyDays) || 60,
-      supplier,
-      beforePhotoUrl,
-      afterPhotoUrl,
+      partName: sanitizeString(partName, 120),
+      deviceModel: sanitizeString(deviceModel, 80) || 'Standard',
+      quality: resolvedQuality,
+      priceNaira: priceVal.value,
+      warrantyDays: warrantyVal.value,
+      supplier: supplier ? sanitizeString(supplier, 120) : undefined,
+      beforePhotoUrl: beforePhotoUrl ? sanitizeString(beforePhotoUrl, 500) : undefined,
+      afterPhotoUrl: afterPhotoUrl ? sanitizeString(afterPhotoUrl, 500) : undefined,
     },
   });
 
@@ -544,17 +815,21 @@ apiRouter.post('/jobs/:id/add-part', requireAuth, requireRole(['technician']), (
 
 apiRouter.post('/jobs/:id/additional-diagnosis', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
   const { title, description, additionalCostNaira, photoEvidence } = req.body;
-  if (!title || additionalCostNaira === undefined) {
-    return res.status(400).json({ error: 'Title and additional cost are required.' });
+
+  if (!isNonEmptyString(title)) {
+    return res.status(400).json({ error: 'Title is required for additional diagnosis.' });
   }
+
+  const costVal = validateNumber(additionalCostNaira, 'Additional cost', { min: 0, max: 10_000_000 });
+  if (costVal.valid === false) return res.status(400).json({ error: costVal.error });
 
   const result = RepairWorkflowService.submitAdditionalDiagnosis({
     jobId: req.params.id,
     technicianId: req.user!.id,
-    title,
-    description: description || '',
-    additionalCostNaira: Number(additionalCostNaira),
-    photoEvidence: photoEvidence || [],
+    title: sanitizeString(title, 150),
+    description: sanitizeString(description, 1500),
+    additionalCostNaira: costVal.value,
+    photoEvidence: Array.isArray(photoEvidence) ? photoEvidence.filter((p) => typeof p === 'string') : [],
   });
 
   if (!result.success) {
@@ -578,33 +853,30 @@ apiRouter.post('/jobs/:id/confirm-completion', requireAuth, requireRole(['custom
 });
 
 /* -------------------------------------------------------------
- * 8. REVIEWS & RATINGS (One Repair = One Review)
+ * 8. REVIEWS & RATINGS (One Completed Repair = One Review)
  * ----------------------------------------------------------- */
 apiRouter.post('/reviews', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
   const { repairId, rating, comment } = req.body;
-  if (!repairId || !rating) {
-    return res.status(400).json({ error: 'Repair ID and rating (1-5) are required.' });
+
+  if (!isNonEmptyString(repairId)) {
+    return res.status(400).json({ error: 'Repair Job ID is required.' });
   }
 
-  const numRating = Number(rating);
-  if (numRating < 1 || numRating > 5) {
-    return res.status(400).json({ error: 'Rating must be between 1 and 5.' });
+  const ratingVal = validateNumber(rating, 'Rating', { min: 1, max: 5, integerOnly: true });
+  if (ratingVal.valid === false) {
+    return res.status(400).json({ error: 'Rating must be an integer between 1 and 5.' });
   }
 
   const job = db.repairJobs.find((j) => j.id === repairId);
-  if (!job) {
+  if (!job || job.customerId !== req.user!.id) {
     return res.status(404).json({ error: 'Repair job not found.' });
   }
 
-  if (job.customerId !== req.user!.id) {
-    return res.status(403).json({ error: 'Unauthorized: You can only rate your own repair.' });
-  }
-
   if (job.status !== 'COMPLETED') {
-    return res.status(400).json({ error: 'You can only review after the repair is completed.' });
+    return res.status(400).json({ error: 'You can only review after the repair is completed and confirmed.' });
   }
 
-  // Prevent duplicate reviews
+  // Prevent duplicate review per repair
   const existing = db.reviews.find((r) => r.repairId === repairId && r.customerId === req.user!.id);
   if (existing) {
     return res.status(400).json({ error: 'You have already reviewed this repair transaction.' });
@@ -619,9 +891,9 @@ apiRouter.post('/reviews', requireAuth, requireRole(['customer']), (req: Authent
     repairId,
     customerId: req.user!.id,
     customerName: user?.name || 'Customer',
-    technicianId: job.technicianId,
-    rating: numRating,
-    comment: comment || '',
+    technicianId: job.technicianId, // Server-derived from job record
+    rating: ratingVal.value,
+    comment: sanitizeString(comment, 1000),
     verifiedPurchase: true as const,
     repairSummary: `${job.deviceBrand} ${job.deviceModel} (${job.issues.join(', ')})`,
     createdAt: now,
@@ -641,7 +913,7 @@ apiRouter.post('/reviews', requireAuth, requireRole(['customer']), (req: Authent
   NotificationService.send({
     userId: job.technicianId,
     title: 'New Customer Review!',
-    message: `${user?.name || 'Customer'} rated your service ${numRating} stars: "${comment ? comment.substring(0, 50) + '...' : 'Great job!'}"`,
+    message: `${user?.name || 'Customer'} rated your service ${ratingVal.value} stars: "${review.comment ? review.comment.substring(0, 50) + '...' : 'Great job!'}"`,
     type: 'STATUS_CHANGE',
     repairId: job.id,
   });
@@ -652,7 +924,7 @@ apiRouter.post('/reviews', requireAuth, requireRole(['customer']), (req: Authent
     action: 'REVIEW_SUBMITTED',
     resourceType: 'REVIEW',
     resourceId: reviewId,
-    details: { rating: numRating, technicianId: job.technicianId },
+    details: { rating: ratingVal.value, technicianId: job.technicianId },
   });
 
   db.save();
@@ -665,7 +937,7 @@ apiRouter.get('/reviews/technician/:id', (req: Request, res: Response) => {
 });
 
 /* -------------------------------------------------------------
- * 9. PARTS CATALOG & TECHNICIAN SETTINGS
+ * 9. PARTS CATALOG & TECHNICIAN SETTINGS (Strict Identity Enforcement)
  * ----------------------------------------------------------- */
 apiRouter.get('/parts/technician/:id', (req: Request, res: Response) => {
   const parts = db.technicianParts.filter((p) => p.technicianId === req.params.id);
@@ -675,25 +947,42 @@ apiRouter.get('/parts/technician/:id', (req: Request, res: Response) => {
 apiRouter.post('/parts', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
   const { name, partName, deviceBrand, deviceModel, quality, priceNaira, inStockCount, stockQuantity, warrantyDays, photoUrl } = req.body;
   const resolvedName = name || partName;
-  if (!resolvedName || priceNaira === undefined) {
-    return res.status(400).json({ error: 'Part name and price are required.' });
+
+  if (!isNonEmptyString(resolvedName)) {
+    return res.status(400).json({ error: 'Part name is required.' });
   }
 
-  const resolvedStock = inStockCount !== undefined ? Number(inStockCount) : (stockQuantity !== undefined ? Number(stockQuantity) : 5);
+  const priceVal = validateNumber(priceNaira, 'Part price', { min: 0, max: 10_000_000 });
+  if (priceVal.valid === false) return res.status(400).json({ error: priceVal.error });
+
+  const rawStock = inStockCount !== undefined ? inStockCount : (stockQuantity !== undefined ? stockQuantity : 5);
+  const stockVal = validateNumber(rawStock, 'Stock count', { min: 0, max: 10_000, integerOnly: true });
+  if (stockVal.valid === false) return res.status(400).json({ error: stockVal.error });
+
+  const warrantyVal = validateNumber(warrantyDays !== undefined ? warrantyDays : 60, 'Warranty days', { min: 0, max: 365, integerOnly: true });
+  if (warrantyVal.valid === false) return res.status(400).json({ error: warrantyVal.error });
+
+  const allowedQualities: PartsQuality[] = [
+    'ORIGINAL_OEM',
+    'PREMIUM_AFTERMARKET',
+    'STANDARD_AFTERMARKET',
+    'REFURBISHED',
+  ];
+  const resolvedQuality: PartsQuality = allowedQualities.includes(quality) ? quality : 'PREMIUM_AFTERMARKET';
 
   const part = {
     id: `part_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-    technicianId: req.user!.id,
-    name: resolvedName,
-    partName: resolvedName,
-    deviceBrand: deviceBrand || 'All',
-    deviceModel: deviceModel || 'All Models',
-    quality: quality || 'PREMIUM_AFTERMARKET',
-    priceNaira: Number(priceNaira),
-    inStockCount: resolvedStock,
-    stockQuantity: resolvedStock,
-    warrantyDays: warrantyDays !== undefined ? Number(warrantyDays) : 60,
-    photoUrl,
+    technicianId: req.user!.id, // Enforce authenticated technician identity
+    name: sanitizeString(resolvedName, 120),
+    partName: sanitizeString(resolvedName, 120),
+    deviceBrand: sanitizeString(deviceBrand, 80) || 'All',
+    deviceModel: sanitizeString(deviceModel, 80) || 'All Models',
+    quality: resolvedQuality,
+    priceNaira: priceVal.value,
+    inStockCount: stockVal.value,
+    stockQuantity: stockVal.value,
+    warrantyDays: warrantyVal.value,
+    photoUrl: photoUrl ? sanitizeString(photoUrl, 500) : undefined,
   };
 
   db.technicianParts.push(part);
@@ -704,31 +993,56 @@ apiRouter.post('/parts', requireAuth, requireRole(['technician']), (req: Authent
 apiRouter.put('/technicians/profile', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
   const tech = db.technicianProfiles.find((t) => t.userId === req.user!.id);
   const user = db.users.find((u) => u.id === req.user!.id);
-  if (!tech || !user) return res.status(404).json({ error: 'Technician not found.' });
+  if (!tech || !user) return res.status(404).json({ error: 'Technician profile not found.' });
 
-  const { businessName, bio, shopLocation, businessHours, phone, supportedBrands, bankDetails } = req.body;
-  if (businessName) {
-    tech.businessName = businessName;
-    user.name = businessName;
+  const { businessName, bio, shopLocation, businessHours, phone, supportedBrands, supportedCategories, serviceRadiusKm, bankDetails } = req.body;
+
+  if (isNonEmptyString(businessName)) {
+    tech.businessName = sanitizeString(businessName, 120);
+    user.name = tech.businessName;
   }
-  if (bio !== undefined) tech.bio = bio;
-  if (businessHours) tech.businessHours = businessHours;
-  if (phone) {
-    tech.phone = phone;
-    user.phone = phone;
+
+  if (bio !== undefined) tech.bio = sanitizeString(bio, 1000);
+  if (businessHours) tech.businessHours = sanitizeString(businessHours, 100);
+
+  if (isNonEmptyString(phone)) {
+    tech.phone = sanitizeString(phone, 30);
+    user.phone = tech.phone;
   }
-  if (supportedBrands) tech.supportedBrands = supportedBrands;
-  if (shopLocation) {
+
+  if (Array.isArray(supportedBrands)) {
+    tech.supportedBrands = supportedBrands.map((b) => sanitizeString(b, 50));
+  }
+
+  if (Array.isArray(supportedCategories)) {
+    tech.supportedCategories = supportedCategories.map((c) => sanitizeString(c, 50));
+  }
+
+  if (serviceRadiusKm !== undefined) {
+    const radiusVal = validateNumber(serviceRadiusKm, 'Service radius', { min: 1, max: 100 });
+    if (radiusVal.valid) {
+      tech.serviceRadiusKm = radiusVal.value;
+    }
+  }
+
+  if (shopLocation && typeof shopLocation === 'object') {
     tech.shopLocation = {
       ...tech.shopLocation,
-      ...shopLocation,
+      address: shopLocation.address ? sanitizeString(shopLocation.address, 200) : tech.shopLocation.address,
+      landmark: shopLocation.landmark ? sanitizeString(shopLocation.landmark, 100) : tech.shopLocation.landmark,
+      area: shopLocation.area ? sanitizeString(shopLocation.area, 80) : tech.shopLocation.area,
+      city: shopLocation.city ? sanitizeString(shopLocation.city, 80) : tech.shopLocation.city,
+      state: shopLocation.state ? sanitizeString(shopLocation.state, 80) : tech.shopLocation.state,
+      lat: isValidCoordinates(shopLocation.lat, shopLocation.lng) ? Number(shopLocation.lat) : tech.shopLocation.lat,
+      lng: isValidCoordinates(shopLocation.lat, shopLocation.lng) ? Number(shopLocation.lng) : tech.shopLocation.lng,
     };
   }
-  if (bankDetails) {
+
+  if (bankDetails && typeof bankDetails === 'object') {
     tech.bankDetails = {
-      bankName: bankDetails.bankName || 'Access Bank',
-      accountNumber: bankDetails.accountNumber || '',
-      accountName: bankDetails.accountName || businessName || user.name,
+      bankName: sanitizeString(bankDetails.bankName, 80) || 'Access Bank',
+      accountNumber: sanitizeString(bankDetails.accountNumber, 30),
+      accountName: sanitizeString(bankDetails.accountName, 120) || tech.businessName || user.name,
       verified: true,
     };
     tech.verificationStatus.payoutVerified = true;
@@ -753,14 +1067,20 @@ apiRouter.post('/technicians/availability', requireAuth, requireRole(['technicia
 });
 
 /* -------------------------------------------------------------
- * 10. NOTIFICATIONS & MESSAGING
+ * 10. NOTIFICATIONS & MESSAGING (Strict Recipient Authorization)
  * ----------------------------------------------------------- */
 apiRouter.get('/notifications', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  // Always filter strictly by authenticated user's ID, ignoring query parameters
   const notifs = db.notifications.filter((n) => n.userId === req.user!.id);
   return res.json(notifs);
 });
 
 apiRouter.post('/notifications/:id/read', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  const notif = db.notifications.find((n) => n.id === req.params.id);
+  if (!notif || notif.userId !== req.user!.id) {
+    return res.status(404).json({ error: 'Notification not found.' });
+  }
+
   NotificationService.markAsRead(req.params.id, req.user!.id);
   return res.json({ success: true });
 });
@@ -771,25 +1091,81 @@ apiRouter.post('/notifications/read-all', requireAuth, (req: AuthenticatedReques
 });
 
 apiRouter.get('/messages/:repairId', requireAuth, (req: AuthenticatedRequest, res: Response) => {
-  const messages = db.messages.filter((m) => m.repairId === req.params.repairId);
+  const repairId = req.params.repairId;
+
+  // Verify caller is an authorized participant in the repair
+  const job = db.repairJobs.find((j) => j.id === repairId);
+  const request = db.repairRequests.find((r) => r.id === repairId);
+
+  let isParticipant = false;
+
+  if (job) {
+    if (job.customerId === req.user!.id || job.technicianId === req.user!.id) {
+      isParticipant = true;
+    }
+  } else if (request) {
+    if (request.customerId === req.user!.id) {
+      isParticipant = true;
+    } else if (req.user!.role === 'technician') {
+      const hasQuoted = db.repairQuotes.some((q) => q.requestId === request.id && q.technicianId === req.user!.id);
+      const isSelected = request.selectedTechnicianId === req.user!.id;
+      if (hasQuoted || isSelected) {
+        isParticipant = true;
+      }
+    }
+  }
+
+  if (!isParticipant) {
+    return res.status(404).json({ error: 'Repair conversation not found or access denied.' });
+  }
+
+  const messages = db.messages.filter((m) => m.repairId === repairId);
   return res.json(messages);
 });
 
 apiRouter.post('/messages/:repairId', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  const repairId = req.params.repairId;
   const { text, attachmentUrl } = req.body;
-  if (!text && !attachmentUrl) {
+
+  if (!isNonEmptyString(text) && !isNonEmptyString(attachmentUrl)) {
     return res.status(400).json({ error: 'Message text or attachment is required.' });
+  }
+
+  // Verify caller is an authorized participant in the repair
+  const job = db.repairJobs.find((j) => j.id === repairId);
+  const request = db.repairRequests.find((r) => r.id === repairId);
+
+  let isParticipant = false;
+
+  if (job) {
+    if (job.customerId === req.user!.id || job.technicianId === req.user!.id) {
+      isParticipant = true;
+    }
+  } else if (request) {
+    if (request.customerId === req.user!.id) {
+      isParticipant = true;
+    } else if (req.user!.role === 'technician') {
+      const hasQuoted = db.repairQuotes.some((q) => q.requestId === request.id && q.technicianId === req.user!.id);
+      const isSelected = request.selectedTechnicianId === req.user!.id;
+      if (hasQuoted || isSelected) {
+        isParticipant = true;
+      }
+    }
+  }
+
+  if (!isParticipant) {
+    return res.status(404).json({ error: 'Repair conversation not found or access denied.' });
   }
 
   const user = db.users.find((u) => u.id === req.user!.id);
   const msg = {
     id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-    repairId: req.params.repairId,
+    repairId,
     senderId: req.user!.id,
     senderRole: req.user!.role,
-    senderName: user?.name || 'User',
-    text: text || '',
-    attachmentUrl,
+    senderName: user?.name || (req.user!.role === 'technician' ? 'Technician' : 'Customer'),
+    text: sanitizeString(text, 2000),
+    attachmentUrl: attachmentUrl ? sanitizeString(attachmentUrl, 500) : undefined,
     createdAt: new Date().toISOString(),
   };
 
@@ -799,17 +1175,45 @@ apiRouter.post('/messages/:repairId', requireAuth, (req: AuthenticatedRequest, r
 });
 
 /* -------------------------------------------------------------
- * 11. WARRANTIES & AUDIT LOGS
+ * 11. WARRANTIES & AUDIT LOGS (Strict Access Boundaries)
  * ----------------------------------------------------------- */
 apiRouter.get('/warranties/my-warranties', requireAuth, (req: AuthenticatedRequest, res: Response) => {
-  const jobs = db.repairJobs.filter((j) => j.customerId === req.user!.id);
-  const jobIds = jobs.map((j) => j.id);
-  const warranties = db.warranties.filter((w) => jobIds.includes(w.repairJobId));
-  return res.json(warranties);
+  if (req.user!.role === 'customer') {
+    const jobs = db.repairJobs.filter((j) => j.customerId === req.user!.id);
+    const jobIds = jobs.map((j) => j.id);
+    const warranties = db.warranties.filter((w) => jobIds.includes(w.repairJobId));
+    return res.json(warranties);
+  } else if (req.user!.role === 'technician') {
+    const warranties = db.warranties.filter((w) => w.technicianId === req.user!.id);
+    return res.json(warranties);
+  }
+  return res.status(403).json({ error: 'Forbidden.' });
 });
 
 apiRouter.get('/audit-logs/repair/:id', requireAuth, (req: AuthenticatedRequest, res: Response) => {
-  const logs = AuditService.getLogsForResource(req.params.id);
+  const resourceId = req.params.id;
+
+  // Verify caller is an authorized participant
+  const job = db.repairJobs.find((j) => j.id === resourceId);
+  const request = db.repairRequests.find((r) => r.id === resourceId);
+
+  let isAuthorized = false;
+
+  if (job) {
+    if (job.customerId === req.user!.id || job.technicianId === req.user!.id) {
+      isAuthorized = true;
+    }
+  } else if (request) {
+    if (request.customerId === req.user!.id || request.selectedTechnicianId === req.user!.id) {
+      isAuthorized = true;
+    }
+  }
+
+  if (!isAuthorized) {
+    return res.status(404).json({ error: 'Audit log not found or access denied.' });
+  }
+
+  const logs = AuditService.getLogsForResource(resourceId);
   return res.json(logs);
 });
 

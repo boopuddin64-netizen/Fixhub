@@ -497,6 +497,32 @@ function getInitialSeedData(): DatabaseSchema {
   // Seed Repair Requests
   const repairRequests: RepairRequest[] = [
     {
+      id: 'req_demo_open',
+      customerId: 'usr_customer_1',
+      customerName: 'Tunde Adebayo',
+      customerPhone: '+234 803 123 4567',
+      customerLocation: {
+        lat: 6.5964,
+        lng: 3.3421,
+        address: '14 Allen Avenue, Ikeja',
+        landmark: 'Opposite Oshopey Plaza',
+        area: 'Ikeja',
+        city: 'Lagos',
+        state: 'Lagos State',
+      },
+      deviceBrand: 'Apple',
+      deviceModel: 'iPhone 13',
+      issues: ['screen_damaged'],
+      description: 'Front screen cracked after accidental drop. Touch responds normally.',
+      photos: [
+        'https://images.unsplash.com/photo-1596742578443-7682ef5251cd?w=600&auto=format&fit=crop&q=80',
+      ],
+      status: 'QUOTING',
+      quotesCount: 1,
+      createdAt: pastDate,
+      updatedAt: now,
+    },
+    {
       id: 'req_demo_active',
       customerId: 'usr_customer_1',
       customerName: 'Tunde Adebayo',
@@ -556,6 +582,28 @@ function getInitialSeedData(): DatabaseSchema {
 
   // Seed Quotes
   const repairQuotes: RepairQuote[] = [
+    {
+      id: 'quote_demo_open_1',
+      requestId: 'req_demo_open',
+      technicianId: 'usr_tech_1',
+      technicianName: 'Emeka Okafor',
+      businessName: 'Emeka Phone Labs & Micro-Soldering',
+      technicianPhone: '+234 802 555 0101',
+      technicianAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+      technicianRating: 4.9,
+      technicianReviewsCount: 128,
+      distanceKm: 0.8,
+      partsCost: 45000,
+      laborCost: 10000,
+      otherCost: 0,
+      totalAmount: 55000,
+      estimatedTimeHours: 2,
+      warrantyDays: 60,
+      partsQuality: 'PREMIUM_AFTERMARKET',
+      notes: 'Premium Hard OLED display replacement with 60-day warranty.',
+      status: 'PENDING',
+      createdAt: pastDate,
+    },
     {
       id: 'quote_demo_1',
       requestId: 'req_demo_active',
@@ -626,6 +674,33 @@ function getInitialSeedData(): DatabaseSchema {
 
   // Seed Repair Jobs
   const repairJobs: RepairJob[] = [
+    {
+      id: 'job_demo_booked',
+      requestId: 'req_demo_open',
+      quoteId: 'quote_demo_open_1',
+      customerId: 'usr_customer_1',
+      technicianId: 'usr_tech_1',
+      deviceBrand: 'Apple',
+      deviceModel: 'iPhone 13',
+      issues: ['screen_damaged'],
+      status: 'PAYMENT_CONFIRMED',
+      dropOffCode: 'FX-1102',
+      pickupCode: 'PK-4421',
+      handoffQrToken: 'tok_fixhub_hand_1102991',
+      originalQuoteAmount: 55000,
+      finalAmount: 55000,
+      platformFeeAmount: 4675,
+      technicianPayoutAmount: 50325,
+      partsUsed: [],
+      createdAt: now,
+      bookedAt: now,
+      statusHistory: [
+        { status: 'REQUESTED', timestamp: pastDate, actorRole: 'customer', note: 'Customer submitted repair request' },
+        { status: 'QUOTING', timestamp: pastDate, actorRole: 'technician', note: 'Emeka submitted quote ₦55,000' },
+        { status: 'QUOTE_ACCEPTED', timestamp: now, actorRole: 'customer', note: 'Quote accepted by customer' },
+        { status: 'PAYMENT_CONFIRMED', timestamp: now, actorRole: 'customer', note: '₦55,000 secured in Escrow' },
+      ],
+    },
     {
       id: 'job_demo_active',
       requestId: 'req_demo_active',
@@ -765,6 +840,21 @@ function getInitialSeedData(): DatabaseSchema {
 
   // Payments
   const payments: PaymentTransaction[] = [
+    {
+      id: 'pay_demo_pending_01',
+      repairId: 'job_demo_booked',
+      customerId: 'usr_customer_1',
+      technicianId: 'usr_tech_1',
+      amountNaira: 55000,
+      platformFeeNaira: 4675,
+      technicianPayoutNaira: 50325,
+      currency: 'NGN',
+      provider: 'PAYSTACK_SANDBOX',
+      status: 'INITIATED',
+      transactionRef: 'FIX-PAY-9918231-LAGOS',
+      idempotencyKey: 'idemp_pay_pending_001',
+      paymentMethod: 'CARD',
+    },
     {
       id: 'pay_demo_active_01',
       repairId: 'job_demo_active',

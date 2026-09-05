@@ -137,4 +137,73 @@ export class TechnicianMatchingService {
 
     return results;
   }
+
+  /**
+   * Checks if a technician is eligible to quote/view a repair request based on:
+   * 1. Distance between customer location and technician shop within service radius
+   * 2. Device brand supported by technician
+   * 3. Technician availability (not OFFLINE)
+   */
+  public static isTechnicianEligible(
+    tech: TechnicianProfile,
+    request: {
+      customerLocation: LocationCoordinates;
+      deviceBrand: string;
+      issues?: string[];
+    }
+  ): { eligible: boolean; reason?: string; distanceKm?: number } {
+    if (!tech) return { eligible: false, reason: 'Technician profile not found.' };
+
+    if (tech.availability === 'OFFLINE') {
+      return { eligible: false, reason: 'Technician is currently offline.' };
+    }
+
+    // Check brand support
+    const brandSupported =
+      tech.supportedBrands.length === 0 ||
+      tech.supportedBrands.some(
+        (b) =>
+          b.toLowerCase() === request.deviceBrand.toLowerCase() ||
+          b.toLowerCase() === 'all' ||
+          request.deviceBrand.toLowerCase() === 'other'
+      );
+
+    if (!brandSupported) {
+      return {
+        eligible: false,
+        reason: `Technician does not service ${request.deviceBrand} devices.`,
+      };
+    }
+
+    // Check distance / service radius
+    if (
+      request.customerLocation &&
+      typeof request.customerLocation.lat === 'number' &&
+      typeof request.customerLocation.lng === 'number' &&
+      tech.shopLocation &&
+      typeof tech.shopLocation.lat === 'number' &&
+      typeof tech.shopLocation.lng === 'number'
+    ) {
+      const distanceKm = calculateDistanceKm(
+        request.customerLocation.lat,
+        request.customerLocation.lng,
+        tech.shopLocation.lat,
+        tech.shopLocation.lng
+      );
+
+      const maxRadius = tech.serviceRadiusKm || 30;
+      if (distanceKm > maxRadius) {
+        return {
+          eligible: false,
+          reason: `Customer location (${distanceKm} km) exceeds technician service radius (${maxRadius} km).`,
+          distanceKm,
+        };
+      }
+
+      return { eligible: true, distanceKm };
+    }
+
+    // Default to eligible if locations are not coordinate-based
+    return { eligible: true, distanceKm: 5.0 };
+  }
 }

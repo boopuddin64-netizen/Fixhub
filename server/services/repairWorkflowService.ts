@@ -55,10 +55,20 @@ export class RepairWorkflowService {
 
     const request = db.repairRequests.find((r) => r.id === requestId);
     if (!request) return { error: 'Repair request not found.' };
-    if (request.customerId !== customerId) return { error: 'Unauthorized.' };
+    if (request.customerId !== customerId) return { error: 'Unauthorized: Request does not belong to you.' };
+
+    if (request.status !== 'REQUESTED' && request.status !== 'QUOTING') {
+      return { error: `Request is no longer open for quote acceptance (current status: ${request.status}).` };
+    }
 
     const quote = db.repairQuotes.find((q) => q.id === quoteId && q.requestId === requestId);
     if (!quote) return { error: 'Quote not found for this request.' };
+    if (quote.status !== 'PENDING') {
+      return { error: `Quote is no longer available (current status: ${quote.status}).` };
+    }
+
+    const tech = db.technicianProfiles.find((t) => t.userId === quote.technicianId);
+    if (!tech) return { error: 'Technician profile associated with quote not found.' };
 
     quote.status = 'ACCEPTED';
     request.selectedQuoteId = quoteId;
@@ -148,6 +158,10 @@ export class RepairWorkflowService {
     if (!job) return { success: false, error: 'Job not found.' };
     if (job.technicianId !== technicianId) return { success: false, error: 'Unauthorized: Not your assigned repair job.' };
 
+    if (!['PAYMENT_CONFIRMED', 'BOOKED', 'DEVICE_DROPPED_OFF'].includes(job.status)) {
+      return { success: false, error: `Cannot check in device when job status is ${job.status}.` };
+    }
+
     job.conditionReport = {
       ...report,
       timestamp: new Date().toISOString(),
@@ -195,6 +209,10 @@ export class RepairWorkflowService {
     if (!job) return { success: false, error: 'Job not found.' };
     if (job.technicianId !== technicianId) return { success: false, error: 'Unauthorized.' };
 
+    if (!['DEVICE_RECEIVED', 'DIAGNOSING', 'REPAIR_IN_PROGRESS', 'ADDITIONAL_DIAGNOSIS'].includes(job.status)) {
+      return { success: false, error: `Cannot record parts when job status is ${job.status}.` };
+    }
+
     const partRecord: PartUsedRecord = {
       id: `partrec_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       ...part,
@@ -231,6 +249,10 @@ export class RepairWorkflowService {
     const job = db.repairJobs.find((j) => j.id === jobId);
     if (!job) return { success: false, error: 'Job not found.' };
     if (job.technicianId !== technicianId) return { success: false, error: 'Unauthorized.' };
+
+    if (!['DEVICE_RECEIVED', 'DIAGNOSING', 'REPAIR_IN_PROGRESS'].includes(job.status)) {
+      return { success: false, error: `Cannot submit additional diagnosis when job status is ${job.status}.` };
+    }
 
     const isMinor = QuoteAccuracyService.isMinorVariation(job.originalQuoteAmount, additionalCostNaira);
     const newTotal = job.originalQuoteAmount + additionalCostNaira;
@@ -295,7 +317,15 @@ export class RepairWorkflowService {
     const { jobId, customerId } = params;
     const job = db.repairJobs.find((j) => j.id === jobId);
     if (!job) return { success: false, error: 'Job not found.' };
-    if (job.customerId !== customerId) return { success: false, error: 'Unauthorized.' };
+    if (job.customerId !== customerId) return { success: false, error: 'Unauthorized: Repair job does not belong to you.' };
+
+    if (job.status === 'COMPLETED') {
+      return { success: false, error: 'Repair job is already completed.' };
+    }
+
+    if (job.status !== 'READY_FOR_PICKUP' && job.status !== 'PICKED_UP') {
+      return { success: false, error: `Cannot confirm completion when job is in status ${job.status}. Must be READY_FOR_PICKUP or PICKED_UP.` };
+    }
 
     const now = new Date().toISOString();
     job.status = 'COMPLETED';
