@@ -188,6 +188,28 @@ export class TechnicianMatchingService {
       };
     }
 
+    // Check repair issues support (canonical issue taxonomy matching)
+    const issues = Array.isArray(request.issues) ? request.issues : [];
+
+    for (const issue of issues) {
+      const compatibleCategories = resolveIssueToMatchingCategories(issue);
+
+      const issueSupported =
+        compatibleCategories.length > 0 &&
+        (!Array.isArray(tech.supportedCategories) ||
+          tech.supportedCategories.length === 0 ||
+          tech.supportedCategories.some((category) =>
+            compatibleCategories.includes(category)
+          ));
+
+      if (!issueSupported) {
+        return {
+          eligible: false,
+          reason: `Technician does not support the requested repair issue (${issue}).`,
+        };
+      }
+    }
+
     // Check distance / service radius
     if (
       request.customerLocation &&

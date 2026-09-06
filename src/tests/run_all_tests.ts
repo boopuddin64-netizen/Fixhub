@@ -25,7 +25,7 @@ function assert(condition: boolean, testName: string, detail?: string) {
   }
 }
 
-async function runTestSuite() {
+export async function runTestSuite(): Promise<{ passed: number; failed: number }> {
   console.log('\n===============================================================');
   console.log('   FIX HUB BACKEND SECURITY FIX #1 — AUDIT & VERIFICATION');
   console.log('===============================================================\n');
@@ -104,6 +104,78 @@ async function runTestSuite() {
   };
   const brandMismatch = TechnicianMatchingService.isTechnicianEligible(samsungOnlyTech, ikejaRequest);
   assert(brandMismatch.eligible === false, 'Technician without brand capability is marked ineligible');
+
+  // Gate A: Canonical Issue Taxonomy Eligibility Verification (Cases 1-7)
+  const screenOnlyTech = {
+    ...techEmeka,
+    supportedCategories: ['screen_damaged'],
+  };
+  const screenNotDisplayingTech = {
+    ...techEmeka,
+    supportedCategories: ['screen_not_displaying'],
+  };
+  const allCategoriesTech = {
+    ...techEmeka,
+    supportedCategories: [],
+  };
+
+  // Case 1: Technician supports the canonical category
+  const case1 = TechnicianMatchingService.isTechnicianEligible(screenOnlyTech, {
+    customerLocation: ikejaRequest.customerLocation,
+    deviceBrand: 'Apple',
+    issues: ['screen_damaged'],
+  });
+  assert(case1.eligible === true, 'Gate A Case 1: Technician supporting canonical screen_damaged is eligible');
+
+  // Case 2: Technician does not support the canonical category
+  const case2 = TechnicianMatchingService.isTechnicianEligible(screenOnlyTech, {
+    customerLocation: ikejaRequest.customerLocation,
+    deviceBrand: 'Apple',
+    issues: ['water_damage'],
+  });
+  assert(case2.eligible === false, 'Gate A Case 2: Technician not supporting canonical water_damage is not eligible');
+
+  // Case 3: Customer uses new granular issue ID issue_screen_cracked and technician supports screen_damaged
+  const case3 = TechnicianMatchingService.isTechnicianEligible(screenOnlyTech, {
+    customerLocation: ikejaRequest.customerLocation,
+    deviceBrand: 'Apple',
+    issues: ['issue_screen_cracked'],
+  });
+  assert(case3.eligible === true, 'Gate A Case 3: Customer issue_screen_cracked is eligible for screen_damaged technician');
+
+  // Case 4: Customer uses issue_display_lines and technician supports screen_not_displaying
+  const case4 = TechnicianMatchingService.isTechnicianEligible(screenNotDisplayingTech, {
+    customerLocation: ikejaRequest.customerLocation,
+    deviceBrand: 'Apple',
+    issues: ['issue_display_lines'],
+  });
+  assert(case4.eligible === true, 'Gate A Case 4: Customer issue_display_lines is eligible for screen_not_displaying technician');
+
+  // Case 5: Customer uses an issue that does not map to the technician’s categories
+  const case5 = TechnicianMatchingService.isTechnicianEligible(screenOnlyTech, {
+    customerLocation: ikejaRequest.customerLocation,
+    deviceBrand: 'Apple',
+    issues: ['issue_battery_drains_quickly'],
+  });
+  assert(case5.eligible === false, 'Gate A Case 5: issue_battery_drains_quickly is not eligible for screen-only technician');
+
+  // Case 6: Technician has empty supportedCategories and semantics define that as “supports all”
+  const case6 = TechnicianMatchingService.isTechnicianEligible(allCategoriesTech, {
+    customerLocation: ikejaRequest.customerLocation,
+    deviceBrand: 'Apple',
+    issues: ['issue_water_damage', 'issue_battery_swelling'],
+  });
+  assert(case6.eligible === true, 'Gate A Case 6: Technician with empty supportedCategories supports all repair issues');
+
+  // Case 7: Offline, brand, and distance restrictions still work
+  const offlineTech = {
+    ...techEmeka,
+    availability: 'OFFLINE' as const,
+  };
+  const case7Offline = TechnicianMatchingService.isTechnicianEligible(offlineTech, ikejaRequest);
+  assert(case7Offline.eligible === false, 'Gate A Case 7a: Offline technician is strictly marked ineligible');
+  assert(ineligibleFar.eligible === false, 'Gate A Case 7b: Distance restriction (>30km) remains strictly enforced');
+  assert(brandMismatch.eligible === false, 'Gate A Case 7c: Brand restriction remains strictly enforced');
 
   // Test 5: Customer Location Privacy & Quote Privacy Sanitization
   console.log('\n5. Data Privacy: Location Masking & Quote Isolation');
@@ -578,12 +650,21 @@ async function runTestSuite() {
   console.log(`   TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);
   console.log('===============================================================\n');
 
-  if (failed > 0) {
+  if (failed > 0 && (!process.env.BUN_TEST && !process.env.NODE_TEST)) {
     process.exit(1);
   }
+
+  return { passed, failed };
 }
 
-runTestSuite().catch((err) => {
-  console.error('Test execution failed:', err);
-  process.exit(1);
-});
+const isDirectRun =
+  typeof process !== 'undefined' &&
+  process.argv[1] &&
+  (process.argv[1].endsWith('run_all_tests.ts') || process.argv[1].endsWith('run_all_tests.js'));
+
+if (isDirectRun) {
+  runTestSuite().catch((err) => {
+    console.error('Test execution failed:', err);
+    process.exit(1);
+  });
+}
