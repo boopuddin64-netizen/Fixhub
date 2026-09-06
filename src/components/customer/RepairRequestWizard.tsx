@@ -6,7 +6,7 @@ import { DeviceSelectorModal } from './repair-flow/DeviceSelectorModal';
 import { IssueSelector } from './repair-flow/IssueSelector';
 import { LocationSelector } from './repair-flow/LocationSelector';
 import { PhotoEvidenceUploader } from './repair-flow/PhotoEvidenceUploader';
-import { VoiceNoteRecorder } from './repair-flow/VoiceNoteRecorder';
+import { VoiceNoteRecorder, VoiceNotePlayer } from './repair-flow/VoiceNoteRecorder';
 
 interface RepairRequestWizardProps {
   onCancel: () => void;
@@ -264,53 +264,68 @@ export const RepairRequestWizard: React.FC<RepairRequestWizardProps> = ({
           )}
 
           {stage === 'evidence' && (
-            <div className="space-y-4 max-w-lg mx-auto animate-fadeIn flex flex-col min-h-full">
+            <div className="space-y-5 max-w-lg mx-auto animate-fadeIn pb-12">
               <div>
                 <h3 className="text-xl font-bold text-slate-900">Tell us what happened</h3>
-                <p className="text-sm text-slate-500">Add photos, a voice note, or describe the issue below.</p>
+                <p className="text-sm text-slate-500">You can provide text, photos, voice notes, or a combination.</p>
               </div>
               
-              {/* Added evidence preview area to show what's collected so far before sending */}
-              <div className="flex-1 space-y-4 mt-6">
-                {description && (
-                  <div className="bg-white p-4 rounded-2xl border border-slate-200">
-                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{description}</p>
-                  </div>
-                )}
-                
-                {photos.length > 0 && (
-                   <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-2">
-                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Photos ({photos.length}/3)</h4>
-                      <div className="flex gap-2 flex-wrap">
-                        {photos.map((p, idx) => (
-                           <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200">
-                             <img src={p} alt="Evidence" className="w-full h-full object-cover" />
-                           </div>
-                        ))}
-                      </div>
-                   </div>
-                )}
+              {/* Text Description Form Card */}
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-2 shadow-xs">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Describe the problem
+                </label>
+                <textarea
+                  rows={3}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="What happened to your device? (e.g. Phone fell on concrete, screen cracked and touch stopped working...)"
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                />
+              </div>
 
-                {voiceNoteUrl && (
-                  <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-2">
-                     <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Voice Note</h4>
-                     <audio src={voiceNoteUrl} controls className="w-full h-10" />
-                  </div>
-                )}
+              {/* Photos Evidence Card */}
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Photos (Max 3)
+                  </label>
+                  <span className="text-[11px] font-medium text-slate-400">
+                    {photos.length}/3 attached
+                  </span>
+                </div>
+                <PhotoEvidenceUploader photos={photos} onChange={setPhotos} />
+              </div>
 
-                {(!description && photos.length === 0 && !voiceNoteUrl) && (
-                  <div className="text-center py-10 text-slate-400 text-sm">
-                    Use the controls below to add details.
-                  </div>
+              {/* Voice Note Card */}
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3 shadow-xs">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Voice Note Attachment
+                </label>
+                {voiceNoteUrl ? (
+                  <VoiceNotePlayer 
+                    url={voiceNoteUrl} 
+                    durationSeconds={voiceNoteDuration} 
+                    onDelete={() => {
+                      setVoiceNoteUrl(undefined);
+                      setVoiceNoteDuration(undefined);
+                    }}
+                  />
+                ) : (
+                  <VoiceNoteRecorder 
+                    voiceNoteUrl={voiceNoteUrl} 
+                    voiceNoteDurationSeconds={voiceNoteDuration}
+                    onChange={(url, dur) => { setVoiceNoteUrl(url); setVoiceNoteDuration(dur); }}
+                  />
                 )}
               </div>
 
-              <div className="flex justify-end pt-4 pb-20">
+              <div className="flex justify-end pt-4">
                 <button type="button" 
                   onClick={() => setStage('location')}
-                  className="px-6 py-3 bg-slate-900 text-white font-bold rounded-2xl hover:bg-slate-800 transition-all"
+                  className="px-6 py-3 bg-slate-900 text-white font-bold rounded-2xl hover:bg-slate-800 transition-all cursor-pointer shadow-md"
                 >
-                  Continue
+                  Continue →
                 </button>
               </div>
             </div>
@@ -417,7 +432,15 @@ export const RepairRequestWizard: React.FC<RepairRequestWizardProps> = ({
               </div>
               
               <h3 className="text-2xl font-bold text-slate-900">Repair request submitted</h3>
-              <p className="text-slate-500">Your request has been saved successfully.</p>
+              <p className="text-slate-500 text-sm">Your request has been saved successfully.</p>
+              
+              {createdRequestId && (
+                <div className="inline-block px-4 py-2 rounded-xl bg-slate-100 border border-slate-200">
+                  <span className="text-xs font-mono font-bold text-slate-700">
+                    Request ID: {createdRequestId.replace(/^req_/, 'REQ-').toUpperCase()}
+                  </span>
+                </div>
+              )}
               
               <div className="pt-8 flex justify-center">
                 <button type="button" 
@@ -425,7 +448,7 @@ export const RepairRequestWizard: React.FC<RepairRequestWizardProps> = ({
                     if (createdRequestId) onRequestCreated(createdRequestId);
                     else onCancel();
                   }}
-                  className="px-8 py-4 bg-slate-900 text-white font-bold rounded-2xl hover:bg-slate-800 transition-all flex items-center gap-2 shadow-xl shadow-slate-900/20"
+                  className="px-8 py-4 bg-slate-900 text-white font-bold rounded-2xl hover:bg-slate-800 transition-all flex items-center gap-2 shadow-xl shadow-slate-900/20 cursor-pointer"
                 >
                   <Search className="w-5 h-5" />
                   Find Technicians

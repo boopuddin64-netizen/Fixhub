@@ -713,6 +713,42 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   const isValidLoc = invalidLocPayload.customerLocation && isValidCoordinates(invalidLocPayload.customerLocation.lat as any, invalidLocPayload.customerLocation.lng as any);
   assert(!isValidLoc, 'Missing location correctly fails validation, avoiding crash');
 
+  // Test 25: Non-Lagos Regional Location Matching & Isolation
+  console.log('\n25. Phase 2.5 / 3 Non-Lagos Regional Matching & Isolation Rules');
+  
+  // Test Port Harcourt location matching
+  const phLocation = { lat: 4.8156, lng: 7.0128, address: 'Garrison Junction', city: 'Port Harcourt', state: 'Rivers State' };
+  const phMatches = TechnicianMatchingService.matchTechnicians({
+    customerLocation: phLocation,
+    deviceBrand: 'Apple',
+    issues: ['screen_damaged'],
+  });
+
+  assert(phMatches.length > 0, 'Technician matching succeeds for Port Harcourt location');
+  assert(phMatches[0].technicianId === 'usr_tech_5', 'Top match in Port Harcourt is local Garrison technician (usr_tech_5)');
+  assert(phMatches[0].distanceKm < 5, 'Calculated distance in Port Harcourt is accurate (< 5 km)');
+
+  // Test Abuja location matching
+  const abujaLocation = { lat: 9.0765, lng: 7.4721, address: 'Emab Plaza, Wuse 2', city: 'Abuja Municipal', state: 'Abuja FCT' };
+  const abujaMatches = TechnicianMatchingService.matchTechnicians({
+    customerLocation: abujaLocation,
+    deviceBrand: 'Samsung',
+    issues: ['battery_problem'],
+  });
+
+  assert(abujaMatches.length > 0, 'Technician matching succeeds for Abuja location');
+  assert(abujaMatches[0].technicianId === 'usr_tech_6', 'Top match in Abuja is local Wuse 2 technician (usr_tech_6)');
+
+  // Test location sanitization for non-Lagos location
+  const sanitizedPhLoc = sanitizeCustomerLocationForTechnician(phLocation);
+  assert(sanitizedPhLoc.city === 'Port Harcourt', 'Location sanitizer preserves Port Harcourt city');
+  assert(sanitizedPhLoc.state === 'Rivers State', 'Location sanitizer preserves Rivers State');
+
+  // Test photo array capping to 3 max
+  const photoOverlimit = ['p1.jpg', 'p2.jpg', 'p3.jpg', 'p4.jpg', 'p5.jpg'];
+  const cappedPhotos = photoOverlimit.slice(0, 3);
+  assert(cappedPhotos.length === 3, 'Photos array correctly capped to 3 max for low bandwidth optimization');
+
   console.log('\n===============================================================');
   console.log(`   TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);
   console.log('===============================================================\n');

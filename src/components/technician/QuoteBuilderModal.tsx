@@ -64,7 +64,7 @@ export const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({
           <div>
             <h3 className="font-bold text-base text-slate-900">Create Transparent Quote</h3>
             <p className="text-xs text-slate-500">
-              For {request.deviceBrand} {request.deviceModel} ({request.issues.join(', ')})
+              For {request.deviceBrand} {request.deviceModel} ({(request.issues || []).join(', ')})
             </p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 cursor-pointer">

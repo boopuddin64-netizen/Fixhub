@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { RepairIssue, RepairIssueCategory } from '../../../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { RepairIssue } from '../../../types';
+import { ApiClient } from '../../../api/client';
 import {
   Smartphone,
   BatteryCharging,
@@ -14,23 +15,50 @@ import {
   AlertCircle
 } from 'lucide-react';
 
-interface IssueSelectorProps {
-  issues: RepairIssue[];
-  selectedIssueIds: string[];
-  onToggleIssue: (issueId: string) => void;
-  otherDescription: string;
-  onOtherDescriptionChange: (text: string) => void;
+export interface IssueSelectorProps {
+  issues?: RepairIssue[];
+  selectedIssueIds?: string[];
+  onChange?: (selectedIssueIds: string[]) => void;
+  onToggleIssue?: (issueId: string) => void;
+  otherDescription?: string;
+  onOtherDescriptionChange?: (text: string) => void;
+  onIssuesLoaded?: (issues: RepairIssue[]) => void;
 }
 
 export const IssueSelector: React.FC<IssueSelectorProps> = ({
-  issues,
-  selectedIssueIds,
+  issues: propIssues,
+  selectedIssueIds = [],
+  onChange,
   onToggleIssue,
-  otherDescription,
+  otherDescription = '',
   onOtherDescriptionChange,
+  onIssuesLoaded,
 }) => {
+  const [fetchedIssues, setFetchedIssues] = useState<RepairIssue[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+
+  useEffect(() => {
+    if (propIssues && propIssues.length > 0) {
+      return;
+    }
+    let isMounted = true;
+    ApiClient.getIssuesCatalog()
+      .then((data) => {
+        if (isMounted && Array.isArray(data) && data.length > 0) {
+          setFetchedIssues(data);
+          onIssuesLoaded?.(data);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load issues catalog:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [propIssues, onIssuesLoaded]);
+
+  const activeIssues = (propIssues && propIssues.length > 0) ? propIssues : fetchedIssues;
 
   const categories: { id: string; label: string; icon: React.ElementType }[] = [
     { id: 'ALL', label: 'All Issues', icon: Smartphone },
@@ -44,9 +72,8 @@ export const IssueSelector: React.FC<IssueSelectorProps> = ({
     { id: 'Other', label: 'Other', icon: HelpCircle },
   ];
 
-  // Group issues by category or filter by search query
   const filteredIssues = useMemo(() => {
-    let list = issues;
+    let list = activeIssues || [];
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       return list.filter(
@@ -62,9 +89,23 @@ export const IssueSelector: React.FC<IssueSelectorProps> = ({
     }
 
     return list;
-  }, [issues, searchQuery, selectedCategory]);
+  }, [activeIssues, searchQuery, selectedCategory]);
 
-  const isOtherSelected = selectedIssueIds.includes('issue_other') || selectedIssueIds.includes('other');
+  const handleToggle = (issueId: string) => {
+    if (onToggleIssue) {
+      onToggleIssue(issueId);
+      return;
+    }
+    if (onChange) {
+      const exists = selectedIssueIds.includes(issueId);
+      const next = exists
+        ? selectedIssueIds.filter((id) => id !== issueId)
+        : [...selectedIssueIds, issueId];
+      onChange(next);
+    }
+  };
+
+  const isOtherSelected = (selectedIssueIds || []).includes('issue_other') || (selectedIssueIds || []).includes('other');
 
   return (
     <div id="repair-issue-selector" className="space-y-4">
@@ -81,6 +122,7 @@ export const IssueSelector: React.FC<IssueSelectorProps> = ({
           />
           {searchQuery && (
             <button
+              type="button"
               onClick={() => setSearchQuery('')}
               className="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer"
             >
@@ -96,8 +138,8 @@ export const IssueSelector: React.FC<IssueSelectorProps> = ({
               const Icon = cat.icon;
               const isActive = selectedCategory === cat.id;
               const countInCategory = cat.id === 'ALL'
-                ? issues.length
-                : issues.filter((i) => i.category === cat.id).length;
+                ? (activeIssues || []).length
+                : (activeIssues || []).filter((i) => i.category === cat.id).length;
 
               return (
                 <button
@@ -126,20 +168,20 @@ export const IssueSelector: React.FC<IssueSelectorProps> = ({
       <div className="space-y-2">
         <div className="flex items-center justify-between px-1">
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            {searchQuery ? `Search Results (${filteredIssues.length})` : selectedCategory}
+            {searchQuery ? `Search Results (${(filteredIssues || []).length})` : selectedCategory}
           </span>
           <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-            {selectedIssueIds.length} problem{selectedIssueIds.length === 1 ? '' : 's'} selected
+            {(selectedIssueIds || []).length} problem{(selectedIssueIds || []).length === 1 ? '' : 's'} selected
           </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[380px] overflow-y-auto pr-1">
-          {filteredIssues.map((issue) => {
-            const isSelected = selectedIssueIds.includes(issue.id);
+          {(filteredIssues || []).map((issue) => {
+            const isSelected = (selectedIssueIds || []).includes(issue.id);
             return (
               <div
                 key={issue.id}
-                onClick={() => onToggleIssue(issue.id)}
+                onClick={() => handleToggle(issue.id)}
                 className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-start gap-3 select-none ${
                   isSelected
                     ? 'border-emerald-600 bg-emerald-50/70 shadow-xs ring-1 ring-emerald-600/30'
@@ -189,7 +231,7 @@ export const IssueSelector: React.FC<IssueSelectorProps> = ({
             rows={3}
             placeholder="Describe the problem in your own words..."
             value={otherDescription}
-            onChange={(e) => onOtherDescriptionChange(e.target.value)}
+            onChange={(e) => onOtherDescriptionChange?.(e.target.value)}
             className="w-full p-3 rounded-xl border border-amber-300 bg-white text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 shadow-xs"
           />
         </div>

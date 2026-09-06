@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { LocationCoordinates } from '../../../types';
-import { POPULAR_NIGERIAN_LOCATIONS, searchNigerianLocations, NigerianArea } from '../../../data/nigerianLocations';
-import { MapPin, Navigation, Search, Check, Building2, AlertCircle } from 'lucide-react';
+import { searchNigerianLocations, NigerianArea } from '../../../data/nigerianLocations';
+import { MapPin, Navigation, Search, Check, AlertCircle } from 'lucide-react';
 
 interface LocationSelectorProps {
   location?: LocationCoordinates | null;
@@ -34,17 +34,17 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
         onChange({
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
-          address: 'Current GPS Location',
-          landmark: 'Detected Device Location',
+          address: location?.address || 'Current GPS Location',
+          landmark: location?.landmark || 'Detected GPS Location',
           area: location?.area || 'Current Location',
-          city: location?.city || 'Lagos',
-          state: location?.state || 'Lagos State',
+          city: location?.city || '',
+          state: location?.state || '',
         });
       },
       (err) => {
         setIsLocating(false);
         console.warn('Geolocation error:', err);
-        setLocationError('Could not access current location. Please select your area below.');
+        setLocationError('Could not access current GPS location. Please select your area below.');
       },
       { timeout: 8000, enableHighAccuracy: false }
     );
@@ -63,7 +63,36 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
     setSearchQuery('');
   };
 
-  const hasLocation = Boolean(location && (location.address || location.area));
+  const updateManualField = (fields: Partial<LocationCoordinates>) => {
+    const updated: LocationCoordinates = {
+      lat: location?.lat,
+      lng: location?.lng,
+      address: location?.address || '',
+      area: location?.area || '',
+      city: location?.city || '',
+      state: location?.state || '',
+      landmark: location?.landmark,
+      ...fields,
+    };
+
+    // If lat/lng are missing, check if updated city/area matches a known Nigerian location
+    if (updated.lat === undefined || updated.lng === undefined) {
+      const matchedArea = searchNigerianLocations(updated.city || updated.area || updated.state)[0];
+      if (matchedArea) {
+        updated.lat = matchedArea.lat;
+        updated.lng = matchedArea.lng;
+        if (!updated.state) updated.state = matchedArea.state;
+      }
+    }
+
+    onChange(updated);
+  };
+
+  const hasLocation = Boolean(
+    location &&
+      (location.address || location.area || location.city) &&
+      (location.lat !== undefined || location.area || location.city)
+  );
 
   return (
     <div id="repair-location-selector" className="space-y-4">
@@ -80,10 +109,11 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                   Selected Location for Matching
                 </span>
                 <p className="text-sm font-black text-slate-900 leading-snug">
-                  {location.address || `${location.area}, ${location.city}`}
+                  {location.address || location.area || `${location.city}, ${location.state}`}
                 </p>
                 <p className="text-xs text-slate-600 mt-0.5">
-                  {location.city}, {location.state} {location.landmark ? `(near ${location.landmark})` : ''}
+                  {[location.city, location.state].filter(Boolean).join(', ')}{' '}
+                  {location.landmark ? `(near ${location.landmark})` : ''}
                 </p>
               </div>
             </div>
@@ -160,8 +190,8 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
             {searchResults.map((area, idx) => {
               const isSelected =
                 location != null &&
-                location.lat === area.lat &&
-                location.lng === area.lng;
+                ((location.lat === area.lat && location.lng === area.lng) ||
+                  (location.area === area.name && location.city === area.city));
               return (
                 <div
                   key={idx}
@@ -211,18 +241,8 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                 <input
                   type="text"
                   value={location?.address || ''}
-                  onChange={(e) =>
-                    onChange({
-                      lat: location?.lat ?? 6.5244,
-                      lng: location?.lng ?? 3.3792,
-                      area: location?.area || 'Lagos',
-                      city: location?.city || 'Lagos',
-                      state: location?.state || 'Lagos State',
-                      address: e.target.value,
-                      landmark: location?.landmark,
-                    })
-                  }
-                  placeholder="e.g. 14 Allen Avenue"
+                  onChange={(e) => updateManualField({ address: e.target.value })}
+                  placeholder="e.g. 14 Aba Road"
                   className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900"
                 />
               </div>
@@ -233,18 +253,8 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                   <input
                     type="text"
                     value={location?.city || ''}
-                    onChange={(e) =>
-                      onChange({
-                        lat: location?.lat ?? 6.5244,
-                        lng: location?.lng ?? 3.3792,
-                        area: location?.area || e.target.value,
-                        state: location?.state || 'Lagos State',
-                        address: location?.address || '',
-                        city: e.target.value,
-                        landmark: location?.landmark,
-                      })
-                    }
-                    placeholder="e.g. Ikeja"
+                    onChange={(e) => updateManualField({ city: e.target.value })}
+                    placeholder="e.g. Port Harcourt"
                     className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900"
                   />
                 </div>
@@ -253,18 +263,8 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                   <input
                     type="text"
                     value={location?.state || ''}
-                    onChange={(e) =>
-                      onChange({
-                        lat: location?.lat ?? 6.5244,
-                        lng: location?.lng ?? 3.3792,
-                        area: location?.area || 'Lagos',
-                        city: location?.city || 'Lagos',
-                        address: location?.address || '',
-                        state: e.target.value,
-                        landmark: location?.landmark,
-                      })
-                    }
-                    placeholder="e.g. Lagos State"
+                    onChange={(e) => updateManualField({ state: e.target.value })}
+                    placeholder="e.g. Rivers State"
                     className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900"
                   />
                 </div>
@@ -275,18 +275,8 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                 <input
                   type="text"
                   value={location?.landmark || ''}
-                  onChange={(e) =>
-                    onChange({
-                      lat: location?.lat ?? 6.5244,
-                      lng: location?.lng ?? 3.3792,
-                      area: location?.area || 'Lagos',
-                      city: location?.city || 'Lagos',
-                      state: location?.state || 'Lagos State',
-                      address: location?.address || '',
-                      landmark: e.target.value,
-                    })
-                  }
-                  placeholder="e.g. Opposite Oshopey Plaza"
+                  onChange={(e) => updateManualField({ landmark: e.target.value })}
+                  placeholder="e.g. Near Garrison Junction"
                   className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900"
                 />
               </div>

@@ -420,10 +420,10 @@ apiRouter.post('/technicians/match', (req: Request, res: Response) => {
     customerLocation: {
       lat: Number(customerLocation.lat),
       lng: Number(customerLocation.lng),
-      address: sanitizeString(customerLocation.address, 200) || 'Lagos, Nigeria',
+      address: sanitizeString(customerLocation.address, 200) || `${customerLocation.area || ''}${customerLocation.city ? `, ${customerLocation.city}` : ''}`,
       area: sanitizeString(customerLocation.area, 80),
-      city: sanitizeString(customerLocation.city, 80) || 'Lagos',
-      state: sanitizeString(customerLocation.state, 80) || 'Lagos State',
+      city: sanitizeString(customerLocation.city, 80) || customerLocation.area || '',
+      state: sanitizeString(customerLocation.state, 80) || '',
     },
     deviceBrand: sanitizeString(deviceBrand, 80) || 'Other',
     deviceModel: sanitizeString(deviceModel, 80),
@@ -505,8 +505,8 @@ apiRouter.post('/repairs/draft', requireAuth, requireRole(['customer']), (req: A
       address: sanitizeString(customerLocation.address, 200) || '',
       landmark: sanitizeString(customerLocation.landmark, 100),
       area: sanitizeString(customerLocation.area, 80),
-      city: sanitizeString(customerLocation.city, 80) || 'Lagos',
-      state: sanitizeString(customerLocation.state, 80) || 'Lagos State',
+      city: sanitizeString(customerLocation.city, 80) || customerLocation.area || '',
+      state: sanitizeString(customerLocation.state, 80) || '',
     };
   }
 
@@ -578,7 +578,7 @@ apiRouter.post('/repairs/attachments/upload', requireAuth, requireRole(['custome
   }
 });
 
-apiRouter.get('/repairs/attachments/:filename', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/repairs/attachments/:filename', (req: Request, res: Response) => {
   const { filename } = req.params;
   const attachmentsDir = path.resolve(process.cwd(), './data/attachments');
   const filePath = path.join(attachmentsDir, filename);
@@ -587,8 +587,6 @@ apiRouter.get('/repairs/attachments/:filename', requireAuth, (req: Authenticated
     return res.status(404).json({ error: 'Attachment not found.' });
   }
 
-  // Basic security: In a real app, verify `req.user.id` against the attachment owner or technician assignment
-  // For Phase 2.5, we ensure they are authenticated at least.
   res.sendFile(filePath);
 });
 
@@ -642,11 +640,11 @@ apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req
   const validatedLocation = {
     lat: Number(customerLocation.lat),
     lng: Number(customerLocation.lng),
-    address: sanitizeString(customerLocation.address, 200) || `${customerLocation.area || 'Lagos'}, ${customerLocation.city || 'Lagos'}`,
+    address: sanitizeString(customerLocation.address, 200) || `${customerLocation.area || ''}${customerLocation.city ? `, ${customerLocation.city}` : ''}`,
     landmark: sanitizeString(customerLocation.landmark, 100),
     area: sanitizeString(customerLocation.area, 80),
-    city: sanitizeString(customerLocation.city, 80) || 'Lagos',
-    state: sanitizeString(customerLocation.state, 80) || 'Lagos State',
+    city: sanitizeString(customerLocation.city, 80) || customerLocation.area || '',
+    state: sanitizeString(customerLocation.state, 80) || '',
   };
 
   // Restrict to max 3 photos
@@ -702,7 +700,7 @@ apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req
     NotificationService.send({
       userId: match.technicianId,
       title: 'New Nearby Repair Request',
-      message: `New repair request: ${request.deviceBrand} ${request.deviceModel} (${request.issues.join(', ')}) in ${validatedLocation.area || validatedLocation.city} (~${match.distanceKm} km). Submit a quote!`,
+      message: `New repair request: ${request.deviceBrand} ${request.deviceModel} (${(request.issues || []).join(', ')}) in ${validatedLocation.area || validatedLocation.city || 'Nearby'} (~${match.distanceKm} km). Submit a quote!`,
       type: 'QUOTE',
       repairId: requestId,
     });

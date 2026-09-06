@@ -317,14 +317,16 @@ function MainAppContent() {
       </main>
 
       {/* Role-Aware Bottom Navigation */}
-      <BottomNav
-        currentTab={currentTab}
-        onSelectTab={(tab) => {
-          setShowWizard(false);
-          setCurrentTab(tab);
-        }}
-        activeRepairsCount={activeJobs.length}
-      />
+      {!showWizard && (
+        <BottomNav
+          currentTab={currentTab}
+          onSelectTab={(tab) => {
+            setShowWizard(false);
+            setCurrentTab(tab);
+          }}
+          activeRepairsCount={activeJobs.length}
+        />
+      )}
 
       {/* Escrow Payment Modal */}
       {selectedQuoteForPayment && activeJob && (

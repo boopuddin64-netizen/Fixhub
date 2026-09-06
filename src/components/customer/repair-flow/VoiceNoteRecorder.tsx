@@ -34,6 +34,104 @@ function getSupportedAudioMimeType(): string | undefined {
   return undefined;
 }
 
+export const VoiceNotePlayer: React.FC<{
+  url: string;
+  durationSeconds?: number;
+  onDelete?: () => void;
+  className?: string;
+}> = ({ url, durationSeconds = 0, onDelete, className = '' }) => {
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [playbackSeconds, setPlaybackSeconds] = useState<number>(0);
+  const [hasError, setHasError] = useState<boolean>(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, [url]);
+
+  const formatTime = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  const togglePlay = () => {
+    if (hasError) setHasError(false);
+    
+    if (!audioRef.current) {
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => {
+        setIsPlaying(false);
+        setPlaybackSeconds(0);
+      };
+      audio.ontimeupdate = () => {
+        setPlaybackSeconds(Math.floor(audio.currentTime));
+      };
+      audio.onerror = () => {
+        setIsPlaying(false);
+        setHasError(true);
+      };
+    }
+
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play().then(() => {
+        setIsPlaying(true);
+      }).catch((err) => {
+        console.warn('Audio playback not permitted or failed:', err);
+        setIsPlaying(false);
+        setHasError(true);
+      });
+    }
+  };
+
+  return (
+    <div className={`flex items-center justify-between gap-3 p-3 rounded-2xl bg-emerald-50 border border-emerald-200 ${className}`}>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={togglePlay}
+          className="w-10 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-md transition-colors cursor-pointer shrink-0"
+          title={isPlaying ? 'Pause' : 'Play voice note'}
+        >
+          {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 ml-0.5 fill-current" />}
+        </button>
+
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-1.5">
+            <Volume2 className="w-3.5 h-3.5 text-emerald-700" />
+            <span className="text-xs font-bold text-emerald-900">Voice Note Attached</span>
+          </div>
+          <p className="text-[11px] text-emerald-700 font-mono font-medium">
+            {hasError
+              ? 'Playback unavailable'
+              : `${formatTime(isPlaying ? playbackSeconds : (durationSeconds || 5))} / ${formatTime(durationSeconds || 5)}`}
+          </p>
+        </div>
+      </div>
+
+      {onDelete && (
+        <button
+          type="button"
+          onClick={onDelete}
+          className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer shrink-0"
+          title="Delete voice note"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      )}
+    </div>
+  );
+};
+
 export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
   voiceNoteUrl,
   voiceNoteDurationSeconds = 0,
@@ -299,37 +397,11 @@ export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
     <div id="voice-note-recorder-component" className="w-full">
       {voiceNoteUrl ? (
         /* Recorded Voice Note Pill */
-        <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-emerald-50 border border-emerald-200">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={togglePlayback}
-              className="w-10 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-md transition-colors cursor-pointer"
-              title={isPlaying ? 'Pause' : 'Play voice note'}
-            >
-              {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 ml-0.5 fill-current" />}
-            </button>
-
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-1.5">
-                <Volume2 className="w-3.5 h-3.5 text-emerald-700" />
-                <span className="text-xs font-bold text-emerald-900">Voice Note Attached</span>
-              </div>
-              <p className="text-[11px] text-emerald-700 font-mono font-medium">
-                {isPlaying ? formatTime(playbackSeconds) : formatTime(voiceNoteDurationSeconds || 5)} / {formatTime(voiceNoteDurationSeconds || 5)}
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={deleteVoiceNote}
-            className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-            title="Delete voice note"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
+        <VoiceNotePlayer
+          url={voiceNoteUrl}
+          durationSeconds={voiceNoteDurationSeconds}
+          onDelete={deleteVoiceNote}
+        />
       ) : isProcessing ? (
         <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200">
            <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" />

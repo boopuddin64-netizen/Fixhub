@@ -357,7 +357,7 @@ export const CustomerHomeView: React.FC<CustomerHomeViewProps> = ({
                     <StatusBadge status={job.status} size="sm" />
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5 truncate">
-                    Issues: <span className="font-semibold text-slate-700">{job.issues.join(', ')}</span>
+                    Issues: <span className="font-semibold text-slate-700">{(job.issues || []).join(', ')}</span>
                   </p>
                   <p className="text-[11px] text-slate-400 mt-0.5">
                     Secured Escrow: <span className="font-bold text-emerald-700">₦{job.finalAmount.toLocaleString()}</span>
@@ -398,7 +398,7 @@ export const CustomerHomeView: React.FC<CustomerHomeViewProps> = ({
                 </div>
                 <div className="min-w-0">
                   <h4 className="font-bold text-xs sm:text-sm text-slate-900 truncate">
-                    {req.deviceBrand} {req.deviceModel} ({req.issues.join(', ')})
+                    {req.deviceBrand} {req.deviceModel} ({(req.issues || []).join(', ')})
                   </h4>
                   <p className="text-[11px] text-amber-900 font-medium">
                     {req.quotesCount || 1} technician quote(s) received • Tap to compare

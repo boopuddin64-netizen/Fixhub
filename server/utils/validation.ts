@@ -76,20 +76,20 @@ export function sanitizeCustomerLocationForTechnician(
 ): LocationCoordinates {
   if (!loc) {
     return {
-      address: 'Lagos, Nigeria',
-      area: 'Lagos Area',
-      city: 'Lagos',
-      state: 'Lagos State',
+      address: 'Location Unavailable',
+      area: 'General Area',
+      city: 'Unknown City',
+      state: 'Unknown State',
       lat: 0,
       lng: 0,
     };
   }
 
   return {
-    address: loc.area ? `${loc.area}, ${loc.city}` : `${loc.city}, ${loc.state}`,
+    address: loc.area ? `${loc.area}${loc.city ? `, ${loc.city}` : ''}` : `${loc.city || 'Local Area'}${loc.state ? `, ${loc.state}` : ''}`,
     area: loc.area || loc.city || 'Local Area',
-    city: loc.city || 'Lagos',
-    state: loc.state || 'Lagos State',
+    city: loc.city || loc.area || 'Unknown City',
+    state: loc.state || 'Unknown State',
     landmark: undefined,
     lat: 0,
     lng: 0,

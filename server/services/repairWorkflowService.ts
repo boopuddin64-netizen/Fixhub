@@ -417,7 +417,7 @@ export class RepairWorkflowService {
       repairJobId: job.id,
       deviceBrand: job.deviceBrand,
       deviceModel: job.deviceModel,
-      coveredRepair: job.issues.join(', '),
+      coveredRepair: (job.issues || []).join(', '),
       coveredRepairs: job.issues && job.issues.length > 0 ? job.issues : ['Standard Repair Service'],
       technicianId: job.technicianId,
       technicianName: tech ? tech.businessName : 'Certified Technician',
