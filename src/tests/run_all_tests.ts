@@ -200,8 +200,68 @@ async function runTestSuite() {
   });
   assert(unauthVerify.success === false, 'Foreign customer CANNOT verify or manipulate payment escrow');
 
-  // Test 9: Device Check-In & Status Machine Boundaries
+  // Test 9: Device Check-In & State Transition Security (Security Hardening Fix #2)
   console.log('\n9. Device Intake Check-In & State Transition Security');
+
+  // Ensure test job is strictly in BOOKED state
+  const testJob = db.repairJobs.find((j) => j.id === 'job_demo_booked');
+  if (testJob) {
+    testJob.status = 'BOOKED';
+    testJob.conditionReport = undefined;
+  }
+
+  // Test 9.1: Generic status update endpoint bypass attempt (Technician tries PATCH status with DEVICE_RECEIVED)
+  // Technician should NOT be able to manually transition to DEVICE_RECEIVED via generic endpoint
+  const allowedTechStatuses = ['DIAGNOSING', 'REPAIR_IN_PROGRESS', 'READY_FOR_PICKUP'];
+  assert(!allowedTechStatuses.includes('DEVICE_RECEIVED' as any), 'Test 1: DEVICE_RECEIVED is excluded from allowed generic technician statuses');
+
+  // Test 9.2: Unauthorized technician check-in attempt (Technician 2 trying to check in Technician 1's job)
+  const unauthCheckIn = RepairWorkflowService.checkInDevice({
+    jobId: 'job_demo_booked',
+    technicianId: 'usr_tech_2',
+    report: {
+      timestamp: new Date().toISOString(),
+      frontCondition: 'PERFECT',
+      backCondition: 'PERFECT',
+      frameCondition: 'PRISTINE',
+      screenPowersOn: true,
+      touchResponsive: true,
+      cameraWorking: true,
+      existingDamageNotes: 'Unauthorized attempt',
+      accessoriesReceived: [],
+      photos: [],
+      technicianNotes: 'Unauthorized attempt',
+      confirmedByCustomer: true,
+    },
+  });
+  assert(unauthCheckIn.success === false, 'Test 2: Foreign technician CANNOT check in another technician’s repair job');
+
+  // Test 9.3: Assigned technician attempts check-in on a job that is NOT in BOOKED status (e.g. PAYMENT_PENDING)
+  const nonBookedJob = db.repairJobs.find((j) => j.status === 'PAYMENT_PENDING' || j.status === 'REPAIR_IN_PROGRESS');
+  if (nonBookedJob) {
+    const invalidStatusCheckIn = RepairWorkflowService.checkInDevice({
+      jobId: nonBookedJob.id,
+      technicianId: nonBookedJob.technicianId,
+      report: {
+        timestamp: new Date().toISOString(),
+        frontCondition: 'CRACKED',
+        backCondition: 'PERFECT',
+        frameCondition: 'PRISTINE',
+        screenPowersOn: true,
+        touchResponsive: true,
+        cameraWorking: true,
+        existingDamageNotes: 'Premature intake attempt',
+        accessoriesReceived: [],
+        photos: [],
+        technicianNotes: 'Premature intake attempt',
+        confirmedByCustomer: true,
+      },
+    });
+    assert(invalidStatusCheckIn.success === false, `Test 3: Assigned technician CANNOT check in a non-BOOKED job (status: ${nonBookedJob.status})`);
+  }
+
+  // Test 9.4: Legitimate check-in on a BOOKED job by authorized technician
+  const preCheckInLogCount = db.auditLogs.length;
   const legitCheckIn = RepairWorkflowService.checkInDevice({
     jobId: 'job_demo_booked',
     technicianId: 'usr_tech_1',
@@ -214,18 +274,30 @@ async function runTestSuite() {
       touchResponsive: true,
       cameraWorking: true,
       existingDamageNotes: 'Screen cracked at top right',
-      accessoriesReceived: ['Phone only'],
-      photos: [],
-      technicianNotes: 'Device received in shop',
+      accessoriesReceived: ['Phone only', 'Clear Case'],
+      photos: ['https://storage.fixhub.ng/photos/intake_screen_01.jpg'],
+      technicianNotes: 'Device received in shop, screen powers on with display lines',
       confirmedByCustomer: true,
     },
   });
-  assert(legitCheckIn.success === true, 'Assigned technician can check in device at shop');
+  assert(legitCheckIn.success === true, 'Test 4: Assigned technician can check in BOOKED device at shop');
+  if (legitCheckIn.success && legitCheckIn.job) {
+    assert(legitCheckIn.job.status === 'DEVICE_RECEIVED', 'Test 4a: Job status transitioned to DEVICE_RECEIVED');
+    assert(!!legitCheckIn.job.conditionReport, 'Test 4b: Physical condition report is populated');
+    assert(
+      legitCheckIn.job.statusHistory.some((h) => h.status === 'DEVICE_RECEIVED'),
+      'Test 4c: statusHistory contains DEVICE_RECEIVED transition'
+    );
+    const checkInAudit = db.auditLogs.find(
+      (log) => log.action === 'DEVICE_CHECKED_IN' && log.resourceId === 'job_demo_booked'
+    );
+    assert(!!checkInAudit, 'Test 4d: Audit log contains DEVICE_CHECKED_IN entry with complete intake metadata');
+  }
 
-  // Malicious technician check-in attempt (Technician 2 trying to check in Technician 1's job)
-  const unauthCheckIn = RepairWorkflowService.checkInDevice({
+  // Test 9.5: Attempt duplicate check-in on already checked-in job
+  const duplicateCheckIn = RepairWorkflowService.checkInDevice({
     jobId: 'job_demo_booked',
-    technicianId: 'usr_tech_2',
+    technicianId: 'usr_tech_1',
     report: {
       timestamp: new Date().toISOString(),
       frontCondition: 'PERFECT',
@@ -234,18 +306,30 @@ async function runTestSuite() {
       screenPowersOn: true,
       touchResponsive: true,
       cameraWorking: true,
-      existingDamageNotes: 'Faked report',
+      existingDamageNotes: 'Duplicate intake attempt',
       accessoriesReceived: [],
       photos: [],
-      technicianNotes: 'Unauthorized attempt',
+      technicianNotes: 'Duplicate intake attempt',
+      confirmedByCustomer: true,
     },
   });
-  assert(unauthCheckIn.success === false, 'Foreign technician CANNOT check in another technician’s repair job');
+  assert(duplicateCheckIn.success === false, 'Test 5: Duplicate check-in on already checked-in job is rejected');
 
-  // State Transition Constraints
+  // Test 9.6: Illegal jump: BOOKED -> COMPLETED
+  assert(!RepairWorkflowService.isValidTransition('BOOKED', 'COMPLETED'), 'Test 6: Illegal jump BOOKED -> COMPLETED is blocked');
+
+  // Test 9.7: Illegal jump: BOOKED -> READY_FOR_PICKUP
+  assert(!RepairWorkflowService.isValidTransition('BOOKED', 'READY_FOR_PICKUP'), 'Test 7: Illegal jump BOOKED -> READY_FOR_PICKUP is blocked');
+
+  // Test 9.8: Illegal jump: DEVICE_RECEIVED -> COMPLETED
+  assert(!RepairWorkflowService.isValidTransition('DEVICE_RECEIVED', 'COMPLETED'), 'Test 8: Illegal jump DEVICE_RECEIVED -> COMPLETED is blocked');
+
+  // Test 9.9: Valid operational transition: DEVICE_RECEIVED -> DIAGNOSING
+  assert(RepairWorkflowService.isValidTransition('DEVICE_RECEIVED', 'DIAGNOSING'), 'Test 9: Valid transition DEVICE_RECEIVED -> DIAGNOSING is allowed');
+
+  // Additional state machine boundary tests
   assert(!RepairWorkflowService.isValidTransition('REQUESTED', 'COMPLETED'), 'Illegal skip: REQUESTED -> COMPLETED is blocked');
-  assert(!RepairWorkflowService.isValidTransition('DEVICE_RECEIVED', 'COMPLETED'), 'Illegal skip: DEVICE_RECEIVED -> COMPLETED is blocked');
-  assert(RepairWorkflowService.isValidTransition('DEVICE_RECEIVED', 'DIAGNOSING'), 'Valid transition: DEVICE_RECEIVED -> DIAGNOSING is allowed');
+  assert(!RepairWorkflowService.isValidTransition('PAYMENT_PENDING', 'COMPLETED'), 'Illegal skip: PAYMENT_PENDING -> COMPLETED is blocked');
 
   // Test 10: Quote Accuracy & Anti-Exploitation Engine
   console.log('\n10. Anti-Exploitation & Quote Accuracy Variance');

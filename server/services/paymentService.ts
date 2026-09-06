@@ -107,12 +107,19 @@ export class PaymentService {
     payment.paidAt = new Date().toISOString();
 
     // Update job status to PAYMENT_CONFIRMED -> BOOKED
-    job.status = 'PAYMENT_CONFIRMED';
+    job.status = 'BOOKED';
+    job.bookedAt = payment.paidAt;
     job.statusHistory.push({
       status: 'PAYMENT_CONFIRMED',
       timestamp: payment.paidAt,
       actorRole: 'customer',
       note: `₦${payment.amountNaira.toLocaleString()} secured in Fix Hub Escrow (Ref: ${payment.transactionRef})`,
+    });
+    job.statusHistory.push({
+      status: 'BOOKED',
+      timestamp: payment.paidAt,
+      actorRole: 'customer',
+      note: 'Repair job booked. Awaiting physical device check-in at shop.',
     });
 
       // Notify technician

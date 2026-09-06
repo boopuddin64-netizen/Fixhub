@@ -225,7 +225,8 @@ export interface WarrantyRecord {
   repairJobId: string;
   deviceBrand: string;
   deviceModel: string;
-  coveredRepair: string;
+  coveredRepair?: string;
+  coveredRepairs?: string[];
   technicianId: string;
   technicianName: string;
   periodDays: number;

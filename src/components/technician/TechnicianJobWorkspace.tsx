@@ -39,10 +39,10 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
 
   // Intake condition form
   const [showIntakeModal, setShowIntakeModal] = useState(false);
-  const [frontCondition, setFrontCondition] = useState('Shattered glass top left');
-  const [backCondition, setBackCondition] = useState('Minor hairline scratches');
+  const [frontCondition, setFrontCondition] = useState('CRACKED');
+  const [backCondition, setBackCondition] = useState('MINOR_SCRATCHES');
   const [screenPowersOn, setScreenPowersOn] = useState(true);
-  const [frameCondition, setFrameCondition] = useState('Clean / No bends');
+  const [frameCondition, setFrameCondition] = useState('PRISTINE');
   const [techNotes, setTechNotes] = useState('Intake confirmed in shop.');
 
   // Additional Diagnosis form
@@ -82,14 +82,14 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
       await ApiClient.checkInDevice(job.id, {
         frontCondition,
         backCondition,
+        frameCondition,
         screenPowersOn,
         touchResponsive: true,
-        camerasWorking: true,
-        speakersWorking: true,
-        frameCondition,
+        cameraWorking: true,
+        existingDamageNotes: techNotes,
         accessoriesReceived: ['Phone only', 'Protective case'],
         technicianNotes: techNotes,
-        intakePhotos: [
+        photos: [
           'https://images.unsplash.com/photo-1596742578443-7682ef5251cd?w=600&auto=format&fit=crop&q=80',
         ],
       });
@@ -198,7 +198,7 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
 
         <div className="flex flex-wrap items-center gap-2.5">
           {/* Step 1: Intake Check-in */}
-          {['PAYMENT_CONFIRMED', 'DEVICE_DROPPED_OFF'].includes(job.status) && (
+          {['BOOKED', 'PAYMENT_CONFIRMED', 'DEVICE_DROPPED_OFF'].includes(job.status) && (
             <button
               id="tech-intake-device-btn"
               onClick={() => setShowIntakeModal(true)}
@@ -387,22 +387,44 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
             <div className="space-y-3 text-xs">
               <div>
                 <label className="font-bold block text-slate-700 mb-1">Front Screen Condition</label>
-                <input
-                  type="text"
+                <select
                   value={frontCondition}
                   onChange={(e) => setFrontCondition(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg"
-                />
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900"
+                >
+                  <option value="PERFECT">PERFECT - Pristine / Flawless</option>
+                  <option value="MINOR_SCRATCHES">MINOR_SCRATCHES - Light cosmetic wear</option>
+                  <option value="CRACKED">CRACKED - Hairline or localized crack</option>
+                  <option value="SHATTERED">SHATTERED - Severely shattered / bleeding LCD</option>
+                </select>
               </div>
 
               <div>
                 <label className="font-bold block text-slate-700 mb-1">Back Housing Condition</label>
-                <input
-                  type="text"
+                <select
                   value={backCondition}
                   onChange={(e) => setBackCondition(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg"
-                />
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900"
+                >
+                  <option value="PERFECT">PERFECT - Like new</option>
+                  <option value="MINOR_SCRATCHES">MINOR_SCRATCHES - Minor surface marks</option>
+                  <option value="CRACKED">CRACKED - Cracked back glass</option>
+                  <option value="SHATTERED">SHATTERED - Shattered rear glass/camera ring</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold block text-slate-700 mb-1">Chassis / Frame Condition</label>
+                <select
+                  value={frameCondition}
+                  onChange={(e) => setFrameCondition(e.target.value)}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900"
+                >
+                  <option value="PRISTINE">PRISTINE - Straight and clean</option>
+                  <option value="SCUFFED">SCUFFED - Corner scuffs / paint wear</option>
+                  <option value="BENT">BENT - Slight chassis curve</option>
+                  <option value="DENTED">DENTED - Impact corner dents</option>
+                </select>
               </div>
 
               <div className="flex items-center gap-3">
@@ -418,12 +440,13 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
               </div>
 
               <div>
-                <label className="font-bold block text-slate-700 mb-1">Technician Condition Notes</label>
+                <label className="font-bold block text-slate-700 mb-1">Technician Intake Notes</label>
                 <textarea
                   value={techNotes}
                   onChange={(e) => setTechNotes(e.target.value)}
                   rows={2}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900"
+                  placeholder="Notes on physical intake inspection..."
                 />
               </div>
             </div>

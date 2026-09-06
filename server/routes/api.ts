@@ -636,39 +636,51 @@ apiRouter.post('/jobs/:id/check-in', requireAuth, requireRole(['technician']), (
     return res.status(404).json({ error: 'Repair job not found.' });
   }
 
-  const report = req.body.report as Partial<ConditionReport>;
-  if (!report || !report.frontCondition) {
+  // Job must currently be in BOOKED status
+  if (job.status !== 'BOOKED') {
+    return res.status(400).json({ error: `Cannot check in device: Job status is ${job.status}, expected BOOKED.` });
+  }
+
+  // Prevent duplicate check-in
+  if (job.conditionReport) {
+    return res.status(400).json({ error: 'Device has already been checked in.' });
+  }
+
+  const rawReport = req.body.report;
+  if (!rawReport || typeof rawReport !== 'object') {
     return res.status(400).json({ error: 'Physical condition intake assessment report required.' });
   }
 
   const allowedFrontBack = ['PERFECT', 'MINOR_SCRATCHES', 'CRACKED', 'SHATTERED'] as const;
   const allowedFrame = ['PRISTINE', 'SCUFFED', 'BENT', 'DENTED'] as const;
 
-  const resolvedFront = allowedFrontBack.includes(report.frontCondition as any)
-    ? (report.frontCondition as 'PERFECT' | 'MINOR_SCRATCHES' | 'CRACKED' | 'SHATTERED')
-    : 'CRACKED';
-  const resolvedBack = allowedFrontBack.includes(report.backCondition as any)
-    ? (report.backCondition as 'PERFECT' | 'MINOR_SCRATCHES' | 'CRACKED' | 'SHATTERED')
-    : 'PERFECT';
-  const resolvedFrame = allowedFrame.includes(report.frameCondition as any)
-    ? (report.frameCondition as 'PRISTINE' | 'SCUFFED' | 'BENT' | 'DENTED')
-    : 'PRISTINE';
+  if (!rawReport.frontCondition || !allowedFrontBack.includes(rawReport.frontCondition)) {
+    return res.status(400).json({ error: 'Valid front condition is required (PERFECT, MINOR_SCRATCHES, CRACKED, SHATTERED).' });
+  }
+  if (!rawReport.backCondition || !allowedFrontBack.includes(rawReport.backCondition)) {
+    return res.status(400).json({ error: 'Valid back condition is required (PERFECT, MINOR_SCRATCHES, CRACKED, SHATTERED).' });
+  }
+  if (!rawReport.frameCondition || !allowedFrame.includes(rawReport.frameCondition)) {
+    return res.status(400).json({ error: 'Valid frame condition is required (PRISTINE, SCUFFED, BENT, DENTED).' });
+  }
 
   const conditionReport: ConditionReport = {
     timestamp: new Date().toISOString(),
-    frontCondition: resolvedFront,
-    backCondition: resolvedBack,
-    frameCondition: resolvedFrame,
-    screenPowersOn: !!report.screenPowersOn,
-    touchResponsive: report.touchResponsive !== undefined ? !!report.touchResponsive : true,
-    cameraWorking: report.cameraWorking !== undefined ? !!report.cameraWorking : true,
-    existingDamageNotes: sanitizeString(report.existingDamageNotes, 1000),
-    accessoriesReceived: Array.isArray(report.accessoriesReceived)
-      ? report.accessoriesReceived.map((a) => sanitizeString(a, 100))
+    frontCondition: rawReport.frontCondition,
+    backCondition: rawReport.backCondition,
+    frameCondition: rawReport.frameCondition,
+    screenPowersOn: Boolean(rawReport.screenPowersOn),
+    touchResponsive: rawReport.touchResponsive !== undefined ? Boolean(rawReport.touchResponsive) : true,
+    cameraWorking: rawReport.cameraWorking !== undefined ? Boolean(rawReport.cameraWorking) : true,
+    existingDamageNotes: sanitizeString(rawReport.existingDamageNotes, 1000),
+    accessoriesReceived: Array.isArray(rawReport.accessoriesReceived)
+      ? rawReport.accessoriesReceived.filter((a): a is string => typeof a === 'string').map((a) => sanitizeString(a, 100))
       : [],
-    photos: Array.isArray(report.photos) ? report.photos.filter((p) => typeof p === 'string') : [],
-    technicianNotes: sanitizeString(report.technicianNotes, 1000),
-    confirmedByCustomer: !!report.confirmedByCustomer,
+    photos: Array.isArray(rawReport.photos)
+      ? rawReport.photos.filter((p): p is string => typeof p === 'string' && (p.startsWith('http://') || p.startsWith('https://') || p.startsWith('data:image/') || p.length > 0))
+      : [],
+    technicianNotes: sanitizeString(rawReport.technicianNotes, 1000),
+    confirmedByCustomer: Boolean(rawReport.confirmedByCustomer),
   };
 
   const result = RepairWorkflowService.checkInDevice({
@@ -689,22 +701,28 @@ apiRouter.patch('/jobs/:id/status', requireAuth, (req: AuthenticatedRequest, res
   const job = db.repairJobs.find((j) => j.id === req.params.id);
   if (!job) return res.status(404).json({ error: 'Repair job not found.' });
 
-  // Ownership verification
+  // Task 4: Explicit defensive protection against generic DEVICE_RECEIVED updates
+  if (newStatus === 'DEVICE_RECEIVED') {
+    return res.status(403).json({
+      error: 'DEVICE_RECEIVED can only be created through the device check-in workflow.',
+    });
+  }
+
+  // Ownership verification & role-based allowed transitions
   if (req.user!.role === 'technician') {
     if (job.technicianId !== req.user!.id) {
       return res.status(404).json({ error: 'Repair job not found.' });
     }
 
-    // Technicians can only initiate specific operational status updates
+    // Task 1: Allowed technician statuses strictly limited to operational transitions
     const allowedTechStatuses: RepairLifecycleStatus[] = [
-      'DEVICE_RECEIVED',
       'DIAGNOSING',
       'REPAIR_IN_PROGRESS',
       'READY_FOR_PICKUP',
     ];
     if (!allowedTechStatuses.includes(newStatus)) {
       return res.status(403).json({
-        error: `Forbidden: Technicians cannot transition status to ${newStatus}. Completion requires customer confirmation, and payment requires escrow verification.`,
+        error: `Forbidden: Technicians cannot transition status to ${newStatus} via generic status update.`,
       });
     }
   } else if (req.user!.role === 'customer') {
@@ -712,7 +730,7 @@ apiRouter.patch('/jobs/:id/status', requireAuth, (req: AuthenticatedRequest, res
       return res.status(404).json({ error: 'Repair job not found.' });
     }
 
-    // Customers can only initiate handoff/pickup updates
+    // Task 6: Customers can only initiate legitimate customer handoff/pickup updates
     const allowedCustomerStatuses: RepairLifecycleStatus[] = [
       'DEVICE_DROPPED_OFF',
       'PICKED_UP',
@@ -735,6 +753,7 @@ apiRouter.patch('/jobs/:id/status', requireAuth, (req: AuthenticatedRequest, res
     });
   }
 
+  const previousStatus = job.status;
   job.status = newStatus;
   const now = new Date().toISOString();
 
@@ -763,11 +782,11 @@ apiRouter.patch('/jobs/:id/status', requireAuth, (req: AuthenticatedRequest, res
     action: `STATUS_CHANGED_${newStatus}`,
     resourceType: 'REPAIR_JOB',
     resourceId: job.id,
-    details: { oldStatus: job.status, newStatus, note: sanitizeString(note, 200) },
+    details: { previousStatus, newStatus, note: sanitizeString(note, 200) },
   });
 
   db.save();
-  return res.json(job);
+  return res.json({ success: true, job });
 });
 
 apiRouter.post('/jobs/:id/add-part', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {

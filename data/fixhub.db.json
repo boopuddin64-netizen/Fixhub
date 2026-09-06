@@ -8,8 +8,8 @@
       "name": "Tunde Adebayo",
       "role": "customer",
       "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-      "createdAt": "2026-08-06T17:37:10.964Z",
-      "passwordHash": "$2b$08$gO/JOb49xgCO2QyUnXpd6eS2VrXFy2wydSDCLRU3NsdmWUlQt8EJW"
+      "createdAt": "2026-08-07T04:39:32.387Z",
+      "passwordHash": "$2b$08$kcdeeOWa3fpFVm2HXegrv.Xywo/0gWg9p/uAEHXahSVvlsnXb9X7q"
     },
     {
       "id": "usr_customer_2",
@@ -18,8 +18,8 @@
       "name": "Ngozi Eze",
       "role": "customer",
       "avatarUrl": "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=150&auto=format&fit=crop&q=80",
-      "createdAt": "2026-08-06T17:37:10.964Z",
-      "passwordHash": "$2b$08$gO/JOb49xgCO2QyUnXpd6eS2VrXFy2wydSDCLRU3NsdmWUlQt8EJW"
+      "createdAt": "2026-08-07T04:39:32.387Z",
+      "passwordHash": "$2b$08$kcdeeOWa3fpFVm2HXegrv.Xywo/0gWg9p/uAEHXahSVvlsnXb9X7q"
     },
     {
       "id": "usr_tech_1",
@@ -28,8 +28,8 @@
       "name": "Emeka Okafor",
       "role": "technician",
       "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
-      "createdAt": "2026-08-06T17:37:10.964Z",
-      "passwordHash": "$2b$08$gO/JOb49xgCO2QyUnXpd6eS2VrXFy2wydSDCLRU3NsdmWUlQt8EJW"
+      "createdAt": "2026-08-07T04:39:32.387Z",
+      "passwordHash": "$2b$08$kcdeeOWa3fpFVm2HXegrv.Xywo/0gWg9p/uAEHXahSVvlsnXb9X7q"
     },
     {
       "id": "usr_tech_2",
@@ -38,8 +38,8 @@
       "name": "Kolawole Balogun",
       "role": "technician",
       "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80",
-      "createdAt": "2026-08-06T17:37:10.964Z",
-      "passwordHash": "$2b$08$gO/JOb49xgCO2QyUnXpd6eS2VrXFy2wydSDCLRU3NsdmWUlQt8EJW"
+      "createdAt": "2026-08-07T04:39:32.387Z",
+      "passwordHash": "$2b$08$kcdeeOWa3fpFVm2HXegrv.Xywo/0gWg9p/uAEHXahSVvlsnXb9X7q"
     },
     {
       "id": "usr_tech_3",
@@ -48,8 +48,8 @@
       "name": "Fatima Ibrahim",
       "role": "technician",
       "avatarUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
-      "createdAt": "2026-08-06T17:37:10.964Z",
-      "passwordHash": "$2b$08$gO/JOb49xgCO2QyUnXpd6eS2VrXFy2wydSDCLRU3NsdmWUlQt8EJW"
+      "createdAt": "2026-08-07T04:39:32.387Z",
+      "passwordHash": "$2b$08$kcdeeOWa3fpFVm2HXegrv.Xywo/0gWg9p/uAEHXahSVvlsnXb9X7q"
     },
     {
       "id": "usr_tech_4",
@@ -58,8 +58,8 @@
       "name": "Chidi Nnamdi",
       "role": "technician",
       "avatarUrl": "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150&auto=format&fit=crop&q=80",
-      "createdAt": "2026-08-06T17:37:10.964Z",
-      "passwordHash": "$2b$08$gO/JOb49xgCO2QyUnXpd6eS2VrXFy2wydSDCLRU3NsdmWUlQt8EJW"
+      "createdAt": "2026-08-07T04:39:32.387Z",
+      "passwordHash": "$2b$08$kcdeeOWa3fpFVm2HXegrv.Xywo/0gWg9p/uAEHXahSVvlsnXb9X7q"
     }
   ],
   "customerProfiles": [
@@ -781,8 +781,8 @@
       ],
       "status": "QUOTE_ACCEPTED",
       "quotesCount": 1,
-      "createdAt": "2026-08-31T17:37:10.964Z",
-      "updatedAt": "2026-09-05T17:37:11.044Z",
+      "createdAt": "2026-09-01T04:39:32.387Z",
+      "updatedAt": "2026-09-06T04:39:32.466Z",
       "selectedQuoteId": "quote_demo_open_1",
       "selectedTechnicianId": "usr_tech_1"
     },
@@ -813,8 +813,8 @@
       "quotesCount": 2,
       "selectedTechnicianId": "usr_tech_1",
       "selectedQuoteId": "quote_demo_1",
-      "createdAt": "2026-08-31T17:37:10.964Z",
-      "updatedAt": "2026-09-05T17:37:10.963Z"
+      "createdAt": "2026-09-01T04:39:32.387Z",
+      "updatedAt": "2026-09-06T04:39:32.387Z"
     },
     {
       "id": "req_demo_completed",
@@ -843,8 +843,8 @@
       "quotesCount": 3,
       "selectedTechnicianId": "usr_tech_1",
       "selectedQuoteId": "quote_demo_completed_1",
-      "createdAt": "2026-08-06T17:37:10.964Z",
-      "updatedAt": "2026-08-31T17:37:10.964Z"
+      "createdAt": "2026-08-07T04:39:32.387Z",
+      "updatedAt": "2026-09-01T04:39:32.387Z"
     }
   ],
   "repairQuotes": [
@@ -868,7 +868,7 @@
       "partsQuality": "PREMIUM_AFTERMARKET",
       "notes": "Premium Hard OLED display replacement with 60-day warranty.",
       "status": "ACCEPTED",
-      "createdAt": "2026-08-31T17:37:10.964Z"
+      "createdAt": "2026-09-01T04:39:32.387Z"
     },
     {
       "id": "quote_demo_1",
@@ -890,7 +890,7 @@
       "partsQuality": "PREMIUM_AFTERMARKET",
       "notes": "Premium Hard OLED display with true-tone programming and original water-seal gasket replacement included.",
       "status": "ACCEPTED",
-      "createdAt": "2026-08-31T17:37:10.964Z"
+      "createdAt": "2026-09-01T04:39:32.387Z"
     },
     {
       "id": "quote_demo_2",
@@ -912,7 +912,7 @@
       "partsQuality": "ORIGINAL_OEM",
       "notes": "100% Genuine Apple pulled display panel with factory oleophobic coating.",
       "status": "REJECTED",
-      "createdAt": "2026-08-31T17:37:10.964Z"
+      "createdAt": "2026-09-01T04:39:32.387Z"
     },
     {
       "id": "quote_demo_completed_1",
@@ -934,7 +934,7 @@
       "partsQuality": "ORIGINAL_OEM",
       "notes": "Original Samsung Galaxy battery replacement with thermal pad reapplication.",
       "status": "ACCEPTED",
-      "createdAt": "2026-08-06T17:37:10.964Z"
+      "createdAt": "2026-08-07T04:39:32.387Z"
     }
   ],
   "repairJobs": [
@@ -958,48 +958,60 @@
       "platformFeeAmount": 4675,
       "technicianPayoutAmount": 50325,
       "partsUsed": [],
-      "createdAt": "2026-09-05T17:37:10.963Z",
-      "bookedAt": "2026-09-05T17:37:10.963Z",
+      "createdAt": "2026-09-06T04:39:32.387Z",
+      "bookedAt": "2026-09-06T04:39:32.484Z",
       "statusHistory": [
         {
           "status": "REQUESTED",
-          "timestamp": "2026-08-31T17:37:10.964Z",
+          "timestamp": "2026-09-01T04:39:32.387Z",
           "actorRole": "customer",
           "note": "Customer submitted repair request"
         },
         {
           "status": "QUOTING",
-          "timestamp": "2026-08-31T17:37:10.964Z",
+          "timestamp": "2026-09-01T04:39:32.387Z",
           "actorRole": "technician",
           "note": "Emeka submitted quote ₦55,000"
         },
         {
           "status": "QUOTE_ACCEPTED",
-          "timestamp": "2026-09-05T17:37:10.963Z",
+          "timestamp": "2026-09-06T04:39:32.387Z",
           "actorRole": "customer",
           "note": "Quote accepted by customer"
         },
         {
           "status": "PAYMENT_CONFIRMED",
-          "timestamp": "2026-09-05T17:37:10.963Z",
+          "timestamp": "2026-09-06T04:39:32.387Z",
           "actorRole": "customer",
           "note": "₦55,000 secured in Escrow"
         },
         {
+          "status": "BOOKED",
+          "timestamp": "2026-09-06T04:39:32.387Z",
+          "actorRole": "customer",
+          "note": "Repair booked. Awaiting physical intake."
+        },
+        {
           "status": "PAYMENT_CONFIRMED",
-          "timestamp": "2026-09-05T17:37:11.063Z",
+          "timestamp": "2026-09-06T04:39:32.484Z",
           "actorRole": "customer",
           "note": "₦55,000 secured in Fix Hub Escrow (Ref: FIX-PAY-9918231-LAGOS)"
         },
         {
+          "status": "BOOKED",
+          "timestamp": "2026-09-06T04:39:32.484Z",
+          "actorRole": "customer",
+          "note": "Repair job booked. Awaiting physical device check-in at shop."
+        },
+        {
           "status": "DEVICE_RECEIVED",
-          "timestamp": "2026-09-05T17:37:11.064Z",
+          "timestamp": "2026-09-06T04:39:32.484Z",
           "actorRole": "technician",
-          "note": "Device checked in and physical intake scan recorded."
+          "note": "Device checked in and physical intake condition report recorded."
         }
       ],
       "conditionReport": {
-        "timestamp": "2026-09-05T17:37:11.064Z",
+        "timestamp": "2026-09-06T04:39:32.484Z",
         "frontCondition": "CRACKED",
         "backCondition": "MINOR_SCRATCHES",
         "frameCondition": "PRISTINE",
@@ -1008,13 +1020,16 @@
         "cameraWorking": true,
         "existingDamageNotes": "Screen cracked at top right",
         "accessoriesReceived": [
-          "Phone only"
+          "Phone only",
+          "Clear Case"
         ],
-        "photos": [],
-        "technicianNotes": "Device received in shop",
+        "photos": [
+          "https://storage.fixhub.ng/photos/intake_screen_01.jpg"
+        ],
+        "technicianNotes": "Device received in shop, screen powers on with display lines",
         "confirmedByCustomer": true
       },
-      "receivedAt": "2026-09-05T17:37:11.064Z"
+      "receivedAt": "2026-09-06T04:39:32.484Z"
     },
     {
       "id": "job_demo_active",
@@ -1036,7 +1051,7 @@
       "platformFeeAmount": 5100,
       "technicianPayoutAmount": 54900,
       "conditionReport": {
-        "timestamp": "2026-08-31T17:37:10.964Z",
+        "timestamp": "2026-09-01T04:39:32.387Z",
         "frontCondition": "CRACKED",
         "backCondition": "PERFECT",
         "frameCondition": "PRISTINE",
@@ -1065,53 +1080,53 @@
           "supplier": "Prime Tech Component Lagos",
           "beforePhotoUrl": "https://images.unsplash.com/photo-1588508065123-287b28e013da?w=400&auto=format&fit=crop&q=80",
           "afterPhotoUrl": "https://images.unsplash.com/photo-1596742578443-7682ef5251cd?w=400&auto=format&fit=crop&q=80",
-          "installationTimestamp": "2026-09-05T17:37:10.963Z"
+          "installationTimestamp": "2026-09-06T04:39:32.387Z"
         }
       ],
-      "createdAt": "2026-08-31T17:37:10.964Z",
-      "bookedAt": "2026-08-31T17:37:10.964Z",
-      "receivedAt": "2026-08-31T17:37:10.964Z",
-      "repairStartedAt": "2026-09-05T17:37:10.963Z",
+      "createdAt": "2026-09-01T04:39:32.387Z",
+      "bookedAt": "2026-09-01T04:39:32.387Z",
+      "receivedAt": "2026-09-01T04:39:32.387Z",
+      "repairStartedAt": "2026-09-06T04:39:32.387Z",
       "statusHistory": [
         {
           "status": "REQUESTED",
-          "timestamp": "2026-08-31T17:37:10.964Z",
+          "timestamp": "2026-09-01T04:39:32.387Z",
           "actorRole": "customer",
           "note": "Customer submitted repair request"
         },
         {
           "status": "QUOTING",
-          "timestamp": "2026-08-31T17:37:10.964Z",
+          "timestamp": "2026-09-01T04:39:32.387Z",
           "actorRole": "technician",
           "note": "Emeka submitted quote ₦60,000"
         },
         {
           "status": "QUOTE_ACCEPTED",
-          "timestamp": "2026-08-31T17:37:10.964Z",
+          "timestamp": "2026-09-01T04:39:32.387Z",
           "actorRole": "customer",
           "note": "Quote accepted by customer"
         },
         {
           "status": "PAYMENT_CONFIRMED",
-          "timestamp": "2026-08-31T17:37:10.964Z",
+          "timestamp": "2026-09-01T04:39:32.387Z",
           "actorRole": "customer",
           "note": "₦60,000 held safely in Escrow"
         },
         {
           "status": "DEVICE_RECEIVED",
-          "timestamp": "2026-08-31T17:37:10.964Z",
+          "timestamp": "2026-09-01T04:39:32.387Z",
           "actorRole": "technician",
           "note": "Device checked in at shop with condition scan"
         },
         {
           "status": "DIAGNOSING",
-          "timestamp": "2026-08-31T17:37:10.964Z",
+          "timestamp": "2026-09-01T04:39:32.387Z",
           "actorRole": "technician",
           "note": "Diagnostics confirmed touch layer intact"
         },
         {
           "status": "REPAIR_IN_PROGRESS",
-          "timestamp": "2026-09-05T17:37:10.963Z",
+          "timestamp": "2026-09-06T04:39:32.387Z",
           "actorRole": "technician",
           "note": "Installing Premium Hard OLED and water-seal gasket"
         }
@@ -1137,7 +1152,7 @@
       "platformFeeAmount": 2550,
       "technicianPayoutAmount": 27450,
       "conditionReport": {
-        "timestamp": "2026-08-06T17:37:10.964Z",
+        "timestamp": "2026-08-07T04:39:32.387Z",
         "frontCondition": "PERFECT",
         "backCondition": "MINOR_SCRATCHES",
         "frameCondition": "PRISTINE",
@@ -1158,7 +1173,7 @@
           "quality": "ORIGINAL_OEM",
           "priceNaira": 22000,
           "warrantyDays": 90,
-          "installationTimestamp": "2026-08-31T17:37:10.964Z"
+          "installationTimestamp": "2026-09-01T04:39:32.387Z"
         }
       ],
       "warranty": {
@@ -1170,63 +1185,63 @@
         "technicianId": "usr_tech_1",
         "technicianName": "Emeka Okafor (Emeka Phone Labs)",
         "periodDays": 90,
-        "startDate": "2026-08-31T17:37:10.964Z",
-        "endDate": "2026-11-29T17:37:10.964Z",
+        "startDate": "2026-09-01T04:39:32.387Z",
+        "endDate": "2026-11-30T04:39:32.387Z",
         "terms": "Covers battery failure, abnormal discharge (>20% in 1 hr idle), or swelling. Excludes water damage or physical puncture.",
         "status": "ACTIVE"
       },
-      "createdAt": "2026-08-06T17:37:10.964Z",
-      "bookedAt": "2026-08-06T17:37:10.964Z",
-      "receivedAt": "2026-08-06T17:37:10.964Z",
-      "repairStartedAt": "2026-08-06T17:37:10.964Z",
-      "readyForPickupAt": "2026-08-31T17:37:10.964Z",
-      "completedAt": "2026-08-31T17:37:10.964Z",
+      "createdAt": "2026-08-07T04:39:32.387Z",
+      "bookedAt": "2026-08-07T04:39:32.387Z",
+      "receivedAt": "2026-08-07T04:39:32.387Z",
+      "repairStartedAt": "2026-08-07T04:39:32.387Z",
+      "readyForPickupAt": "2026-09-01T04:39:32.387Z",
+      "completedAt": "2026-09-01T04:39:32.387Z",
       "statusHistory": [
         {
           "status": "REQUESTED",
-          "timestamp": "2026-08-06T17:37:10.964Z",
+          "timestamp": "2026-08-07T04:39:32.387Z",
           "actorRole": "customer"
         },
         {
           "status": "QUOTE_ACCEPTED",
-          "timestamp": "2026-08-06T17:37:10.964Z",
+          "timestamp": "2026-08-07T04:39:32.387Z",
           "actorRole": "customer"
         },
         {
           "status": "PAYMENT_CONFIRMED",
-          "timestamp": "2026-08-06T17:37:10.964Z",
+          "timestamp": "2026-08-07T04:39:32.387Z",
           "actorRole": "customer"
         },
         {
           "status": "DEVICE_RECEIVED",
-          "timestamp": "2026-08-06T17:37:10.964Z",
+          "timestamp": "2026-08-07T04:39:32.387Z",
           "actorRole": "technician"
         },
         {
           "status": "REPAIR_IN_PROGRESS",
-          "timestamp": "2026-08-06T17:37:10.964Z",
+          "timestamp": "2026-08-07T04:39:32.387Z",
           "actorRole": "technician"
         },
         {
           "status": "READY_FOR_PICKUP",
-          "timestamp": "2026-08-31T17:37:10.964Z",
+          "timestamp": "2026-09-01T04:39:32.387Z",
           "actorRole": "technician"
         },
         {
           "status": "PICKED_UP",
-          "timestamp": "2026-08-31T17:37:10.964Z",
+          "timestamp": "2026-09-01T04:39:32.387Z",
           "actorRole": "customer"
         },
         {
           "status": "COMPLETED",
-          "timestamp": "2026-08-31T17:37:10.964Z",
+          "timestamp": "2026-09-01T04:39:32.387Z",
           "actorRole": "customer",
           "note": "Customer tested battery charging speed and approved release"
         }
       ]
     },
     {
-      "id": "job_1788629831044_n4oj",
+      "id": "job_1788669572466_0zhk",
       "requestId": "req_demo_open",
       "quoteId": "quote_demo_open_1",
       "customerId": "usr_customer_1",
@@ -1237,35 +1252,35 @@
         "screen_damaged"
       ],
       "status": "PAYMENT_PENDING",
-      "dropOffCode": "FX-6527",
-      "pickupCode": "PK-2153",
-      "handoffQrToken": "tok_fixhub_1788629831044_ddghqk",
+      "dropOffCode": "FX-4891",
+      "pickupCode": "PK-9747",
+      "handoffQrToken": "tok_fixhub_1788669572466_hqa6s0",
       "originalQuoteAmount": 55000,
       "finalAmount": 55000,
       "platformFeeAmount": 4675,
       "technicianPayoutAmount": 50325,
       "partsUsed": [],
-      "createdAt": "2026-09-05T17:37:11.044Z",
+      "createdAt": "2026-09-06T04:39:32.466Z",
       "statusHistory": [
         {
           "status": "REQUESTED",
-          "timestamp": "2026-08-31T17:37:10.964Z",
+          "timestamp": "2026-09-01T04:39:32.387Z",
           "actorRole": "customer"
         },
         {
           "status": "QUOTING",
-          "timestamp": "2026-08-31T17:37:10.964Z",
+          "timestamp": "2026-09-01T04:39:32.387Z",
           "actorRole": "technician"
         },
         {
           "status": "QUOTE_ACCEPTED",
-          "timestamp": "2026-09-05T17:37:11.044Z",
+          "timestamp": "2026-09-06T04:39:32.466Z",
           "actorRole": "customer",
           "note": "Accepted quote from Emeka Okafor (₦55,000)"
         },
         {
           "status": "PAYMENT_PENDING",
-          "timestamp": "2026-09-05T17:37:11.044Z",
+          "timestamp": "2026-09-06T04:39:32.466Z",
           "actorRole": "customer"
         }
       ]
@@ -1355,7 +1370,7 @@
       "transactionRef": "FIX-PAY-9918231-LAGOS",
       "idempotencyKey": "idemp_pay_pending_001",
       "paymentMethod": "CARD",
-      "paidAt": "2026-09-05T17:37:11.063Z"
+      "paidAt": "2026-09-06T04:39:32.484Z"
     },
     {
       "id": "pay_demo_active_01",
@@ -1371,7 +1386,7 @@
       "transactionRef": "FIX-PAY-8849102-LAGOS",
       "idempotencyKey": "idemp_pay_active_001",
       "paymentMethod": "CARD",
-      "paidAt": "2026-08-31T17:37:10.964Z"
+      "paidAt": "2026-09-01T04:39:32.387Z"
     },
     {
       "id": "pay_demo_comp_01",
@@ -1387,8 +1402,8 @@
       "transactionRef": "FIX-PAY-1120934-LAGOS",
       "idempotencyKey": "idemp_pay_comp_001",
       "paymentMethod": "BANK_TRANSFER",
-      "paidAt": "2026-08-06T17:37:10.964Z",
-      "releasedAt": "2026-08-31T17:37:10.964Z"
+      "paidAt": "2026-08-07T04:39:32.387Z",
+      "releasedAt": "2026-09-01T04:39:32.387Z"
     }
   ],
   "warranties": [
@@ -1398,11 +1413,14 @@
       "deviceBrand": "Samsung",
       "deviceModel": "Galaxy S22 Ultra",
       "coveredRepair": "Battery Replacement (5000mAh OEM)",
+      "coveredRepairs": [
+        "Battery Replacement (5000mAh OEM)"
+      ],
       "technicianId": "usr_tech_1",
       "technicianName": "Emeka Okafor (Emeka Phone Labs)",
       "periodDays": 90,
-      "startDate": "2026-08-31T17:37:10.964Z",
-      "endDate": "2026-11-29T17:37:10.964Z",
+      "startDate": "2026-09-01T04:39:32.387Z",
+      "endDate": "2026-11-30T04:39:32.387Z",
       "terms": "Covers battery failure, abnormal discharge, or swelling. Excludes water damage or physical puncture.",
       "status": "ACTIVE"
     }
@@ -1418,7 +1436,7 @@
       "comment": "Emeka did a fantastic job on my S22 Ultra battery. Dropped it off in Computer Village, tested it in 45 mins, and now the battery lasts over a full day. Super transparent!",
       "verifiedPurchase": true,
       "repairSummary": "Samsung Galaxy S22 Ultra Battery Replacement",
-      "createdAt": "2026-08-31T17:37:10.964Z"
+      "createdAt": "2026-09-01T04:39:32.387Z"
     },
     {
       "id": "rev_02",
@@ -1430,7 +1448,7 @@
       "comment": "Quick screen replacement for my iPhone 12. FaceID still works and TrueTone is intact. Very professional shop.",
       "verifiedPurchase": true,
       "repairSummary": "iPhone 12 Screen Replacement",
-      "createdAt": "2026-08-06T17:37:10.964Z"
+      "createdAt": "2026-08-07T04:39:32.387Z"
     }
   ],
   "auditLogs": [
@@ -1446,7 +1464,7 @@
         "repairId": "job_demo_active",
         "provider": "PAYSTACK_SANDBOX"
       },
-      "timestamp": "2026-08-31T17:37:10.964Z"
+      "timestamp": "2026-09-01T04:39:32.387Z"
     },
     {
       "id": "audit_02",
@@ -1459,24 +1477,24 @@
         "frontCondition": "CRACKED",
         "screenPowersOn": true
       },
-      "timestamp": "2026-08-31T17:37:10.964Z"
+      "timestamp": "2026-09-01T04:39:32.387Z"
     },
     {
-      "id": "audit_1788629831063_g7juc",
+      "id": "audit_1788669572483_aptof",
       "actorId": "usr_customer_1",
       "actorRole": "customer",
       "action": "QUOTE_ACCEPTED",
       "resourceType": "REPAIR_JOB",
-      "resourceId": "job_1788629831044_n4oj",
+      "resourceId": "job_1788669572466_0zhk",
       "details": {
         "quoteId": "quote_demo_open_1",
         "totalAmount": 55000
       },
       "ipAddress": "127.0.0.1",
-      "timestamp": "2026-09-05T17:37:11.063Z"
+      "timestamp": "2026-09-06T04:39:32.483Z"
     },
     {
-      "id": "audit_1788629831064_ql3ke",
+      "id": "audit_1788669572484_d2b1c",
       "actorId": "usr_customer_1",
       "actorRole": "customer",
       "action": "PAYMENT_ESCROW_CONFIRMED",
@@ -1487,24 +1505,29 @@
         "status": "ESCROW_HELD"
       },
       "ipAddress": "127.0.0.1",
-      "timestamp": "2026-09-05T17:37:11.064Z"
+      "timestamp": "2026-09-06T04:39:32.484Z"
     },
     {
-      "id": "audit_1788629831064_typ8u",
+      "id": "audit_1788669572485_8fzxh",
       "actorId": "usr_tech_1",
       "actorRole": "technician",
       "action": "DEVICE_CHECKED_IN",
       "resourceType": "REPAIR_JOB",
       "resourceId": "job_demo_booked",
       "details": {
+        "previousStatus": "BOOKED",
+        "newStatus": "DEVICE_RECEIVED",
         "frontCondition": "CRACKED",
-        "screenPowersOn": true
+        "backCondition": "MINOR_SCRATCHES",
+        "frameCondition": "PRISTINE",
+        "screenPowersOn": true,
+        "intakeTimestamp": "2026-09-06T04:39:32.484Z"
       },
       "ipAddress": "127.0.0.1",
-      "timestamp": "2026-09-05T17:37:11.064Z"
+      "timestamp": "2026-09-06T04:39:32.485Z"
     },
     {
-      "id": "audit_1788629831064_7a4uk",
+      "id": "audit_1788669572485_y06v8",
       "actorId": "usr_customer_1",
       "actorRole": "customer",
       "action": "SECURITY_AUDIT_VERIFIED",
@@ -1514,49 +1537,49 @@
         "passed": true
       },
       "ipAddress": "127.0.0.1",
-      "timestamp": "2026-09-05T17:37:11.064Z"
+      "timestamp": "2026-09-06T04:39:32.485Z"
     }
   ],
   "notifications": [
     {
-      "id": "notif_1788629831064_3q3n",
+      "id": "notif_1788669572484_rhdk",
       "userId": "usr_customer_1",
       "title": "Phone Checked In at Shop",
       "message": "Your Apple iPhone 13 has been received and verified by the technician. Digital check-in report is ready to view.",
       "type": "STATUS_CHANGE",
       "repairId": "job_demo_booked",
       "read": false,
-      "createdAt": "2026-09-05T17:37:11.064Z"
+      "createdAt": "2026-09-06T04:39:32.484Z"
     },
     {
-      "id": "notif_1788629831064_o14f",
+      "id": "notif_1788669572484_j3v8",
       "userId": "usr_customer_1",
       "title": "Payment Secured",
       "message": "Your payment of ₦55,000 is safely held in escrow. Take your phone to the technician to begin repair.",
       "type": "PAYMENT",
       "repairId": "job_demo_booked",
       "read": false,
-      "createdAt": "2026-09-05T17:37:11.064Z"
+      "createdAt": "2026-09-06T04:39:32.484Z"
     },
     {
-      "id": "notif_1788629831063_xm7m",
+      "id": "notif_1788669572484_q3mm",
       "userId": "usr_tech_1",
       "title": "Payment Secured in Escrow",
       "message": "Payment of ₦55,000 for Apple iPhone 13 is now held in escrow. Customer will bring device.",
       "type": "PAYMENT",
       "repairId": "job_demo_booked",
       "read": false,
-      "createdAt": "2026-09-05T17:37:11.063Z"
+      "createdAt": "2026-09-06T04:39:32.484Z"
     },
     {
-      "id": "notif_1788629831063_2u81",
+      "id": "notif_1788669572483_0v1t",
       "userId": "usr_tech_1",
       "title": "Quote Accepted!",
       "message": "Tunde Adebayo accepted your quote of ₦55,000 for Apple iPhone 13. Waiting for escrow payment.",
       "type": "QUOTE",
-      "repairId": "job_1788629831044_n4oj",
+      "repairId": "job_1788669572466_0zhk",
       "read": false,
-      "createdAt": "2026-09-05T17:37:11.063Z"
+      "createdAt": "2026-09-06T04:39:32.483Z"
     },
     {
       "id": "notif_01",
@@ -1566,7 +1589,7 @@
       "type": "STATUS_CHANGE",
       "repairId": "job_demo_active",
       "read": false,
-      "createdAt": "2026-09-05T17:37:10.963Z"
+      "createdAt": "2026-09-06T04:39:32.387Z"
     },
     {
       "id": "notif_02",
@@ -1576,7 +1599,7 @@
       "type": "PAYMENT",
       "repairId": "job_demo_active",
       "read": true,
-      "createdAt": "2026-08-31T17:37:10.964Z"
+      "createdAt": "2026-09-01T04:39:32.387Z"
     }
   ],
   "messages": [
@@ -1587,7 +1610,7 @@
       "senderRole": "technician",
       "senderName": "Emeka Okafor",
       "text": "Good afternoon Mr. Tunde, we just finished opening the device. The frame is in great shape, so the screen replacement will sit completely flush.",
-      "createdAt": "2026-08-31T17:37:10.964Z"
+      "createdAt": "2026-09-01T04:39:32.387Z"
     },
     {
       "id": "msg_02",
@@ -1596,7 +1619,7 @@
       "senderRole": "customer",
       "senderName": "Tunde Adebayo",
       "text": "Awesome, thanks Emeka! Please ensure TrueTone calibration is copied over.",
-      "createdAt": "2026-08-31T17:37:10.964Z"
+      "createdAt": "2026-09-01T04:39:32.387Z"
     }
   ],
   "riskEvents": []

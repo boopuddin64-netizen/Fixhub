@@ -16,11 +16,11 @@ import { QuoteAccuracyService } from './quoteAccuracyService';
 
 const ALLOWED_TRANSITIONS: Record<RepairLifecycleStatus, RepairLifecycleStatus[]> = {
   REQUESTED: ['QUOTING', 'CANCELLED'],
-  QUOTING: ['QUOTE_ACCEPTED', 'CANCELLED'],
+  QUOTING: ['QUOTE_ACCEPTED', 'PAYMENT_PENDING', 'CANCELLED'],
   QUOTE_ACCEPTED: ['PAYMENT_PENDING', 'CANCELLED'],
   PAYMENT_PENDING: ['PAYMENT_CONFIRMED', 'CANCELLED'],
-  PAYMENT_CONFIRMED: ['BOOKED', 'DEVICE_DROPPED_OFF', 'DEVICE_RECEIVED', 'CANCELLED', 'REFUNDED'],
-  BOOKED: ['DEVICE_DROPPED_OFF', 'DEVICE_RECEIVED', 'CANCELLED'],
+  PAYMENT_CONFIRMED: ['BOOKED', 'CANCELLED', 'REFUNDED'],
+  BOOKED: ['DEVICE_RECEIVED', 'DEVICE_DROPPED_OFF', 'CANCELLED'],
   DEVICE_DROPPED_OFF: ['DEVICE_RECEIVED', 'CANCELLED'],
   DEVICE_RECEIVED: ['DIAGNOSING', 'REPAIR_IN_PROGRESS', 'DISPUTED'],
   DIAGNOSING: ['REPAIR_IN_PROGRESS', 'ADDITIONAL_DIAGNOSIS', 'DISPUTED'],
@@ -147,6 +147,7 @@ export class RepairWorkflowService {
 
   /**
    * Device Check-in by Technician at shop
+   * Dedicated workflow: ONLY valid path to transition BOOKED -> DEVICE_RECEIVED
    */
   public static checkInDevice(params: {
     jobId: string;
@@ -155,24 +156,77 @@ export class RepairWorkflowService {
   }): { success: boolean; job?: RepairJob; error?: string } {
     const { jobId, technicianId, report } = params;
     const job = db.repairJobs.find((j) => j.id === jobId);
-    if (!job) return { success: false, error: 'Job not found.' };
-    if (job.technicianId !== technicianId) return { success: false, error: 'Unauthorized: Not your assigned repair job.' };
-
-    if (!['PAYMENT_CONFIRMED', 'BOOKED', 'DEVICE_DROPPED_OFF'].includes(job.status)) {
-      return { success: false, error: `Cannot check in device when job status is ${job.status}.` };
+    if (!job) {
+      return { success: false, error: 'Job not found.' };
+    }
+    if (job.technicianId !== technicianId) {
+      return { success: false, error: 'Unauthorized: Not your assigned repair job.' };
     }
 
-    job.conditionReport = {
-      ...report,
-      timestamp: new Date().toISOString(),
+    // Duplicate check-in rejection
+    if (job.conditionReport || job.status === 'DEVICE_RECEIVED' || ['DIAGNOSING', 'REPAIR_IN_PROGRESS', 'ADDITIONAL_DIAGNOSIS', 'READY_FOR_PICKUP', 'PICKED_UP', 'COMPLETED'].includes(job.status)) {
+      return { success: false, error: 'Device has already been checked in.' };
+    }
+
+    // Must be strictly BOOKED (or DEVICE_DROPPED_OFF)
+    if (job.status !== 'BOOKED' && job.status !== 'DEVICE_DROPPED_OFF') {
+      return { success: false, error: `Cannot check in device: Job status is ${job.status}, expected BOOKED.` };
+    }
+
+    // Validate state machine transition
+    if (!this.isValidTransition(job.status, 'DEVICE_RECEIVED')) {
+      return { success: false, error: `Invalid transition from ${job.status} to DEVICE_RECEIVED.` };
+    }
+
+    // Validate condition report structure
+    if (!report || typeof report !== 'object') {
+      return { success: false, error: 'Physical condition intake assessment report is required.' };
+    }
+
+    const allowedFrontBack = ['PERFECT', 'MINOR_SCRATCHES', 'CRACKED', 'SHATTERED'];
+    const allowedFrame = ['PRISTINE', 'SCUFFED', 'BENT', 'DENTED'];
+
+    if (!report.frontCondition || !allowedFrontBack.includes(report.frontCondition)) {
+      return { success: false, error: 'Valid front physical condition is required (PERFECT, MINOR_SCRATCHES, CRACKED, SHATTERED).' };
+    }
+    if (!report.backCondition || !allowedFrontBack.includes(report.backCondition)) {
+      return { success: false, error: 'Valid back physical condition is required (PERFECT, MINOR_SCRATCHES, CRACKED, SHATTERED).' };
+    }
+    if (!report.frameCondition || !allowedFrame.includes(report.frameCondition)) {
+      return { success: false, error: 'Valid frame condition is required (PRISTINE, SCUFFED, BENT, DENTED).' };
+    }
+
+    const now = new Date().toISOString();
+    const previousStatus = job.status;
+
+    // Sanitize and ensure server-side timestamp
+    const sanitizedReport: ConditionReport = {
+      timestamp: now,
+      frontCondition: report.frontCondition,
+      backCondition: report.backCondition,
+      frameCondition: report.frameCondition,
+      screenPowersOn: Boolean(report.screenPowersOn),
+      touchResponsive: report.touchResponsive !== undefined ? Boolean(report.touchResponsive) : true,
+      cameraWorking: report.cameraWorking !== undefined ? Boolean(report.cameraWorking) : true,
+      existingDamageNotes: typeof report.existingDamageNotes === 'string' ? report.existingDamageNotes.trim().slice(0, 1000) : '',
+      accessoriesReceived: Array.isArray(report.accessoriesReceived)
+        ? report.accessoriesReceived.filter((a): a is string => typeof a === 'string').map((a) => a.trim().slice(0, 100))
+        : [],
+      photos: Array.isArray(report.photos)
+        ? report.photos.filter((p): p is string => typeof p === 'string' && (p.startsWith('http://') || p.startsWith('https://') || p.startsWith('data:image/') || p.length > 0))
+        : [],
+      technicianNotes: typeof report.technicianNotes === 'string' ? report.technicianNotes.trim().slice(0, 1000) : '',
+      confirmedByCustomer: Boolean(report.confirmedByCustomer),
     };
+
+    job.conditionReport = sanitizedReport;
     job.status = 'DEVICE_RECEIVED';
-    job.receivedAt = new Date().toISOString();
+    job.receivedAt = now;
     job.statusHistory.push({
       status: 'DEVICE_RECEIVED',
-      timestamp: job.receivedAt,
+      timestamp: now,
       actorRole: 'technician',
-      note: 'Device checked in and physical intake scan recorded.',
+      note: 'Device checked in and physical intake condition report recorded.',
     });
 
     NotificationService.send({
@@ -189,7 +243,15 @@ export class RepairWorkflowService {
       action: 'DEVICE_CHECKED_IN',
       resourceType: 'REPAIR_JOB',
       resourceId: jobId,
-      details: { frontCondition: report.frontCondition, screenPowersOn: report.screenPowersOn },
+      details: {
+        previousStatus,
+        newStatus: 'DEVICE_RECEIVED',
+        frontCondition: sanitizedReport.frontCondition,
+        backCondition: sanitizedReport.backCondition,
+        frameCondition: sanitizedReport.frameCondition,
+        screenPowersOn: sanitizedReport.screenPowersOn,
+        intakeTimestamp: now,
+      },
     });
 
     db.save();
@@ -349,6 +411,7 @@ export class RepairWorkflowService {
       deviceBrand: job.deviceBrand,
       deviceModel: job.deviceModel,
       coveredRepair: job.issues.join(', '),
+      coveredRepairs: job.issues && job.issues.length > 0 ? job.issues : ['Standard Repair Service'],
       technicianId: job.technicianId,
       technicianName: tech ? tech.businessName : 'Certified Technician',
       periodDays,

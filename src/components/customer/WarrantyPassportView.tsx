@@ -92,7 +92,10 @@ export const WarrantyPassportView: React.FC = () => {
                     <div>
                       <span className="text-slate-400 block text-[10px] font-medium">Covered Repairs & Parts:</span>
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {w.coveredRepairs.map((rep, idx) => (
+                        {(Array.isArray(w.coveredRepairs)
+                          ? w.coveredRepairs
+                          : (w.coveredRepair ? w.coveredRepair.split(',').map((s) => s.trim()) : ['Standard Hardware Coverage'])
+                        ).map((rep, idx) => (
                           <span key={idx} className="bg-white border border-slate-200 text-slate-800 font-medium px-2 py-0.5 rounded text-[11px]">
                             {rep}
                           </span>
@@ -140,11 +143,11 @@ export const WarrantyPassportView: React.FC = () => {
                   </div>
                   <div>
                     <h4 className="font-bold text-sm text-slate-900">{job.deviceBrand} {job.deviceModel}</h4>
-                    <p className="text-xs text-slate-500">Fixed: {job.issues.join(', ')} • ₦{job.finalAmount.toLocaleString()}</p>
+                    <p className="text-xs text-slate-500">Fixed: {(job.issues || []).join(', ')} • ₦{(job.finalAmount || 0).toLocaleString()}</p>
                   </div>
                 </div>
                 <span className="text-xs font-bold text-slate-600">
-                  {new Date(job.updatedAt).toLocaleDateString()}
+                  {new Date(job.completedAt || job.createdAt).toLocaleDateString()}
                 </span>
               </div>
             ))}
