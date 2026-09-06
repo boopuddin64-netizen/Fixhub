@@ -152,10 +152,11 @@ export class TechnicianMatchingService {
   }
 
   /**
-   * Checks if a technician is eligible to quote/view a repair request based on:
-   * 1. Distance between customer location and technician shop within service radius
-   * 2. Device brand supported by technician
-   * 3. Technician availability (not OFFLINE)
+   * Checks if a technician is eligible to quote/view a repair request based on four gates:
+   * 1. Technician availability (not OFFLINE)
+   * 2. Device brand compatibility (supportedBrands)
+   * 3. Repair issue/category compatibility (via canonical taxonomy resolveIssueToMatchingCategories)
+   * 4. Geographic service-radius eligibility (distance within technician serviceRadiusKm)
    */
   public static isTechnicianEligible(
     tech: TechnicianProfile,

@@ -177,6 +177,22 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   assert(ineligibleFar.eligible === false, 'Gate A Case 7b: Distance restriction (>30km) remains strictly enforced');
   assert(brandMismatch.eligible === false, 'Gate A Case 7c: Brand restriction remains strictly enforced');
 
+  // Case 8: Unknown issue ID does not match a technician with restricted categories
+  const case8UnknownIssue = TechnicianMatchingService.isTechnicianEligible(screenOnlyTech, {
+    customerLocation: ikejaRequest.customerLocation,
+    deviceBrand: 'Apple',
+    issues: ['issue_not_real'],
+  });
+  assert(case8UnknownIssue.eligible === false, 'Gate A Case 8: Unrecognized issue ID (issue_not_real) does not match restricted technician');
+
+  // Case 9: Multiple issues where one is supported and another is unsupported marks technician ineligible
+  const case9MultipleIssues = TechnicianMatchingService.isTechnicianEligible(screenOnlyTech, {
+    customerLocation: ikejaRequest.customerLocation,
+    deviceBrand: 'Apple',
+    issues: ['screen_damaged', 'battery_problem'],
+  });
+  assert(case9MultipleIssues.eligible === false, 'Gate A Case 9: Request with supported and unsupported issue marks technician ineligible');
+
   // Test 5: Customer Location Privacy & Quote Privacy Sanitization
   console.log('\n5. Data Privacy: Location Masking & Quote Isolation');
   const openLead = db.repairRequests.find((r) => r.id === 'req_demo_open')!;

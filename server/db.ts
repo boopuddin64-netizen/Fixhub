@@ -60,7 +60,20 @@ export interface DatabaseSchema {
   }>;
 }
 
-const DB_FILE_PATH = path.resolve(process.cwd(), process.env.DATA_STORAGE_PATH || './data/fixhub.db.json');
+const isTestEnv =
+  process.env.NODE_ENV === 'test' ||
+  Boolean(process.env.BUN_TEST) ||
+  Boolean(process.env.VITEST) ||
+  process.argv.some((arg) => arg.includes('test'));
+
+const PRIMARY_DB_FILE_PATH = path.resolve(
+  process.cwd(),
+  process.env.DATA_STORAGE_PATH || './data/fixhub.db.json'
+);
+
+const DB_FILE_PATH = isTestEnv
+  ? path.resolve('/tmp', 'fixhub.test.db.json')
+  : PRIMARY_DB_FILE_PATH;
 
 // Ensure directory exists
 function ensureDbDir() {
@@ -1055,8 +1068,14 @@ class Database {
 
   private loadData(): DatabaseSchema {
     try {
-      if (fs.existsSync(DB_FILE_PATH)) {
-        const fileContent = fs.readFileSync(DB_FILE_PATH, 'utf-8');
+      const pathToRead = fs.existsSync(DB_FILE_PATH)
+        ? DB_FILE_PATH
+        : fs.existsSync(PRIMARY_DB_FILE_PATH)
+        ? PRIMARY_DB_FILE_PATH
+        : null;
+
+      if (pathToRead && fs.existsSync(pathToRead)) {
+        const fileContent = fs.readFileSync(pathToRead, 'utf-8');
         const parsed = JSON.parse(fileContent);
         if (parsed && parsed.version) {
           if (!parsed.deviceFamilies || parsed.deviceFamilies.length === 0) {
