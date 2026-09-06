@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Smartphone, MapPin, CheckCircle2, ShieldCheck, ArrowRight } from 'lucide-react';
+import React from 'react';
+import { Smartphone, ShieldCheck, ArrowRight } from 'lucide-react';
 
 interface TechnicianRadarHandoffProps {
   deviceBrand: string;
@@ -16,26 +16,6 @@ export const TechnicianRadarHandoff: React.FC<TechnicianRadarHandoffProps> = ({
   locationSummary,
   onViewQuotes,
 }) => {
-  const [matchCount, setMatchCount] = useState<number>(1);
-  const [countdown, setCountdown] = useState<number>(3);
-
-  useEffect(() => {
-    const t1 = setTimeout(() => setMatchCount(3), 800);
-    const t2 = setTimeout(() => setMatchCount(6), 1600);
-    const t3 = setTimeout(() => setMatchCount(8), 2400);
-
-    const timer = setInterval(() => {
-      setCountdown((prev) => Math.max(0, prev - 1));
-    }, 1000);
-
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearInterval(timer);
-    };
-  }, []);
-
   return (
     <div id="technician-radar-handoff" className="py-8 px-4 text-center space-y-6 max-w-md mx-auto animate-fadeIn">
       {/* Animated Radar Pulse Effect */}
@@ -44,7 +24,6 @@ export const TechnicianRadarHandoff: React.FC<TechnicianRadarHandoffProps> = ({
         <div className="absolute inset-0 rounded-full border-2 border-emerald-500/30 animate-ping opacity-75" />
         <div className="absolute -inset-4 rounded-full border border-emerald-400/20 animate-pulse" />
         <div className="absolute inset-2 rounded-full bg-emerald-500/10" />
-
         {/* Central Core */}
         <div className="relative z-10 w-20 h-20 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex flex-col items-center justify-center shadow-xl shadow-emerald-600/30">
           <Smartphone className="w-8 h-8 text-white animate-bounce" />
@@ -54,13 +33,13 @@ export const TechnicianRadarHandoff: React.FC<TechnicianRadarHandoffProps> = ({
       <div className="space-y-2">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 text-xs font-bold">
           <span className="w-2 h-2 rounded-full bg-emerald-600 animate-ping" />
-          <span>Searching nearby verified shops...</span>
+          <span>Ready to find technicians</span>
         </div>
         <h2 className="text-2xl font-black text-slate-900 tracking-tight">
-          Broadcasting to Technicians
+          Request Submitted Successfully
         </h2>
         <p className="text-xs sm:text-sm text-slate-600 max-w-sm mx-auto">
-          We found <strong className="text-emerald-700 font-bold">{matchCount} verified repairers</strong> near {locationSummary} with genuine parts in stock.
+          We're ready to find verified technicians near <strong className="text-emerald-700 font-bold">{locationSummary}</strong> to fix your device.
         </p>
       </div>
 
@@ -93,13 +72,9 @@ export const TechnicianRadarHandoff: React.FC<TechnicianRadarHandoffProps> = ({
           onClick={onViewQuotes}
           className="w-full py-3.5 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
         >
-          <span>View incoming quotes</span>
+          <span>Find Technicians</span>
           <ArrowRight className="w-4 h-4" />
         </button>
-
-        <p className="text-[11px] text-slate-400">
-          Quotes typically arrive within 3 to 5 minutes.
-        </p>
       </div>
     </div>
   );

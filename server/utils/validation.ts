@@ -55,7 +55,7 @@ export function validateNumber(
 /**
  * Validates latitude and longitude.
  */
-export function isValidCoordinates(lat: unknown, lng: unknown): boolean {
+export function isValidCoordinates(lat: unknown, lng: unknown): boolean { if(lat === null || lat === undefined || lat === "") return false; if(lng === null || lng === undefined || lng === "") return false; 
   const latNum = Number(lat);
   const lngNum = Number(lng);
 

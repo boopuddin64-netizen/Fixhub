@@ -156,8 +156,7 @@ export const DeviceSelectorModal: React.FC<DeviceSelectorModalProps> = ({
         <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2.5">
             {selectedBrand && !searchQuery ? (
-              <button
-                type="button"
+              <button type="button"
                 onClick={() => {
                   if (selectedFamily) setSelectedFamily(null);
                   else setSelectedBrand(null);
@@ -182,8 +181,7 @@ export const DeviceSelectorModal: React.FC<DeviceSelectorModalProps> = ({
               </p>
             </div>
           </div>
-          <button
-            type="button"
+          <button type="button"
             onClick={onClose}
             className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
           >
@@ -195,8 +193,7 @@ export const DeviceSelectorModal: React.FC<DeviceSelectorModalProps> = ({
       {/* When inline, we might still want a back button if we are deep in selection */}
       {inline && (selectedBrand || selectedFamily) && !searchQuery && (
         <div className="p-3 border-b border-slate-100 flex items-center gap-2 bg-slate-50">
-          <button
-            type="button"
+          <button type="button"
             onClick={() => {
               if (selectedFamily) setSelectedFamily(null);
               else setSelectedBrand(null);
@@ -211,8 +208,7 @@ export const DeviceSelectorModal: React.FC<DeviceSelectorModalProps> = ({
       {/* Device Type Toggle (Phone vs Tablet) */}
         <div className="p-3 bg-slate-100/70 border-b border-slate-200/60 flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 p-1 bg-white rounded-xl border border-slate-200">
-            <button
-              type="button"
+            <button type="button"
               onClick={() => {
                 setDeviceType('PHONE');
                 setSelectedBrand(null);
@@ -227,8 +223,7 @@ export const DeviceSelectorModal: React.FC<DeviceSelectorModalProps> = ({
               <Smartphone className="w-3.5 h-3.5" />
               <span>Phones</span>
             </button>
-            <button
-              type="button"
+            <button type="button"
               onClick={() => {
                 setDeviceType('TABLET');
                 setSelectedBrand(null);
@@ -244,9 +239,7 @@ export const DeviceSelectorModal: React.FC<DeviceSelectorModalProps> = ({
               <span>Tablets / iPads</span>
             </button>
           </div>
-
-          <button
-            type="button"
+          <button type="button"
             onClick={() => setIsManualEntry(!isManualEntry)}
             className="text-xs font-bold text-blue-600 hover:text-blue-700 underline cursor-pointer"
           >
@@ -297,8 +290,7 @@ export const DeviceSelectorModal: React.FC<DeviceSelectorModalProps> = ({
                 <span className="text-xs font-medium text-slate-700">Save this device to my Fix Hub profile</span>
               </label>
 
-              <button
-                type="submit"
+              <button type="submit"
                 disabled={!manualBrand.trim() || !manualModel.trim()}
                 className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-xs shadow-md transition-colors cursor-pointer"
               >
@@ -441,9 +433,8 @@ export const DeviceSelectorModal: React.FC<DeviceSelectorModalProps> = ({
                     </span>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {brands.map((brand) => (
-                        <button
+                        <button type="button"
                           key={brand.id}
-                          type="button"
                           onClick={() => setSelectedBrand(brand)}
                           className="p-3 rounded-2xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 flex items-center justify-between cursor-pointer transition-all text-left"
                         >

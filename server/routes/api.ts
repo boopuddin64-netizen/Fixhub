@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../db';
 import { AuthService } from '../services/authService';
@@ -623,6 +625,19 @@ apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req
   const user = db.users.find((u) => u.id === req.user!.id);
   const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
   const now = new Date().toISOString();
+
+  // Idempotency check: prevent duplicate requests within 2 minutes
+  const recentDuplicate = db.repairRequests.find(r => 
+    r.customerId === user!.id &&
+    r.deviceBrand === deviceBrand &&
+    r.deviceModel === deviceModel &&
+    r.description === description &&
+    (new Date(now).getTime() - new Date(r.createdAt).getTime()) < 2 * 60 * 1000
+  );
+
+  if (recentDuplicate) {
+    return res.status(200).json(recentDuplicate);
+  }
 
   const validatedLocation = {
     lat: Number(customerLocation.lat),

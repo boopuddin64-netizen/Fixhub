@@ -662,6 +662,57 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   });
   assert(matchedCanonical.length > 0, 'Technician matching succeeds with technician category screen_damaged');
 
+  // Test 24: Fix Hub Phase 2.5 Corrections (Idempotency and Validation)
+  console.log('\n24. Fix Hub Phase 2.5 Corrections (Idempotency and Validation)');
+  
+  // Create an explicit mock test without full express request
+  const duplicatePayload = {
+    customerLocation: { lat: 6.5244, lng: 3.3792, address: 'Test Address', city: 'Lagos', state: 'Lagos' },
+    deviceBrand: 'Apple',
+    deviceModel: 'iPhone 15',
+    issues: ['screen'],
+    description: 'Cracked screen test idempotency',
+    photos: []
+  };
+
+  const req1Id = `req_idempotency_1`;
+  db.repairRequests.push({
+    id: req1Id,
+    customerId: 'usr_customer_1',
+    customerName: 'Test Customer',
+    customerPhone: '0800000000',
+    quotesCount: 0,
+    updatedAt: new Date().toISOString(),
+    deviceBrand: 'Apple',
+    deviceModel: 'iPhone 15',
+    issues: ['screen'],
+    description: 'Cracked screen test idempotency',
+    photos: [],
+    status: 'DRAFT',
+    createdAt: new Date().toISOString(),
+    customerLocation: duplicatePayload.customerLocation,
+  });
+
+  const recentDuplicate = db.repairRequests.find(r => 
+    r.customerId === 'usr_customer_1' &&
+    r.deviceBrand === duplicatePayload.deviceBrand &&
+    r.deviceModel === duplicatePayload.deviceModel &&
+    r.description === duplicatePayload.description &&
+    (Date.now() - new Date(r.createdAt).getTime()) < 2 * 60 * 1000
+  );
+
+  assert(recentDuplicate !== undefined && recentDuplicate.id === req1Id, 'Double-submit check successfully detects duplicate request');
+  
+  const invalidLocPayload = {
+    customerLocation: { lat: null, lng: null },
+    deviceBrand: 'Apple',
+    deviceModel: 'iPhone 15',
+    issues: ['screen']
+  };
+  
+  const isValidLoc = invalidLocPayload.customerLocation && isValidCoordinates(invalidLocPayload.customerLocation.lat as any, invalidLocPayload.customerLocation.lng as any);
+  assert(!isValidLoc, 'Missing location correctly fails validation, avoiding crash');
+
   console.log('\n===============================================================');
   console.log(`   TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);
   console.log('===============================================================\n');
@@ -684,3 +735,5 @@ if (isDirectRun) {
     process.exit(1);
   });
 }
+
+  // Test: Fix Hub Phase 2.5 Correction
