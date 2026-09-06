@@ -193,6 +193,7 @@ export interface RepairIssue {
   iconName?: string;
   estimatedLaborMinutes?: number;
   typicalCostRangeNaira?: [number, number];
+  canonicalIssueId?: string;
 }
 
 export interface RepairRequestAttachment {

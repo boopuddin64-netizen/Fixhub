@@ -79,10 +79,10 @@ export const TechnicianRadarHandoff: React.FC<TechnicianRadarHandoffProps> = ({
           <span className="text-xs font-medium text-slate-700 truncate max-w-[200px]">{locationSummary}</span>
         </div>
         <div className="flex items-center justify-between pt-0.5">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Protection</span>
-          <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-700">
-            <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-            100% Escrow Protected
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Privacy & Trust</span>
+          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            Verified Technicians Only
           </span>
         </div>
       </div>

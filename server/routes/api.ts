@@ -701,7 +701,15 @@ apiRouter.get('/repairs/requests', requireAuth, (req: AuthenticatedRequest, res:
 
       // Technician can view request if open & eligible, or if already quoted/assigned
       if (isEligible || hasQuoted || isAssigned) {
-        if (!distanceKm && r.customerLocation && tech.shopLocation) {
+        if (
+          !distanceKm &&
+          r.customerLocation &&
+          typeof r.customerLocation.lat === 'number' &&
+          typeof r.customerLocation.lng === 'number' &&
+          tech.shopLocation &&
+          typeof tech.shopLocation.lat === 'number' &&
+          typeof tech.shopLocation.lng === 'number'
+        ) {
           distanceKm = calculateDistanceKm(
             r.customerLocation.lat,
             r.customerLocation.lng,
@@ -841,12 +849,21 @@ apiRouter.post('/quotes/submit', requireAuth, requireRole(['technician']), (req:
     ? partsQuality
     : 'PREMIUM_AFTERMARKET';
 
-  const distanceKm = eligibility.distanceKm || calculateDistanceKm(
-    request.customerLocation.lat,
-    request.customerLocation.lng,
-    tech.shopLocation.lat,
-    tech.shopLocation.lng
-  );
+  const distanceKm =
+    eligibility.distanceKm ??
+    (request.customerLocation &&
+    typeof request.customerLocation.lat === 'number' &&
+    typeof request.customerLocation.lng === 'number' &&
+    tech.shopLocation &&
+    typeof tech.shopLocation.lat === 'number' &&
+    typeof tech.shopLocation.lng === 'number'
+      ? calculateDistanceKm(
+          request.customerLocation.lat,
+          request.customerLocation.lng,
+          tech.shopLocation.lat,
+          tech.shopLocation.lng
+        )
+      : undefined);
 
   // Check for existing pending quote from this technician
   const existingQuote = db.repairQuotes.find(

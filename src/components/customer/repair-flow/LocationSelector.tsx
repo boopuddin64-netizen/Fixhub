@@ -4,7 +4,7 @@ import { POPULAR_NIGERIAN_LOCATIONS, searchNigerianLocations, NigerianArea } fro
 import { MapPin, Navigation, Search, Check, Building2, AlertCircle } from 'lucide-react';
 
 interface LocationSelectorProps {
-  location: LocationCoordinates;
+  location?: LocationCoordinates | null;
   onChange: (newLoc: LocationCoordinates) => void;
 }
 
@@ -36,9 +36,9 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
           lng: pos.coords.longitude,
           address: 'Current GPS Location',
           landmark: 'Detected Device Location',
-          area: location.area || 'Ikeja',
-          city: location.city || 'Lagos',
-          state: location.state || 'Lagos State',
+          area: location?.area || 'Current Location',
+          city: location?.city || 'Lagos',
+          state: location?.state || 'Lagos State',
         });
       },
       (err) => {
@@ -63,32 +63,44 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
     setSearchQuery('');
   };
 
+  const hasLocation = Boolean(location && (location.address || location.area));
+
   return (
     <div id="repair-location-selector" className="space-y-4">
       {/* Active Selected Location Display Card */}
-      <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-2">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-start gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5">
-              <MapPin className="w-4 h-4" />
+      {hasLocation && location ? (
+        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5">
+                <MapPin className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
+                  Selected Location for Matching
+                </span>
+                <p className="text-sm font-black text-slate-900 leading-snug">
+                  {location.address || `${location.area}, ${location.city}`}
+                </p>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  {location.city}, {location.state} {location.landmark ? `(near ${location.landmark})` : ''}
+                </p>
+              </div>
             </div>
-            <div>
-              <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
-                Selected Location for Matching
-              </span>
-              <p className="text-sm font-black text-slate-900 leading-snug">
-                {location.address || `${location.area}, ${location.city}`}
-              </p>
-              <p className="text-xs text-slate-600 mt-0.5">
-                {location.city}, {location.state} {location.landmark ? `(near ${location.landmark})` : ''}
-              </p>
-            </div>
+            <span className="px-2 py-0.5 rounded-full bg-emerald-200/80 text-emerald-900 text-[10px] font-bold shrink-0">
+              Selected
+            </span>
           </div>
-          <span className="px-2 py-0.5 rounded-full bg-emerald-200/80 text-emerald-900 text-[10px] font-bold shrink-0">
-            Active
-          </span>
         </div>
-      </div>
+      ) : (
+        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-1">
+          <MapPin className="w-6 h-6 text-slate-400 mx-auto" />
+          <p className="text-xs font-bold text-slate-700">No Location Selected Yet</p>
+          <p className="text-[11px] text-slate-500">
+            Choose your area below or use your current location to discover certified technicians nearby.
+          </p>
+        </div>
+      )}
 
       {/* Option A: Use Current Location */}
       <div>
@@ -147,7 +159,9 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-1">
             {searchResults.map((area, idx) => {
               const isSelected =
-                location.lat === area.lat && location.lng === area.lng;
+                location != null &&
+                location.lat === area.lat &&
+                location.lng === area.lng;
               return (
                 <div
                   key={idx}
@@ -196,8 +210,18 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                 <label className="text-[11px] font-bold text-slate-700">Street Address</label>
                 <input
                   type="text"
-                  value={location.address}
-                  onChange={(e) => onChange({ ...location, address: e.target.value })}
+                  value={location?.address || ''}
+                  onChange={(e) =>
+                    onChange({
+                      lat: location?.lat ?? 6.5244,
+                      lng: location?.lng ?? 3.3792,
+                      area: location?.area || 'Lagos',
+                      city: location?.city || 'Lagos',
+                      state: location?.state || 'Lagos State',
+                      address: e.target.value,
+                      landmark: location?.landmark,
+                    })
+                  }
                   placeholder="e.g. 14 Allen Avenue"
                   className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900"
                 />
@@ -208,8 +232,18 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                   <label className="text-[11px] font-bold text-slate-700">City / LGA</label>
                   <input
                     type="text"
-                    value={location.city}
-                    onChange={(e) => onChange({ ...location, city: e.target.value })}
+                    value={location?.city || ''}
+                    onChange={(e) =>
+                      onChange({
+                        lat: location?.lat ?? 6.5244,
+                        lng: location?.lng ?? 3.3792,
+                        area: location?.area || e.target.value,
+                        state: location?.state || 'Lagos State',
+                        address: location?.address || '',
+                        city: e.target.value,
+                        landmark: location?.landmark,
+                      })
+                    }
                     placeholder="e.g. Ikeja"
                     className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900"
                   />
@@ -218,8 +252,18 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                   <label className="text-[11px] font-bold text-slate-700">State</label>
                   <input
                     type="text"
-                    value={location.state}
-                    onChange={(e) => onChange({ ...location, state: e.target.value })}
+                    value={location?.state || ''}
+                    onChange={(e) =>
+                      onChange({
+                        lat: location?.lat ?? 6.5244,
+                        lng: location?.lng ?? 3.3792,
+                        area: location?.area || 'Lagos',
+                        city: location?.city || 'Lagos',
+                        address: location?.address || '',
+                        state: e.target.value,
+                        landmark: location?.landmark,
+                      })
+                    }
                     placeholder="e.g. Lagos State"
                     className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900"
                   />
@@ -230,8 +274,18 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                 <label className="text-[11px] font-bold text-slate-700">Nearest Landmark (optional)</label>
                 <input
                   type="text"
-                  value={location.landmark || ''}
-                  onChange={(e) => onChange({ ...location, landmark: e.target.value })}
+                  value={location?.landmark || ''}
+                  onChange={(e) =>
+                    onChange({
+                      lat: location?.lat ?? 6.5244,
+                      lng: location?.lng ?? 3.3792,
+                      area: location?.area || 'Lagos',
+                      city: location?.city || 'Lagos',
+                      state: location?.state || 'Lagos State',
+                      address: location?.address || '',
+                      landmark: e.target.value,
+                    })
+                  }
                   placeholder="e.g. Opposite Oshopey Plaza"
                   className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900"
                 />

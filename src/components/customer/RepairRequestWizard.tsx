@@ -60,12 +60,12 @@ export const RepairRequestWizard: React.FC<RepairRequestWizardProps> = ({
   const [draftRestored, setDraftRestored] = useState<boolean>(false);
   const saveTimeoutRef = useRef<number | null>(null);
 
-  // Step 1: Device State
+  // Step 1: Device State (Clean empty state unless explicitly preselected or customer profile provided)
   const [deviceBrand, setDeviceBrand] = useState<string>(
-    preselectedDevice?.brandName || preselectedBrand || 'Apple'
+    preselectedDevice?.brandName || preselectedBrand || ''
   );
   const [deviceModel, setDeviceModel] = useState<string>(
-    preselectedDevice?.modelName || preselectedModel || 'iPhone 13'
+    preselectedDevice?.modelName || preselectedModel || ''
   );
   const [deviceModelId, setDeviceModelId] = useState<string | undefined>(
     preselectedDevice?.deviceModelId
@@ -74,14 +74,14 @@ export const RepairRequestWizard: React.FC<RepairRequestWizardProps> = ({
     preselectedDevice?.deviceType || 'PHONE'
   );
   const [catalogMatch, setCatalogMatch] = useState<boolean>(
-    preselectedDevice ? preselectedDevice.catalogMatch : true
+    preselectedDevice ? preselectedDevice.catalogMatch : false
   );
   const [isDeviceModalOpen, setIsDeviceModalOpen] = useState<boolean>(false);
 
   // Step 2: Issues State
   const [issuesCatalog, setIssuesCatalog] = useState<RepairIssue[]>([]);
   const [selectedIssueIds, setSelectedIssueIds] = useState<string[]>(
-    preselectedIssue ? [preselectedIssue] : ['issue_screen_cracked']
+    preselectedIssue ? [preselectedIssue] : []
   );
   const [otherDescription, setOtherDescription] = useState<string>('');
 
@@ -91,18 +91,10 @@ export const RepairRequestWizard: React.FC<RepairRequestWizardProps> = ({
   const [voiceNoteDuration, setVoiceNoteDuration] = useState<number | undefined>(undefined);
   const [photos, setPhotos] = useState<string[]>([]);
 
-  // Step 5: Location State (Defaults to Ikeja Computer Village corridor)
-  const [location, setLocation] = useState<LocationCoordinates>({
-    lat: 6.5964,
-    lng: 3.3421,
-    address: '14 Allen Avenue, Ikeja',
-    area: 'Ikeja',
-    city: 'Lagos',
-    state: 'Lagos State',
-    landmark: 'Near Computer Village',
-  });
+  // Step 5: Location State (Empty by default - no fake or hardcoded locations)
+  const [location, setLocation] = useState<LocationCoordinates | undefined>(undefined);
 
-  // Load Issues Catalog & Check Drafts on Initial Mount
+  // Load Issues Catalog & Check Drafts / Customer Defaults on Initial Mount
   useEffect(() => {
     // 1. Fetch backend normalized issues catalog
     ApiClient.getIssuesCatalog()
@@ -113,7 +105,7 @@ export const RepairRequestWizard: React.FC<RepairRequestWizardProps> = ({
       })
       .catch((err) => console.error('Failed to load issues catalog:', err));
 
-    // 2. Fetch active draft if available
+    // 2. Fetch active draft if available, or load customer profile defaults
     ApiClient.getRepairDraft()
       .then((draft) => {
         if (draft && draft.deviceBrand && draft.deviceModel && !preselectedDevice && !preselectedModel) {
@@ -134,12 +126,39 @@ export const RepairRequestWizard: React.FC<RepairRequestWizardProps> = ({
           if (draft.step && draft.step >= 1 && draft.step <= 5) setStep(draft.step);
 
           setDraftRestored(true);
+          return;
+        }
+
+        // If no draft exists and no preselected device, check customer saved devices & default location
+        if (!preselectedDevice && !preselectedBrand && !preselectedModel) {
+          ApiClient.getCustomerDevices()
+            .then((devices) => {
+              if (devices && devices.length > 0) {
+                const primary = devices.find((d) => d.isPrimary) || devices[0];
+                if (primary) {
+                  setDeviceBrand(primary.brandName);
+                  setDeviceModel(primary.modelName);
+                  if (primary.deviceModelId) setDeviceModelId(primary.deviceModelId);
+                  if (primary.deviceType) setDeviceType(primary.deviceType);
+                  setCatalogMatch(primary.catalogMatch);
+                }
+              }
+            })
+            .catch(() => {});
+
+          ApiClient.getMe()
+            .then((session) => {
+              if (session?.customerProfile?.defaultLocation) {
+                setLocation(session.customerProfile.defaultLocation);
+              }
+            })
+            .catch(() => {});
         }
       })
       .catch(() => {
         // Silent catch for non-blocking draft check
       });
-  }, [preselectedDevice, preselectedModel]);
+  }, [preselectedDevice, preselectedBrand, preselectedModel]);
 
   // Debounced Draft Auto-Save
   const triggerDraftSave = useCallback(() => {
@@ -147,6 +166,11 @@ export const RepairRequestWizard: React.FC<RepairRequestWizardProps> = ({
 
     saveTimeoutRef.current = window.setTimeout(() => {
       saveTimeoutRef.current = null;
+
+      // Only save draft if the customer has entered actual data
+      if (!deviceBrand && !deviceModel && selectedIssueIds.length === 0 && !description && !voiceNoteUrl && photos.length === 0 && !location) {
+        return;
+      }
 
       ApiClient.saveRepairDraft({
         step,
@@ -189,17 +213,24 @@ export const RepairRequestWizard: React.FC<RepairRequestWizardProps> = ({
   const handleStartFresh = async () => {
     try {
       await ApiClient.deleteRepairDraft();
-      setDraftRestored(false);
-      setStep(1);
-      setDeviceBrand('Apple');
-      setDeviceModel('iPhone 13');
-      setSelectedIssueIds(['issue_screen_cracked']);
-      setDescription('');
-      setVoiceNoteUrl(undefined);
-      setPhotos([]);
-      setOtherDescription('');
     } catch (err) {
       console.error('Error clearing draft:', err);
+    } finally {
+      setDraftRestored(false);
+      setStep(1);
+      setDeviceBrand('');
+      setDeviceModel('');
+      setDeviceModelId(undefined);
+      setDeviceType('PHONE');
+      setCatalogMatch(false);
+      setSelectedIssueIds([]);
+      setDescription('');
+      setVoiceNoteUrl(undefined);
+      setVoiceNoteDuration(undefined);
+      setPhotos([]);
+      setOtherDescription('');
+      setLocation(undefined);
+      setSubmitError(null);
     }
   };
 
@@ -226,10 +257,38 @@ export const RepairRequestWizard: React.FC<RepairRequestWizardProps> = ({
     });
   };
 
-  // Final Submission Handler
+  // Final Submission Handler with strict customer input validation
   const handleSubmitRequest = async () => {
-    setIsSubmitting(true);
     setSubmitError(null);
+
+    // 1. Device validation
+    if (!deviceBrand || !deviceModel) {
+      setSubmitError('Please select a valid device and model before submitting.');
+      setStep(1);
+      return;
+    }
+
+    // 2. Issue selection validation
+    if (selectedIssueIds.length === 0) {
+      setSubmitError('Please select at least one repair issue before submitting.');
+      setStep(2);
+      return;
+    }
+
+    // 3. Location validation
+    if (
+      !location ||
+      typeof location.lat !== 'number' ||
+      typeof location.lng !== 'number' ||
+      (location.lat === 0 && location.lng === 0) ||
+      (!location.address && !location.area)
+    ) {
+      setSubmitError('Please select a valid location to find nearby repair technicians.');
+      setStep(5);
+      return;
+    }
+
+    setIsSubmitting(true);
 
     try {
       // Package attachments (Voice note + Photos)
@@ -373,61 +432,90 @@ export const RepairRequestWizard: React.FC<RepairRequestWizardProps> = ({
         {/* ================= STEP 1: MY DEVICE ================= */}
         {step === 1 && (
           <div className="space-y-6 animate-fadeIn">
-            {/* Selected Device Presentation Card */}
-            <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white shadow-lg space-y-4">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-cyan-300 border border-white/10">
-                    {deviceType === 'TABLET' ? (
-                      <Tablet className="w-6 h-6" />
-                    ) : (
-                      <Smartphone className="w-6 h-6" />
-                    )}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">
-                        {deviceBrand}
-                      </span>
-                      {catalogMatch && (
-                        <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-bold border border-emerald-500/30">
-                          <Check className="w-3 h-3 text-emerald-400 stroke-[3]" />
-                          Verified Model
-                        </span>
+            {!deviceBrand || !deviceModel ? (
+              /* Empty Device Prompt Card */
+              <div className="p-6 sm:p-8 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-4">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center mx-auto">
+                  <Smartphone className="w-7 h-7" />
+                </div>
+                <div className="space-y-1 max-w-sm mx-auto">
+                  <h2 className="text-base sm:text-lg font-black text-slate-900">
+                    Which device needs repair?
+                  </h2>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Select your phone or tablet model so we can match certified technicians with genuine replacement parts.
+                  </p>
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setIsDeviceModalOpen(true)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md transition-colors cursor-pointer"
+                  >
+                    <span>Choose Phone or Tablet</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Selected Device Presentation Card */
+              <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white shadow-lg space-y-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-cyan-300 border border-white/10">
+                      {deviceType === 'TABLET' ? (
+                        <Tablet className="w-6 h-6" />
+                      ) : (
+                        <Smartphone className="w-6 h-6" />
                       )}
                     </div>
-                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                      {deviceBrand} {deviceModel}
-                    </h2>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">
+                          {deviceBrand}
+                        </span>
+                        {catalogMatch && (
+                          <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-bold border border-emerald-500/30">
+                            <Check className="w-3 h-3 text-emerald-400 stroke-[3]" />
+                            Verified Model
+                          </span>
+                        )}
+                      </div>
+                      <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                        {deviceBrand} {deviceModel}
+                      </h2>
+                    </div>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsDeviceModalOpen(true)}
+                    className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition-colors cursor-pointer"
+                  >
+                    Change device
+                  </button>
                 </div>
 
+                <div className="flex items-center gap-2 text-xs text-slate-300 pt-1 border-t border-white/10">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Fix Hub certified repairers in Lagos have genuine parts ready for this device.</span>
+                </div>
+              </div>
+            )}
+
+            {/* Quick Change / Browse Button if device is selected */}
+            {deviceBrand && deviceModel && (
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                <span>Not the device you want to fix?</span>
                 <button
                   type="button"
                   onClick={() => setIsDeviceModalOpen(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition-colors cursor-pointer"
+                  className="font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer"
                 >
-                  Change device
+                  Choose another phone or tablet →
                 </button>
               </div>
-
-              <div className="flex items-center gap-2 text-xs text-slate-300 pt-1 border-t border-white/10">
-                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Fix Hub certified repairers in Lagos have genuine parts ready for this device.</span>
-              </div>
-            </div>
-
-            {/* Quick Change / Browse Button if needed */}
-            <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
-              <span>Not the device you want to fix?</span>
-              <button
-                type="button"
-                onClick={() => setIsDeviceModalOpen(true)}
-                className="font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer"
-              >
-                Choose another phone or tablet →
-              </button>
-            </div>
+            )}
 
             {/* Step 1 CTA */}
             <div className="pt-2 flex items-center justify-between gap-3">
@@ -438,14 +526,22 @@ export const RepairRequestWizard: React.FC<RepairRequestWizardProps> = ({
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={() => setStep(2)}
-                className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm shadow-xl shadow-emerald-600/30 transition-all cursor-pointer"
-              >
-                <span>Continue: What&apos;s wrong?</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-3">
+                {(!deviceBrand || !deviceModel) && (
+                  <span className="text-xs text-amber-700 font-medium hidden sm:inline">
+                    Please select a device to proceed
+                  </span>
+                )}
+                <button
+                  type="button"
+                  disabled={!deviceBrand || !deviceModel}
+                  onClick={() => setStep(2)}
+                  className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:pointer-events-none text-white font-extrabold text-sm shadow-xl shadow-emerald-600/30 transition-all cursor-pointer"
+                >
+                  <span>Continue: What&apos;s wrong?</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -648,32 +744,54 @@ export const RepairRequestWizard: React.FC<RepairRequestWizardProps> = ({
               </div>
 
               {/* 4. Location Preview */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
-                    <MapPin className="w-5 h-5" />
+              {location && (location.address || location.area) ? (
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                      <MapPin className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Target Location</span>
+                      <p className="text-xs font-bold text-slate-900">{location.address || `${location.area}, ${location.city}`}</p>
+                      <p className="text-[11px] text-slate-500">{location.city}, {location.state}</p>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Target Location</span>
-                    <p className="text-xs font-bold text-slate-900">{location.address || `${location.area}, ${location.city}`}</p>
-                    <p className="text-[11px] text-slate-500">{location.city}, {location.state}</p>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStep(5)}
+                    className="text-xs font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                  >
+                    Change
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setStep(5)}
-                  className="text-xs font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer"
-                >
-                  Change
-                </button>
-              </div>
+              ) : (
+                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
+                      <MapPin className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Location Required</span>
+                      <p className="text-xs font-bold text-slate-900">No location selected yet</p>
+                      <p className="text-[11px] text-amber-700">Location is needed to find nearby certified technicians</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStep(5)}
+                    className="text-xs font-bold text-emerald-700 hover:text-emerald-900 underline cursor-pointer"
+                  >
+                    Select location
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Escrow Guarantee Banner */}
+            {/* Request Protection Banner (Neutral, accurate wording) */}
             <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 flex items-center gap-3 text-xs text-emerald-950">
               <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
               <span>
-                <strong>100% Escrow Protection:</strong> Submitting this request is completely free. When you choose a quote, your payment is held securely in escrow until you verify the repair is complete.
+                <strong>Request Protection:</strong> Your request is protected. We’ll only share the information needed to connect you with suitable repair professionals.
               </span>
             </div>
 
@@ -706,6 +824,14 @@ export const RepairRequestWizard: React.FC<RepairRequestWizardProps> = ({
               onChange={setLocation}
             />
 
+            {/* Inline validation if customer has not selected an area yet */}
+            {(!location || (!location.address && !location.area)) && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2 animate-fadeIn">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Please select your area or use your device location to connect with nearby technicians.</span>
+              </div>
+            )}
+
             {submitError && (
               <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
@@ -727,8 +853,8 @@ export const RepairRequestWizard: React.FC<RepairRequestWizardProps> = ({
                 type="button"
                 id="submit-repair-request-btn"
                 onClick={handleSubmitRequest}
-                disabled={isSubmitting}
-                className="flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-sm shadow-xl shadow-emerald-600/30 transition-all cursor-pointer disabled:opacity-50"
+                disabled={isSubmitting || !deviceBrand || !deviceModel || selectedIssueIds.length === 0 || !location || (!location.address && !location.area)}
+                className="flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-sm shadow-xl shadow-emerald-600/30 transition-all cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
               >
                 {isSubmitting ? (
                   <>
@@ -752,7 +878,7 @@ export const RepairRequestWizard: React.FC<RepairRequestWizardProps> = ({
             deviceBrand={deviceBrand}
             deviceModel={deviceModel}
             problemSummary={getSelectedIssueNames().slice(0, 2).join(', ')}
-            locationSummary={location.area || location.city}
+            locationSummary={location?.area || location?.city || 'Selected Location'}
             onViewQuotes={() => {
               if (createdRequestId) {
                 onRequestCreated(createdRequestId);

@@ -1,5 +1,6 @@
 import { db } from '../db';
 import { TechnicianProfile, LocationCoordinates, MatchScoreResult } from '../../src/types/index';
+import { resolveIssueToMatchingCategories } from '../data/repairIssuesData';
 
 /**
  * Calculates Haversine distance between two coordinates in Kilometers
@@ -44,7 +45,15 @@ export class TechnicianMatchingService {
 
     const results: MatchScoreResult[] = [];
 
+    if (!customerLocation || typeof customerLocation.lat !== 'number' || typeof customerLocation.lng !== 'number') {
+      return results;
+    }
+
     for (const tech of technicians) {
+      if (!tech.shopLocation || typeof tech.shopLocation.lat !== 'number' || typeof tech.shopLocation.lng !== 'number') {
+        continue;
+      }
+
       // 1. Calculate Distance
       const distanceKm = calculateDistanceKm(
         customerLocation.lat,
@@ -73,7 +82,11 @@ export class TechnicianMatchingService {
       // 3. Issue Category Expertise (Max 15 pts)
       let categoryMatchCount = 0;
       for (const issue of issues) {
-        if (tech.supportedCategories.includes(issue)) {
+        const compatibleCategories = resolveIssueToMatchingCategories(issue);
+        const isMatched = compatibleCategories.some((cat) =>
+          tech.supportedCategories.includes(cat)
+        );
+        if (isMatched) {
           categoryMatchCount++;
         }
       }

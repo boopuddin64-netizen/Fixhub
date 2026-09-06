@@ -433,5 +433,97 @@ export const standardRepairIssues: RepairIssue[] = [
     iconName: 'HelpCircle',
     estimatedLaborMinutes: 60,
     typicalCostRangeNaira: [8000, 40000],
+    canonicalIssueId: 'other',
   },
 ];
+
+/**
+ * FIX HUB REPAIR ISSUE COMPATIBILITY MAPPING
+ * ------------------------------------------------------------------------
+ * Bridges normalized customer-facing issue taxonomy (38 granular issues)
+ * with legacy technician category identifiers (e.g., screen_damaged).
+ * This ensures backwards-compatibility for existing technician profiles,
+ * seed data, and historical quote records.
+ */
+export const repairIssueCompatibilityMap: Record<string, string[]> = {
+  // 1. Screen & Display
+  issue_screen_cracked: ['screen_damaged'],
+  issue_screen_broken: ['screen_damaged'],
+  issue_screen_black: ['screen_not_displaying', 'screen_damaged'],
+  issue_screen_not_responding: ['screen_damaged', 'screen_not_displaying'],
+  issue_touch_not_working: ['screen_damaged', 'screen_not_displaying'],
+  issue_display_lines: ['screen_not_displaying', 'screen_damaged'],
+  issue_display_flickering: ['screen_not_displaying', 'screen_damaged'],
+
+  // 2. Power & Battery
+  issue_wont_turn_on: ['no_power', 'battery_problem'],
+  issue_battery_drains_quickly: ['battery_problem'],
+  issue_not_charging: ['charging_problem', 'battery_problem'],
+  issue_charging_slowly: ['charging_problem', 'battery_problem'],
+  issue_overheating: ['battery_problem', 'overheating', 'no_power'],
+  issue_battery_swelling: ['battery_problem'],
+
+  // 3. Camera
+  issue_camera_not_working: ['camera_problem'],
+  issue_blurry_camera: ['camera_problem'],
+  issue_camera_glass_broken: ['camera_problem', 'body_glass_damage'],
+  issue_flash_not_working: ['camera_problem'],
+
+  // 4. Audio
+  issue_no_sound: ['speaker_problem'],
+  issue_speaker_not_working: ['speaker_problem'],
+  issue_mic_not_working: ['mic_problem'],
+  issue_earpiece_not_working: ['speaker_problem', 'mic_problem'],
+
+  // 5. Network & Connectivity
+  issue_no_network: ['no_power', 'software_problem'],
+  issue_sim_not_detected: ['software_problem', 'no_power'],
+  issue_wifi_not_working: ['software_problem'],
+  issue_bluetooth_not_working: ['software_problem'],
+  issue_mobile_data_not_working: ['software_problem'],
+
+  // 6. Physical Damage
+  issue_water_damage: ['water_damage'],
+  issue_phone_dropped: ['body_glass_damage', 'screen_damaged'],
+  issue_back_glass_broken: ['body_glass_damage'],
+  issue_frame_damaged: ['body_glass_damage'],
+  issue_buttons_damaged: ['body_glass_damage', 'charging_problem'],
+
+  // 7. Software
+  issue_phone_freezes: ['software_problem'],
+  issue_phone_is_slow: ['software_problem'],
+  issue_apps_crashing: ['software_problem'],
+  issue_boot_loop: ['software_problem', 'no_power'],
+  issue_software_problem: ['software_problem'],
+  issue_forgot_password_lock: ['software_problem'],
+
+  // 8. Other
+  issue_other: ['other', 'screen_damaged', 'battery_problem', 'software_problem'],
+};
+
+/**
+ * Resolves any customer or legacy issue identifier to all compatible category strings.
+ * Guarantees that matching succeeds whether technicians specify canonical catalog IDs
+ * or legacy category tags.
+ */
+export function resolveIssueToMatchingCategories(issueId: string): string[] {
+  if (!issueId || typeof issueId !== 'string') return [];
+  const normalized = issueId.trim();
+  const set = new Set<string>();
+  set.add(normalized);
+
+  // If issueId is in compatibility map, add mapped legacy IDs
+  if (repairIssueCompatibilityMap[normalized]) {
+    repairIssueCompatibilityMap[normalized].forEach((cat) => set.add(cat));
+  }
+
+  // Also check if normalized is a legacy ID that maps to catalog IDs
+  for (const [newId, legacyList] of Object.entries(repairIssueCompatibilityMap)) {
+    if (legacyList.includes(normalized)) {
+      set.add(newId);
+    }
+  }
+
+  return Array.from(set);
+}
+

@@ -535,6 +535,45 @@ async function runTestSuite() {
     'Phase 2 repair request successfully initialized with MATCHING status and submittedAt timestamp'
   );
 
+  // Test 14: Phase 2 Hardening — Canonical Repair Issue Taxonomy Compatibility & Zero-Default Integrity
+  console.log('\n14. Phase 2 Hardening: Canonical Issue Taxonomy Compatibility & Zero-Default Integrity');
+  const { resolveIssueToMatchingCategories, standardRepairIssues } = await import('../../server/data/repairIssuesData');
+
+  // Test canonical resolution for legacy screen issue
+  const resolvedScreen = resolveIssueToMatchingCategories('issue_screen_cracked');
+  assert(
+    resolvedScreen.includes('screen_damaged') && resolvedScreen.includes('issue_screen_cracked'),
+    'issue_screen_cracked maps to technician category screen_damaged'
+  );
+
+  // Test canonical resolution for battery issue
+  const resolvedBattery = resolveIssueToMatchingCategories('issue_battery_drains_quickly');
+  assert(
+    resolvedBattery.includes('battery_problem'),
+    'issue_battery_drains_quickly maps to technician category battery_problem'
+  );
+
+  // Verify all issues in standard catalog are active and configured
+  const allIssuesConfigured = standardRepairIssues.every(
+    (issue) => typeof issue.id === 'string' && issue.id.length > 0 && typeof issue.category === 'string'
+  );
+  assert(allIssuesConfigured, 'Every issue in standardRepairIssues has a valid id and category');
+
+  // Verify technician matching finds technicians using both legacy and canonical issue IDs
+  const matchedLegacy = TechnicianMatchingService.matchTechnicians({
+    customerLocation: ikejaLocation,
+    deviceBrand: 'Apple',
+    issues: ['issue_screen_cracked'],
+  });
+  assert(matchedLegacy.length > 0, 'Technician matching succeeds with issue_screen_cracked');
+
+  const matchedCanonical = TechnicianMatchingService.matchTechnicians({
+    customerLocation: ikejaLocation,
+    deviceBrand: 'Apple',
+    issues: ['screen_damaged'],
+  });
+  assert(matchedCanonical.length > 0, 'Technician matching succeeds with technician category screen_damaged');
+
   console.log('\n===============================================================');
   console.log(`   TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);
   console.log('===============================================================\n');

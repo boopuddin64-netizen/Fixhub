@@ -7,6 +7,32 @@ interface VoiceNoteRecorderProps {
   onChange: (url: string | undefined, durationSeconds?: number) => void;
 }
 
+const CANDIDATE_MIME_TYPES = [
+  'audio/mp4',
+  'audio/webm;codecs=opus',
+  'audio/webm',
+  'audio/ogg;codecs=opus',
+  'audio/ogg',
+];
+
+/**
+ * Returns the first MIME format supported by the current browser's MediaRecorder implementation.
+ */
+function getSupportedAudioMimeType(): string | undefined {
+  if (typeof window === 'undefined' || typeof window.MediaRecorder === 'undefined') {
+    return undefined;
+  }
+  if (typeof window.MediaRecorder.isTypeSupported !== 'function') {
+    return undefined;
+  }
+  for (const mime of CANDIDATE_MIME_TYPES) {
+    if (window.MediaRecorder.isTypeSupported(mime)) {
+      return mime;
+    }
+  }
+  return undefined;
+}
+
 export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
   voiceNoteUrl,
   voiceNoteDurationSeconds = 0,
@@ -16,7 +42,7 @@ export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playbackSeconds, setPlaybackSeconds] = useState<number>(0);
-  const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -24,19 +50,32 @@ export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recordingSecondsRef = useRef<number>(0);
-  const isSimulatedRef = useRef<boolean>(false);
+  const selectedMimeTypeRef = useRef<string>('audio/webm');
+
+  const releaseStreamTracks = () => {
+    if (streamRef.current) {
+      try {
+        streamRef.current.getTracks().forEach((track) => {
+          track.stop();
+        });
+      } catch (err) {
+        console.warn('Error releasing audio track:', err);
+      }
+      streamRef.current = null;
+    }
+  };
 
   useEffect(() => {
     return () => {
-      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
       if (audioPlayerRef.current) {
         audioPlayerRef.current.pause();
         audioPlayerRef.current = null;
       }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
-      }
+      releaseStreamTracks();
     };
   }, []);
 
@@ -47,51 +86,96 @@ export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
   };
 
   const startRecording = async () => {
-    setPermissionError(null);
+    setErrorMessage(null);
+
+    // 1. Feature Detection: MediaRecorder & getUserMedia check
+    const isMediaRecorderSupported =
+      typeof window !== 'undefined' && typeof window.MediaRecorder !== 'undefined';
+    const isGetUserMediaSupported =
+      typeof navigator !== 'undefined' &&
+      Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+
+    if (!isMediaRecorderSupported || !isGetUserMediaSupported) {
+      setErrorMessage("Voice recording isn’t supported on this device/browser. You can continue without a voice note.");
+      return;
+    }
+
+    // 2. Request Microphone Access
+    let stream: MediaStream;
     try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        // Fallback for sandboxed environments without direct audio recording hardware
-        simulateVoiceNote();
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err: any) {
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setErrorMessage("Microphone permission wasn’t granted. You can continue without a voice note.");
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        setErrorMessage("Microphone unavailable or not detected. You can continue without a voice note.");
+      } else {
+        setErrorMessage("Voice recording isn’t supported on this device/browser. You can continue without a voice note.");
+      }
+      return;
+    }
+
+    streamRef.current = stream;
+
+    // 3. Dynamic MIME Type Resolution
+    const supportedMime = getSupportedAudioMimeType();
+    selectedMimeTypeRef.current = supportedMime || 'audio/webm';
+
+    let mediaRecorder: MediaRecorder;
+    try {
+      if (supportedMime) {
+        mediaRecorder = new MediaRecorder(stream, { mimeType: supportedMime });
+      } else {
+        mediaRecorder = new MediaRecorder(stream);
+      }
+    } catch (recorderErr) {
+      try {
+        mediaRecorder = new MediaRecorder(stream);
+      } catch (finalErr) {
+        releaseStreamTracks();
+        setErrorMessage("Unsupported audio recording format. You can continue without a voice note.");
         return;
       }
+    }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch((err) => {
-        console.warn('Microphone access denied or unavailable:', err);
-        throw err;
-      });
+    mediaRecorderRef.current = mediaRecorder;
+    audioChunksRef.current = [];
 
-      streamRef.current = stream;
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-      isSimulatedRef.current = false;
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        audioChunksRef.current.push(event.data);
+      }
+    };
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
+    mediaRecorder.onerror = () => {
+      releaseStreamTracks();
+      setErrorMessage("Recording encountered an issue. You can continue without a voice note.");
+      setIsRecording(false);
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+    };
+
+    mediaRecorder.onstop = () => {
+      const finalMime = selectedMimeTypeRef.current || mediaRecorder.mimeType || 'audio/webm';
+      const audioBlob = new Blob(audioChunksRef.current, { type: finalMime });
+      const finalDuration = recordingSecondsRef.current || 1;
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64Data = reader.result as string;
+        window.setTimeout(() => {
+          onChange(base64Data, finalDuration);
+        }, 0);
       };
+      reader.readAsDataURL(audioBlob);
 
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const finalDuration = recordingSecondsRef.current || 5;
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const base64Data = reader.result as string;
-          // Defer update outside of active render loop
-          window.setTimeout(() => {
-            onChange(base64Data, finalDuration);
-          }, 0);
-        };
-        reader.readAsDataURL(audioBlob);
+      releaseStreamTracks();
+    };
 
-        // Stop all audio tracks to release microphone
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach((track) => track.stop());
-          streamRef.current = null;
-        }
-      };
-
+    // 4. Start recording and manage 120-second cap
+    try {
       mediaRecorder.start();
       setIsRecording(true);
       setRecordingSeconds(0);
@@ -100,11 +184,18 @@ export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = window.setInterval(() => {
         recordingSecondsRef.current += 1;
-        setRecordingSeconds(recordingSecondsRef.current);
+        const currentSecs = recordingSecondsRef.current;
+        setRecordingSeconds(currentSecs);
+
+        // Maximum recording duration capped at 120 seconds
+        if (currentSecs >= 120) {
+          stopRecording();
+        }
       }, 1000);
-    } catch (err: any) {
-      console.warn('Could not record native audio, offering fallback note simulation:', err);
-      setPermissionError('Microphone permission was not granted or not supported in this browser window.');
+    } catch (startErr) {
+      releaseStreamTracks();
+      setErrorMessage("Could not start recording on this device. You can continue without a voice note.");
+      setIsRecording(false);
     }
   };
 
@@ -117,14 +208,13 @@ export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
     }
     setIsRecording(false);
 
-    if (isSimulatedRef.current) {
-      const finalDuration = Math.max(recordingSecondsRef.current, 3);
-      const sampleAudio = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
-      window.setTimeout(() => {
-        onChange(sampleAudio, finalDuration);
-      }, 0);
-    } else if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (err) {
+        console.warn('Error stopping MediaRecorder:', err);
+        releaseStreamTracks();
+      }
     }
   };
 
@@ -134,44 +224,17 @@ export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
       timerIntervalRef.current = null;
     }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (err) {
+        // ignore
+      }
     }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
+    releaseStreamTracks();
     audioChunksRef.current = [];
     recordingSecondsRef.current = 0;
     setIsRecording(false);
     setRecordingSeconds(0);
-  };
-
-  // Safe fallback demonstration voice note for testing in sandboxed headless environments
-  const simulateVoiceNote = () => {
-    setPermissionError(null);
-    setIsRecording(true);
-    setRecordingSeconds(0);
-    recordingSecondsRef.current = 0;
-    isSimulatedRef.current = true;
-
-    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-    timerIntervalRef.current = window.setInterval(() => {
-      recordingSecondsRef.current += 1;
-      const count = recordingSecondsRef.current;
-      setRecordingSeconds(count);
-
-      if (count >= 4) {
-        if (timerIntervalRef.current) {
-          clearInterval(timerIntervalRef.current);
-          timerIntervalRef.current = null;
-        }
-        setIsRecording(false);
-        const sampleAudio = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
-        window.setTimeout(() => {
-          onChange(sampleAudio, 5);
-        }, 0);
-      }
-    }, 1000);
   };
 
   const togglePlayback = () => {
@@ -193,11 +256,14 @@ export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
         audio.ontimeupdate = () => {
           setPlaybackSeconds(Math.floor(audio.currentTime));
         };
+        audio.onerror = () => {
+          setIsPlaying(false);
+          setErrorMessage("Playback failed on this device. You can re-record or continue.");
+        };
       }
-      audioPlayerRef.current.play().catch(() => {
-        // Fallback for sandboxed silent audio
-        setIsPlaying(true);
-        setTimeout(() => setIsPlaying(false), (voiceNoteDurationSeconds || 5) * 1000);
+      audioPlayerRef.current.play().catch((playErr) => {
+        console.warn('Audio playback not permitted or failed:', playErr);
+        setIsPlaying(false);
       });
       setIsPlaying(true);
     }
@@ -211,7 +277,7 @@ export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
     setIsPlaying(false);
     setPlaybackSeconds(0);
     window.setTimeout(() => {
-      onChange(undefined, 0);
+      onChange(undefined, undefined);
     }, 0);
   };
 
@@ -257,7 +323,9 @@ export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
             <div className="w-3 h-3 rounded-full bg-red-600 animate-ping" />
             <div className="space-y-0.5">
               <span className="text-xs font-bold text-red-900">Recording voice note...</span>
-              <p className="text-[11px] font-mono font-bold text-red-700">{formatTime(recordingSeconds)}</p>
+              <p className="text-[11px] font-mono font-bold text-red-700">
+                {formatTime(recordingSeconds)} / 2:00
+              </p>
             </div>
           </div>
 
@@ -291,21 +359,14 @@ export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
               <Mic className="w-4 h-4 text-emerald-600" />
               <span>Record voice note</span>
             </button>
-            <span className="text-[11px] text-slate-400">or explain what happened</span>
+            <span className="text-[11px] text-slate-400">or explain what happened (max 2 mins)</span>
           </div>
 
-          {permissionError && (
-            <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2">
+          {errorMessage && (
+            <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2 animate-fadeIn">
               <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <div className="flex-1">
-                <span>{permissionError}</span>
-                <button
-                  type="button"
-                  onClick={simulateVoiceNote}
-                  className="block mt-1 font-bold text-amber-900 underline cursor-pointer"
-                >
-                  Click here to attach a quick voice note sample for testing
-                </button>
+                <span>{errorMessage}</span>
               </div>
             </div>
           )}
@@ -314,3 +375,4 @@ export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
     </div>
   );
 };
+
