@@ -8,8 +8,8 @@
       "name": "Tunde Adebayo",
       "role": "customer",
       "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-      "createdAt": "2026-08-07T06:17:22.056Z",
-      "passwordHash": "$2b$08$V/KuPm2rGF5.sgz7PzA7xOSWj0cCnhf3bbQp/USFskBEAOxe.SZPq"
+      "createdAt": "2026-08-07T07:16:40.905Z",
+      "passwordHash": "$2b$08$YIERt0cObORNRQ.Wsas2Cu6Lkyw47NMvPWQWQARL3T0TJ6zQfmU7W"
     },
     {
       "id": "usr_customer_2",
@@ -18,8 +18,8 @@
       "name": "Ngozi Eze",
       "role": "customer",
       "avatarUrl": "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=150&auto=format&fit=crop&q=80",
-      "createdAt": "2026-08-07T06:17:22.056Z",
-      "passwordHash": "$2b$08$V/KuPm2rGF5.sgz7PzA7xOSWj0cCnhf3bbQp/USFskBEAOxe.SZPq"
+      "createdAt": "2026-08-07T07:16:40.905Z",
+      "passwordHash": "$2b$08$YIERt0cObORNRQ.Wsas2Cu6Lkyw47NMvPWQWQARL3T0TJ6zQfmU7W"
     },
     {
       "id": "usr_tech_1",
@@ -28,8 +28,8 @@
       "name": "Emeka Okafor",
       "role": "technician",
       "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
-      "createdAt": "2026-08-07T06:17:22.056Z",
-      "passwordHash": "$2b$08$V/KuPm2rGF5.sgz7PzA7xOSWj0cCnhf3bbQp/USFskBEAOxe.SZPq"
+      "createdAt": "2026-08-07T07:16:40.905Z",
+      "passwordHash": "$2b$08$YIERt0cObORNRQ.Wsas2Cu6Lkyw47NMvPWQWQARL3T0TJ6zQfmU7W"
     },
     {
       "id": "usr_tech_2",
@@ -38,8 +38,8 @@
       "name": "Kolawole Balogun",
       "role": "technician",
       "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80",
-      "createdAt": "2026-08-07T06:17:22.056Z",
-      "passwordHash": "$2b$08$V/KuPm2rGF5.sgz7PzA7xOSWj0cCnhf3bbQp/USFskBEAOxe.SZPq"
+      "createdAt": "2026-08-07T07:16:40.905Z",
+      "passwordHash": "$2b$08$YIERt0cObORNRQ.Wsas2Cu6Lkyw47NMvPWQWQARL3T0TJ6zQfmU7W"
     },
     {
       "id": "usr_tech_3",
@@ -48,8 +48,8 @@
       "name": "Fatima Ibrahim",
       "role": "technician",
       "avatarUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
-      "createdAt": "2026-08-07T06:17:22.056Z",
-      "passwordHash": "$2b$08$V/KuPm2rGF5.sgz7PzA7xOSWj0cCnhf3bbQp/USFskBEAOxe.SZPq"
+      "createdAt": "2026-08-07T07:16:40.905Z",
+      "passwordHash": "$2b$08$YIERt0cObORNRQ.Wsas2Cu6Lkyw47NMvPWQWQARL3T0TJ6zQfmU7W"
     },
     {
       "id": "usr_tech_4",
@@ -58,8 +58,8 @@
       "name": "Chidi Nnamdi",
       "role": "technician",
       "avatarUrl": "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150&auto=format&fit=crop&q=80",
-      "createdAt": "2026-08-07T06:17:22.056Z",
-      "passwordHash": "$2b$08$V/KuPm2rGF5.sgz7PzA7xOSWj0cCnhf3bbQp/USFskBEAOxe.SZPq"
+      "createdAt": "2026-08-07T07:16:40.905Z",
+      "passwordHash": "$2b$08$YIERt0cObORNRQ.Wsas2Cu6Lkyw47NMvPWQWQARL3T0TJ6zQfmU7W"
     }
   ],
   "customerProfiles": [
@@ -6812,8 +6812,8 @@
       "storage": "128GB",
       "isPrimary": true,
       "catalogMatch": true,
-      "createdAt": "2026-08-07T06:17:22.056Z",
-      "updatedAt": "2026-09-01T06:17:22.056Z"
+      "createdAt": "2026-08-07T07:16:40.905Z",
+      "updatedAt": "2026-09-01T07:16:40.905Z"
     },
     {
       "id": "cdev_demo_2",
@@ -6827,11 +6827,11 @@
       "storage": "64GB",
       "isPrimary": false,
       "catalogMatch": true,
-      "createdAt": "2026-09-01T06:17:22.056Z",
-      "updatedAt": "2026-09-01T06:17:22.056Z"
+      "createdAt": "2026-09-01T07:16:40.905Z",
+      "updatedAt": "2026-09-01T07:16:40.905Z"
     },
     {
-      "id": "cdev_test_1788675442155",
+      "id": "cdev_test_1788679001035",
       "customerId": "usr_customer_1",
       "brandName": "Samsung",
       "modelName": "Galaxy S23",
@@ -6842,8 +6842,8 @@
       "color": "Phantom Black",
       "storageCapacity": "256GB",
       "isPrimary": true,
-      "createdAt": "2026-09-06T06:17:22.155Z",
-      "updatedAt": "2026-09-06T06:17:22.155Z"
+      "createdAt": "2026-09-06T07:16:41.035Z",
+      "updatedAt": "2026-09-06T07:16:41.035Z"
     }
   ],
   "repairIssues": [
@@ -6991,7 +6991,574 @@
       ]
     }
   ],
+  "repairIssueCatalog": [
+    {
+      "id": "issue_screen_cracked",
+      "name": "Cracked screen",
+      "category": "Screen & Display",
+      "description": "Front glass cracked or chipped, touch or display might still work partially",
+      "isActive": true,
+      "sortOrder": 1,
+      "iconName": "Smartphone",
+      "estimatedLaborMinutes": 45,
+      "typicalCostRangeNaira": [
+        18000,
+        85000
+      ]
+    },
+    {
+      "id": "issue_screen_broken",
+      "name": "Broken screen",
+      "category": "Screen & Display",
+      "description": "Shattered display panel with visible internal damage",
+      "isActive": true,
+      "sortOrder": 2,
+      "iconName": "Smartphone",
+      "estimatedLaborMinutes": 50,
+      "typicalCostRangeNaira": [
+        25000,
+        110000
+      ]
+    },
+    {
+      "id": "issue_screen_black",
+      "name": "Black screen",
+      "category": "Screen & Display",
+      "description": "Phone vibrates or rings, but the screen stays pitch black",
+      "isActive": true,
+      "sortOrder": 3,
+      "iconName": "Tv",
+      "estimatedLaborMinutes": 45,
+      "typicalCostRangeNaira": [
+        30000,
+        130000
+      ]
+    },
+    {
+      "id": "issue_screen_not_responding",
+      "name": "Screen not responding",
+      "category": "Screen & Display",
+      "description": "Display is on, but taps and gestures do not register",
+      "isActive": true,
+      "sortOrder": 4,
+      "iconName": "Smartphone",
+      "estimatedLaborMinutes": 40,
+      "typicalCostRangeNaira": [
+        20000,
+        95000
+      ]
+    },
+    {
+      "id": "issue_touch_not_working",
+      "name": "Touch not working",
+      "category": "Screen & Display",
+      "description": "Ghost touches, dead touch zones, or frozen touch panel",
+      "isActive": true,
+      "sortOrder": 5,
+      "iconName": "Hand",
+      "estimatedLaborMinutes": 45,
+      "typicalCostRangeNaira": [
+        20000,
+        95000
+      ]
+    },
+    {
+      "id": "issue_display_lines",
+      "name": "Display lines",
+      "category": "Screen & Display",
+      "description": "Vertical or horizontal colored lines (green, purple, white) across screen",
+      "isActive": true,
+      "sortOrder": 6,
+      "iconName": "Spline",
+      "estimatedLaborMinutes": 50,
+      "typicalCostRangeNaira": [
+        35000,
+        150000
+      ]
+    },
+    {
+      "id": "issue_display_flickering",
+      "name": "Display flickering",
+      "category": "Screen & Display",
+      "description": "Screen flashes rapidly, strobes, or changes brightness unpredictably",
+      "isActive": true,
+      "sortOrder": 7,
+      "iconName": "Zap",
+      "estimatedLaborMinutes": 45,
+      "typicalCostRangeNaira": [
+        25000,
+        120000
+      ]
+    },
+    {
+      "id": "issue_wont_turn_on",
+      "name": "Won't turn on",
+      "category": "Power & Battery",
+      "description": "Device is completely dead, unresponsive to power key and charger",
+      "isActive": true,
+      "sortOrder": 8,
+      "iconName": "PowerOff",
+      "estimatedLaborMinutes": 90,
+      "typicalCostRangeNaira": [
+        15000,
+        65000
+      ]
+    },
+    {
+      "id": "issue_battery_drains_quickly",
+      "name": "Battery drains quickly",
+      "category": "Power & Battery",
+      "description": "Battery health degraded, drops rapidly or shuts down at 20-30%",
+      "isActive": true,
+      "sortOrder": 9,
+      "iconName": "BatteryCharging",
+      "estimatedLaborMinutes": 30,
+      "typicalCostRangeNaira": [
+        12000,
+        45000
+      ]
+    },
+    {
+      "id": "issue_not_charging",
+      "name": "Not charging",
+      "category": "Power & Battery",
+      "description": "No charging icon when plugged in, loose connector, or port damage",
+      "isActive": true,
+      "sortOrder": 10,
+      "iconName": "ZapOff",
+      "estimatedLaborMinutes": 35,
+      "typicalCostRangeNaira": [
+        8000,
+        25000
+      ]
+    },
+    {
+      "id": "issue_charging_slowly",
+      "name": "Charging slowly",
+      "category": "Power & Battery",
+      "description": "Takes many hours to charge or cable has to be held at an angle",
+      "isActive": true,
+      "sortOrder": 11,
+      "iconName": "Zap",
+      "estimatedLaborMinutes": 30,
+      "typicalCostRangeNaira": [
+        7000,
+        22000
+      ]
+    },
+    {
+      "id": "issue_overheating",
+      "name": "Overheating",
+      "category": "Power & Battery",
+      "description": "Phone gets abnormally hot to touch during charging or regular use",
+      "isActive": true,
+      "sortOrder": 12,
+      "iconName": "Flame",
+      "estimatedLaborMinutes": 60,
+      "typicalCostRangeNaira": [
+        10000,
+        35000
+      ]
+    },
+    {
+      "id": "issue_battery_swelling",
+      "name": "Battery swelling",
+      "category": "Power & Battery",
+      "description": "Back cover lifting, screen being pushed outwards by bloated battery",
+      "isActive": true,
+      "sortOrder": 13,
+      "iconName": "ShieldAlert",
+      "estimatedLaborMinutes": 40,
+      "typicalCostRangeNaira": [
+        15000,
+        50000
+      ]
+    },
+    {
+      "id": "issue_camera_not_working",
+      "name": "Camera not working",
+      "category": "Camera",
+      "description": "Camera app closes immediately, shows black preview, or freezes",
+      "isActive": true,
+      "sortOrder": 14,
+      "iconName": "CameraOff",
+      "estimatedLaborMinutes": 40,
+      "typicalCostRangeNaira": [
+        15000,
+        55000
+      ]
+    },
+    {
+      "id": "issue_blurry_camera",
+      "name": "Blurry camera",
+      "category": "Camera",
+      "description": "Cannot focus, shaky lens mechanism, or internal lens haze",
+      "isActive": true,
+      "sortOrder": 15,
+      "iconName": "Eye",
+      "estimatedLaborMinutes": 35,
+      "typicalCostRangeNaira": [
+        12000,
+        48000
+      ]
+    },
+    {
+      "id": "issue_camera_glass_broken",
+      "name": "Camera glass broken",
+      "category": "Camera",
+      "description": "External rear camera protective glass cracked, broken, or missing",
+      "isActive": true,
+      "sortOrder": 16,
+      "iconName": "Camera",
+      "estimatedLaborMinutes": 30,
+      "typicalCostRangeNaira": [
+        7000,
+        22000
+      ]
+    },
+    {
+      "id": "issue_flash_not_working",
+      "name": "Flash not working",
+      "category": "Camera",
+      "description": "Torchlight and photo flash LED will not turn on",
+      "isActive": true,
+      "sortOrder": 17,
+      "iconName": "Flashlight",
+      "estimatedLaborMinutes": 30,
+      "typicalCostRangeNaira": [
+        6000,
+        18000
+      ]
+    },
+    {
+      "id": "issue_no_sound",
+      "name": "No sound",
+      "category": "Audio",
+      "description": "No ringtones, media audio, or notification sounds playing",
+      "isActive": true,
+      "sortOrder": 18,
+      "iconName": "VolumeX",
+      "estimatedLaborMinutes": 30,
+      "typicalCostRangeNaira": [
+        8000,
+        24000
+      ]
+    },
+    {
+      "id": "issue_speaker_not_working",
+      "name": "Speaker not working",
+      "category": "Audio",
+      "description": "Bottom loudspeaker crackling, distorted, or completely silent",
+      "isActive": true,
+      "sortOrder": 19,
+      "iconName": "Volume2",
+      "estimatedLaborMinutes": 35,
+      "typicalCostRangeNaira": [
+        7000,
+        22000
+      ]
+    },
+    {
+      "id": "issue_mic_not_working",
+      "name": "Microphone not working",
+      "category": "Audio",
+      "description": "Callers cannot hear you, WhatsApp voice notes record only static",
+      "isActive": true,
+      "sortOrder": 20,
+      "iconName": "MicOff",
+      "estimatedLaborMinutes": 35,
+      "typicalCostRangeNaira": [
+        7000,
+        20000
+      ]
+    },
+    {
+      "id": "issue_earpiece_not_working",
+      "name": "Earpiece not working",
+      "category": "Audio",
+      "description": "Cannot hear caller during phone calls unless on speakerphone",
+      "isActive": true,
+      "sortOrder": 21,
+      "iconName": "Headphones",
+      "estimatedLaborMinutes": 30,
+      "typicalCostRangeNaira": [
+        6000,
+        18000
+      ]
+    },
+    {
+      "id": "issue_no_network",
+      "name": "No network",
+      "category": "Network & Connectivity",
+      "description": "Emergency calls only, searching for service, or no signal bars",
+      "isActive": true,
+      "sortOrder": 22,
+      "iconName": "Signal",
+      "estimatedLaborMinutes": 60,
+      "typicalCostRangeNaira": [
+        10000,
+        35000
+      ]
+    },
+    {
+      "id": "issue_sim_not_detected",
+      "name": "SIM not detected",
+      "category": "Network & Connectivity",
+      "description": "Device says \"No SIM card inserted\" despite valid MTN/Airtel/Glo SIM",
+      "isActive": true,
+      "sortOrder": 23,
+      "iconName": "CreditCard",
+      "estimatedLaborMinutes": 45,
+      "typicalCostRangeNaira": [
+        8000,
+        25000
+      ]
+    },
+    {
+      "id": "issue_wifi_not_working",
+      "name": "Wi-Fi not working",
+      "category": "Network & Connectivity",
+      "description": "Wi-Fi toggle grayed out or fails to scan/connect to routers",
+      "isActive": true,
+      "sortOrder": 24,
+      "iconName": "WifiOff",
+      "estimatedLaborMinutes": 50,
+      "typicalCostRangeNaira": [
+        10000,
+        30000
+      ]
+    },
+    {
+      "id": "issue_bluetooth_not_working",
+      "name": "Bluetooth not working",
+      "category": "Network & Connectivity",
+      "description": "Cannot pair with earbuds, car systems, or nearby Bluetooth devices",
+      "isActive": true,
+      "sortOrder": 25,
+      "iconName": "Bluetooth",
+      "estimatedLaborMinutes": 40,
+      "typicalCostRangeNaira": [
+        8000,
+        25000
+      ]
+    },
+    {
+      "id": "issue_mobile_data_not_working",
+      "name": "Mobile data not working",
+      "category": "Network & Connectivity",
+      "description": "Calls work, but 4G/5G data connection fails or drops constantly",
+      "isActive": true,
+      "sortOrder": 26,
+      "iconName": "Radio",
+      "estimatedLaborMinutes": 40,
+      "typicalCostRangeNaira": [
+        8000,
+        25000
+      ]
+    },
+    {
+      "id": "issue_water_damage",
+      "name": "Water damage",
+      "category": "Physical Damage",
+      "description": "Dropped in water/liquid, corrosion cleanup and ultrasonic bath needed",
+      "isActive": true,
+      "sortOrder": 27,
+      "iconName": "Droplets",
+      "estimatedLaborMinutes": 120,
+      "typicalCostRangeNaira": [
+        15000,
+        70000
+      ]
+    },
+    {
+      "id": "issue_phone_dropped",
+      "name": "Phone dropped",
+      "category": "Physical Damage",
+      "description": "Heavy impact from fall, internal component loose or damaged",
+      "isActive": true,
+      "sortOrder": 28,
+      "iconName": "MoveDown",
+      "estimatedLaborMinutes": 60,
+      "typicalCostRangeNaira": [
+        15000,
+        80000
+      ]
+    },
+    {
+      "id": "issue_back_glass_broken",
+      "name": "Back glass broken",
+      "category": "Physical Damage",
+      "description": "Rear glass cover shattered or cracked",
+      "isActive": true,
+      "sortOrder": 29,
+      "iconName": "ShieldAlert",
+      "estimatedLaborMinutes": 60,
+      "typicalCostRangeNaira": [
+        14000,
+        55000
+      ]
+    },
+    {
+      "id": "issue_frame_damaged",
+      "name": "Frame damaged",
+      "category": "Physical Damage",
+      "description": "Metal/plastic chassis bent, curved, or severely dented",
+      "isActive": true,
+      "sortOrder": 30,
+      "iconName": "Square",
+      "estimatedLaborMinutes": 75,
+      "typicalCostRangeNaira": [
+        16000,
+        65000
+      ]
+    },
+    {
+      "id": "issue_buttons_damaged",
+      "name": "Buttons damaged",
+      "category": "Physical Damage",
+      "description": "Power button or volume rocker stuck, sunken, or unresponsive",
+      "isActive": true,
+      "sortOrder": 31,
+      "iconName": "Sliders",
+      "estimatedLaborMinutes": 35,
+      "typicalCostRangeNaira": [
+        7000,
+        22000
+      ]
+    },
+    {
+      "id": "issue_phone_freezes",
+      "name": "Phone freezes",
+      "category": "Software",
+      "description": "Device hangs constantly, stops responding until battery dies or forced restart",
+      "isActive": true,
+      "sortOrder": 32,
+      "iconName": "Snowflake",
+      "estimatedLaborMinutes": 40,
+      "typicalCostRangeNaira": [
+        6000,
+        20000
+      ]
+    },
+    {
+      "id": "issue_phone_is_slow",
+      "name": "Phone is slow",
+      "category": "Software",
+      "description": "Extreme lag when opening apps, typing, or navigating system menus",
+      "isActive": true,
+      "sortOrder": 33,
+      "iconName": "Clock",
+      "estimatedLaborMinutes": 30,
+      "typicalCostRangeNaira": [
+        5000,
+        18000
+      ]
+    },
+    {
+      "id": "issue_apps_crashing",
+      "name": "Apps crashing",
+      "category": "Software",
+      "description": "WhatsApp, banking apps, or system services keep stopping",
+      "isActive": true,
+      "sortOrder": 34,
+      "iconName": "AlertTriangle",
+      "estimatedLaborMinutes": 35,
+      "typicalCostRangeNaira": [
+        5000,
+        18000
+      ]
+    },
+    {
+      "id": "issue_boot_loop",
+      "name": "Boot loop",
+      "category": "Software",
+      "description": "Phone gets stuck on Apple logo, Android recovery, or restarts continuously",
+      "isActive": true,
+      "sortOrder": 35,
+      "iconName": "RotateCcw",
+      "estimatedLaborMinutes": 50,
+      "typicalCostRangeNaira": [
+        7000,
+        25000
+      ]
+    },
+    {
+      "id": "issue_software_problem",
+      "name": "Software problem",
+      "category": "Software",
+      "description": "Corrupt OS, failed update, or requires factory flashing",
+      "isActive": true,
+      "sortOrder": 36,
+      "iconName": "Cpu",
+      "estimatedLaborMinutes": 45,
+      "typicalCostRangeNaira": [
+        6000,
+        25000
+      ]
+    },
+    {
+      "id": "issue_forgot_password_lock",
+      "name": "Forgot password / lock issue",
+      "category": "Software",
+      "description": "Lock screen PIN/pattern forgotten, device disabled with proof of ownership",
+      "isActive": true,
+      "sortOrder": 37,
+      "iconName": "Lock",
+      "estimatedLaborMinutes": 45,
+      "typicalCostRangeNaira": [
+        6000,
+        22000
+      ]
+    },
+    {
+      "id": "issue_other",
+      "name": "Other",
+      "category": "Other",
+      "description": "Specialized issue or diagnostic needed by certified tech",
+      "isActive": true,
+      "sortOrder": 38,
+      "iconName": "HelpCircle",
+      "estimatedLaborMinutes": 60,
+      "typicalCostRangeNaira": [
+        8000,
+        40000
+      ]
+    }
+  ],
+  "drafts": [],
   "repairRequests": [
+    {
+      "id": "req_p2_1788679001035",
+      "customerId": "usr_customer_1",
+      "customerName": "Test Customer",
+      "customerPhone": "+2348011111111",
+      "customerLocation": {
+        "lat": 6.5964,
+        "lng": 3.3421,
+        "address": "Allen Avenue, Ikeja",
+        "city": "Lagos",
+        "state": "Lagos State"
+      },
+      "deviceBrand": "Apple",
+      "deviceModel": "iPhone 13 Pro",
+      "deviceModelId": "mod_apple_ip13pro",
+      "deviceType": "PHONE",
+      "catalogMatch": true,
+      "issues": [
+        "issue_screen_cracked"
+      ],
+      "description": "Screen broken, needs urgent fix",
+      "photos": [
+        "data:image/jpeg;base64,/9j/test1",
+        "data:image/jpeg;base64,/9j/test2",
+        "data:image/jpeg;base64,/9j/test3"
+      ],
+      "status": "MATCHING",
+      "quotesCount": 0,
+      "submittedAt": "2026-09-06T07:16:41.035Z",
+      "createdAt": "2026-09-06T07:16:41.035Z",
+      "updatedAt": "2026-09-06T07:16:41.035Z"
+    },
     {
       "id": "req_demo_open",
       "customerId": "usr_customer_1",
@@ -7017,8 +7584,8 @@
       ],
       "status": "QUOTE_ACCEPTED",
       "quotesCount": 1,
-      "createdAt": "2026-09-01T06:17:22.056Z",
-      "updatedAt": "2026-09-06T06:17:22.136Z",
+      "createdAt": "2026-09-01T07:16:40.905Z",
+      "updatedAt": "2026-09-06T07:16:41.015Z",
       "selectedQuoteId": "quote_demo_open_1",
       "selectedTechnicianId": "usr_tech_1"
     },
@@ -7049,8 +7616,8 @@
       "quotesCount": 2,
       "selectedTechnicianId": "usr_tech_1",
       "selectedQuoteId": "quote_demo_1",
-      "createdAt": "2026-09-01T06:17:22.056Z",
-      "updatedAt": "2026-09-06T06:17:22.056Z"
+      "createdAt": "2026-09-01T07:16:40.905Z",
+      "updatedAt": "2026-09-06T07:16:40.905Z"
     },
     {
       "id": "req_demo_completed",
@@ -7079,12 +7646,14 @@
       "quotesCount": 3,
       "selectedTechnicianId": "usr_tech_1",
       "selectedQuoteId": "quote_demo_completed_1",
-      "createdAt": "2026-08-07T06:17:22.056Z",
-      "updatedAt": "2026-09-01T06:17:22.056Z"
+      "createdAt": "2026-08-07T07:16:40.905Z",
+      "updatedAt": "2026-09-01T07:16:40.905Z"
     },
     {
-      "id": "req_test_cat_1788675442155",
+      "id": "req_test_cat_1788679001035",
       "customerId": "usr_customer_1",
+      "customerName": "Customer One",
+      "customerPhone": "+2348012345678",
       "customerLocation": {
         "lat": 6.5964,
         "lng": 3.3421,
@@ -7103,8 +7672,9 @@
       "description": "Cracked screen from fall",
       "photos": [],
       "status": "REQUESTED",
-      "createdAt": "2026-09-06T06:17:22.155Z",
-      "updatedAt": "2026-09-06T06:17:22.155Z"
+      "quotesCount": 0,
+      "createdAt": "2026-09-06T07:16:41.035Z",
+      "updatedAt": "2026-09-06T07:16:41.035Z"
     }
   ],
   "repairQuotes": [
@@ -7128,7 +7698,7 @@
       "partsQuality": "PREMIUM_AFTERMARKET",
       "notes": "Premium Hard OLED display replacement with 60-day warranty.",
       "status": "ACCEPTED",
-      "createdAt": "2026-09-01T06:17:22.056Z"
+      "createdAt": "2026-09-01T07:16:40.905Z"
     },
     {
       "id": "quote_demo_1",
@@ -7150,7 +7720,7 @@
       "partsQuality": "PREMIUM_AFTERMARKET",
       "notes": "Premium Hard OLED display with true-tone programming and original water-seal gasket replacement included.",
       "status": "ACCEPTED",
-      "createdAt": "2026-09-01T06:17:22.056Z"
+      "createdAt": "2026-09-01T07:16:40.905Z"
     },
     {
       "id": "quote_demo_2",
@@ -7172,7 +7742,7 @@
       "partsQuality": "ORIGINAL_OEM",
       "notes": "100% Genuine Apple pulled display panel with factory oleophobic coating.",
       "status": "REJECTED",
-      "createdAt": "2026-09-01T06:17:22.056Z"
+      "createdAt": "2026-09-01T07:16:40.905Z"
     },
     {
       "id": "quote_demo_completed_1",
@@ -7194,7 +7764,7 @@
       "partsQuality": "ORIGINAL_OEM",
       "notes": "Original Samsung Galaxy battery replacement with thermal pad reapplication.",
       "status": "ACCEPTED",
-      "createdAt": "2026-08-07T06:17:22.056Z"
+      "createdAt": "2026-08-07T07:16:40.905Z"
     }
   ],
   "repairJobs": [
@@ -7218,60 +7788,60 @@
       "platformFeeAmount": 4675,
       "technicianPayoutAmount": 50325,
       "partsUsed": [],
-      "createdAt": "2026-09-06T06:17:22.056Z",
-      "bookedAt": "2026-09-06T06:17:22.153Z",
+      "createdAt": "2026-09-06T07:16:40.905Z",
+      "bookedAt": "2026-09-06T07:16:41.033Z",
       "statusHistory": [
         {
           "status": "REQUESTED",
-          "timestamp": "2026-09-01T06:17:22.056Z",
+          "timestamp": "2026-09-01T07:16:40.905Z",
           "actorRole": "customer",
           "note": "Customer submitted repair request"
         },
         {
           "status": "QUOTING",
-          "timestamp": "2026-09-01T06:17:22.056Z",
+          "timestamp": "2026-09-01T07:16:40.905Z",
           "actorRole": "technician",
           "note": "Emeka submitted quote ₦55,000"
         },
         {
           "status": "QUOTE_ACCEPTED",
-          "timestamp": "2026-09-06T06:17:22.056Z",
+          "timestamp": "2026-09-06T07:16:40.905Z",
           "actorRole": "customer",
           "note": "Quote accepted by customer"
         },
         {
           "status": "PAYMENT_CONFIRMED",
-          "timestamp": "2026-09-06T06:17:22.056Z",
+          "timestamp": "2026-09-06T07:16:40.905Z",
           "actorRole": "customer",
           "note": "₦55,000 secured in Escrow"
         },
         {
           "status": "BOOKED",
-          "timestamp": "2026-09-06T06:17:22.056Z",
+          "timestamp": "2026-09-06T07:16:40.905Z",
           "actorRole": "customer",
           "note": "Repair booked. Awaiting physical intake."
         },
         {
           "status": "PAYMENT_CONFIRMED",
-          "timestamp": "2026-09-06T06:17:22.153Z",
+          "timestamp": "2026-09-06T07:16:41.033Z",
           "actorRole": "customer",
           "note": "₦55,000 secured in Fix Hub Escrow (Ref: FIX-PAY-9918231-LAGOS)"
         },
         {
           "status": "BOOKED",
-          "timestamp": "2026-09-06T06:17:22.153Z",
+          "timestamp": "2026-09-06T07:16:41.033Z",
           "actorRole": "customer",
           "note": "Repair job booked. Awaiting physical device check-in at shop."
         },
         {
           "status": "DEVICE_RECEIVED",
-          "timestamp": "2026-09-06T06:17:22.154Z",
+          "timestamp": "2026-09-06T07:16:41.034Z",
           "actorRole": "technician",
           "note": "Device checked in and physical intake condition report recorded."
         }
       ],
       "conditionReport": {
-        "timestamp": "2026-09-06T06:17:22.154Z",
+        "timestamp": "2026-09-06T07:16:41.034Z",
         "frontCondition": "CRACKED",
         "backCondition": "MINOR_SCRATCHES",
         "frameCondition": "PRISTINE",
@@ -7289,7 +7859,7 @@
         "technicianNotes": "Device received in shop, screen powers on with display lines",
         "confirmedByCustomer": true
       },
-      "receivedAt": "2026-09-06T06:17:22.154Z"
+      "receivedAt": "2026-09-06T07:16:41.034Z"
     },
     {
       "id": "job_demo_active",
@@ -7311,7 +7881,7 @@
       "platformFeeAmount": 5100,
       "technicianPayoutAmount": 54900,
       "conditionReport": {
-        "timestamp": "2026-09-01T06:17:22.056Z",
+        "timestamp": "2026-09-01T07:16:40.905Z",
         "frontCondition": "CRACKED",
         "backCondition": "PERFECT",
         "frameCondition": "PRISTINE",
@@ -7340,53 +7910,53 @@
           "supplier": "Prime Tech Component Lagos",
           "beforePhotoUrl": "https://images.unsplash.com/photo-1588508065123-287b28e013da?w=400&auto=format&fit=crop&q=80",
           "afterPhotoUrl": "https://images.unsplash.com/photo-1596742578443-7682ef5251cd?w=400&auto=format&fit=crop&q=80",
-          "installationTimestamp": "2026-09-06T06:17:22.056Z"
+          "installationTimestamp": "2026-09-06T07:16:40.905Z"
         }
       ],
-      "createdAt": "2026-09-01T06:17:22.056Z",
-      "bookedAt": "2026-09-01T06:17:22.056Z",
-      "receivedAt": "2026-09-01T06:17:22.056Z",
-      "repairStartedAt": "2026-09-06T06:17:22.056Z",
+      "createdAt": "2026-09-01T07:16:40.905Z",
+      "bookedAt": "2026-09-01T07:16:40.905Z",
+      "receivedAt": "2026-09-01T07:16:40.905Z",
+      "repairStartedAt": "2026-09-06T07:16:40.905Z",
       "statusHistory": [
         {
           "status": "REQUESTED",
-          "timestamp": "2026-09-01T06:17:22.056Z",
+          "timestamp": "2026-09-01T07:16:40.905Z",
           "actorRole": "customer",
           "note": "Customer submitted repair request"
         },
         {
           "status": "QUOTING",
-          "timestamp": "2026-09-01T06:17:22.056Z",
+          "timestamp": "2026-09-01T07:16:40.905Z",
           "actorRole": "technician",
           "note": "Emeka submitted quote ₦60,000"
         },
         {
           "status": "QUOTE_ACCEPTED",
-          "timestamp": "2026-09-01T06:17:22.056Z",
+          "timestamp": "2026-09-01T07:16:40.905Z",
           "actorRole": "customer",
           "note": "Quote accepted by customer"
         },
         {
           "status": "PAYMENT_CONFIRMED",
-          "timestamp": "2026-09-01T06:17:22.056Z",
+          "timestamp": "2026-09-01T07:16:40.905Z",
           "actorRole": "customer",
           "note": "₦60,000 held safely in Escrow"
         },
         {
           "status": "DEVICE_RECEIVED",
-          "timestamp": "2026-09-01T06:17:22.056Z",
+          "timestamp": "2026-09-01T07:16:40.905Z",
           "actorRole": "technician",
           "note": "Device checked in at shop with condition scan"
         },
         {
           "status": "DIAGNOSING",
-          "timestamp": "2026-09-01T06:17:22.056Z",
+          "timestamp": "2026-09-01T07:16:40.905Z",
           "actorRole": "technician",
           "note": "Diagnostics confirmed touch layer intact"
         },
         {
           "status": "REPAIR_IN_PROGRESS",
-          "timestamp": "2026-09-06T06:17:22.056Z",
+          "timestamp": "2026-09-06T07:16:40.905Z",
           "actorRole": "technician",
           "note": "Installing Premium Hard OLED and water-seal gasket"
         }
@@ -7412,7 +7982,7 @@
       "platformFeeAmount": 2550,
       "technicianPayoutAmount": 27450,
       "conditionReport": {
-        "timestamp": "2026-08-07T06:17:22.056Z",
+        "timestamp": "2026-08-07T07:16:40.905Z",
         "frontCondition": "PERFECT",
         "backCondition": "MINOR_SCRATCHES",
         "frameCondition": "PRISTINE",
@@ -7433,7 +8003,7 @@
           "quality": "ORIGINAL_OEM",
           "priceNaira": 22000,
           "warrantyDays": 90,
-          "installationTimestamp": "2026-09-01T06:17:22.056Z"
+          "installationTimestamp": "2026-09-01T07:16:40.905Z"
         }
       ],
       "warranty": {
@@ -7445,63 +8015,63 @@
         "technicianId": "usr_tech_1",
         "technicianName": "Emeka Okafor (Emeka Phone Labs)",
         "periodDays": 90,
-        "startDate": "2026-09-01T06:17:22.056Z",
-        "endDate": "2026-11-30T06:17:22.056Z",
+        "startDate": "2026-09-01T07:16:40.905Z",
+        "endDate": "2026-11-30T07:16:40.906Z",
         "terms": "Covers battery failure, abnormal discharge (>20% in 1 hr idle), or swelling. Excludes water damage or physical puncture.",
         "status": "ACTIVE"
       },
-      "createdAt": "2026-08-07T06:17:22.056Z",
-      "bookedAt": "2026-08-07T06:17:22.056Z",
-      "receivedAt": "2026-08-07T06:17:22.056Z",
-      "repairStartedAt": "2026-08-07T06:17:22.056Z",
-      "readyForPickupAt": "2026-09-01T06:17:22.056Z",
-      "completedAt": "2026-09-01T06:17:22.056Z",
+      "createdAt": "2026-08-07T07:16:40.905Z",
+      "bookedAt": "2026-08-07T07:16:40.905Z",
+      "receivedAt": "2026-08-07T07:16:40.905Z",
+      "repairStartedAt": "2026-08-07T07:16:40.905Z",
+      "readyForPickupAt": "2026-09-01T07:16:40.905Z",
+      "completedAt": "2026-09-01T07:16:40.905Z",
       "statusHistory": [
         {
           "status": "REQUESTED",
-          "timestamp": "2026-08-07T06:17:22.056Z",
+          "timestamp": "2026-08-07T07:16:40.905Z",
           "actorRole": "customer"
         },
         {
           "status": "QUOTE_ACCEPTED",
-          "timestamp": "2026-08-07T06:17:22.056Z",
+          "timestamp": "2026-08-07T07:16:40.905Z",
           "actorRole": "customer"
         },
         {
           "status": "PAYMENT_CONFIRMED",
-          "timestamp": "2026-08-07T06:17:22.056Z",
+          "timestamp": "2026-08-07T07:16:40.905Z",
           "actorRole": "customer"
         },
         {
           "status": "DEVICE_RECEIVED",
-          "timestamp": "2026-08-07T06:17:22.056Z",
+          "timestamp": "2026-08-07T07:16:40.905Z",
           "actorRole": "technician"
         },
         {
           "status": "REPAIR_IN_PROGRESS",
-          "timestamp": "2026-08-07T06:17:22.056Z",
+          "timestamp": "2026-08-07T07:16:40.905Z",
           "actorRole": "technician"
         },
         {
           "status": "READY_FOR_PICKUP",
-          "timestamp": "2026-09-01T06:17:22.056Z",
+          "timestamp": "2026-09-01T07:16:40.905Z",
           "actorRole": "technician"
         },
         {
           "status": "PICKED_UP",
-          "timestamp": "2026-09-01T06:17:22.056Z",
+          "timestamp": "2026-09-01T07:16:40.905Z",
           "actorRole": "customer"
         },
         {
           "status": "COMPLETED",
-          "timestamp": "2026-09-01T06:17:22.056Z",
+          "timestamp": "2026-09-01T07:16:40.905Z",
           "actorRole": "customer",
           "note": "Customer tested battery charging speed and approved release"
         }
       ]
     },
     {
-      "id": "job_1788675442136_j7om",
+      "id": "job_1788679001015_blxz",
       "requestId": "req_demo_open",
       "quoteId": "quote_demo_open_1",
       "customerId": "usr_customer_1",
@@ -7512,35 +8082,35 @@
         "screen_damaged"
       ],
       "status": "PAYMENT_PENDING",
-      "dropOffCode": "FX-8128",
-      "pickupCode": "PK-1192",
-      "handoffQrToken": "tok_fixhub_1788675442136_osqn1k",
+      "dropOffCode": "FX-4713",
+      "pickupCode": "PK-5266",
+      "handoffQrToken": "tok_fixhub_1788679001015_ipuw44",
       "originalQuoteAmount": 55000,
       "finalAmount": 55000,
       "platformFeeAmount": 4675,
       "technicianPayoutAmount": 50325,
       "partsUsed": [],
-      "createdAt": "2026-09-06T06:17:22.136Z",
+      "createdAt": "2026-09-06T07:16:41.015Z",
       "statusHistory": [
         {
           "status": "REQUESTED",
-          "timestamp": "2026-09-01T06:17:22.056Z",
+          "timestamp": "2026-09-01T07:16:40.905Z",
           "actorRole": "customer"
         },
         {
           "status": "QUOTING",
-          "timestamp": "2026-09-01T06:17:22.056Z",
+          "timestamp": "2026-09-01T07:16:40.905Z",
           "actorRole": "technician"
         },
         {
           "status": "QUOTE_ACCEPTED",
-          "timestamp": "2026-09-06T06:17:22.136Z",
+          "timestamp": "2026-09-06T07:16:41.015Z",
           "actorRole": "customer",
           "note": "Accepted quote from Emeka Okafor (₦55,000)"
         },
         {
           "status": "PAYMENT_PENDING",
-          "timestamp": "2026-09-06T06:17:22.136Z",
+          "timestamp": "2026-09-06T07:16:41.015Z",
           "actorRole": "customer"
         }
       ]
@@ -7630,7 +8200,7 @@
       "transactionRef": "FIX-PAY-9918231-LAGOS",
       "idempotencyKey": "idemp_pay_pending_001",
       "paymentMethod": "CARD",
-      "paidAt": "2026-09-06T06:17:22.153Z"
+      "paidAt": "2026-09-06T07:16:41.033Z"
     },
     {
       "id": "pay_demo_active_01",
@@ -7646,7 +8216,7 @@
       "transactionRef": "FIX-PAY-8849102-LAGOS",
       "idempotencyKey": "idemp_pay_active_001",
       "paymentMethod": "CARD",
-      "paidAt": "2026-09-01T06:17:22.056Z"
+      "paidAt": "2026-09-01T07:16:40.905Z"
     },
     {
       "id": "pay_demo_comp_01",
@@ -7662,8 +8232,8 @@
       "transactionRef": "FIX-PAY-1120934-LAGOS",
       "idempotencyKey": "idemp_pay_comp_001",
       "paymentMethod": "BANK_TRANSFER",
-      "paidAt": "2026-08-07T06:17:22.056Z",
-      "releasedAt": "2026-09-01T06:17:22.056Z"
+      "paidAt": "2026-08-07T07:16:40.905Z",
+      "releasedAt": "2026-09-01T07:16:40.905Z"
     }
   ],
   "warranties": [
@@ -7679,8 +8249,8 @@
       "technicianId": "usr_tech_1",
       "technicianName": "Emeka Okafor (Emeka Phone Labs)",
       "periodDays": 90,
-      "startDate": "2026-09-01T06:17:22.056Z",
-      "endDate": "2026-11-30T06:17:22.056Z",
+      "startDate": "2026-09-01T07:16:40.905Z",
+      "endDate": "2026-11-30T07:16:40.906Z",
       "terms": "Covers battery failure, abnormal discharge, or swelling. Excludes water damage or physical puncture.",
       "status": "ACTIVE"
     }
@@ -7696,7 +8266,7 @@
       "comment": "Emeka did a fantastic job on my S22 Ultra battery. Dropped it off in Computer Village, tested it in 45 mins, and now the battery lasts over a full day. Super transparent!",
       "verifiedPurchase": true,
       "repairSummary": "Samsung Galaxy S22 Ultra Battery Replacement",
-      "createdAt": "2026-09-01T06:17:22.056Z"
+      "createdAt": "2026-09-01T07:16:40.905Z"
     },
     {
       "id": "rev_02",
@@ -7708,7 +8278,7 @@
       "comment": "Quick screen replacement for my iPhone 12. FaceID still works and TrueTone is intact. Very professional shop.",
       "verifiedPurchase": true,
       "repairSummary": "iPhone 12 Screen Replacement",
-      "createdAt": "2026-08-07T06:17:22.056Z"
+      "createdAt": "2026-08-07T07:16:40.905Z"
     }
   ],
   "auditLogs": [
@@ -7724,7 +8294,7 @@
         "repairId": "job_demo_active",
         "provider": "PAYSTACK_SANDBOX"
       },
-      "timestamp": "2026-09-01T06:17:22.056Z"
+      "timestamp": "2026-09-01T07:16:40.905Z"
     },
     {
       "id": "audit_02",
@@ -7737,24 +8307,24 @@
         "frontCondition": "CRACKED",
         "screenPowersOn": true
       },
-      "timestamp": "2026-09-01T06:17:22.056Z"
+      "timestamp": "2026-09-01T07:16:40.905Z"
     },
     {
-      "id": "audit_1788675442153_dov2w",
+      "id": "audit_1788679001033_1wgf9",
       "actorId": "usr_customer_1",
       "actorRole": "customer",
       "action": "QUOTE_ACCEPTED",
       "resourceType": "REPAIR_JOB",
-      "resourceId": "job_1788675442136_j7om",
+      "resourceId": "job_1788679001015_blxz",
       "details": {
         "quoteId": "quote_demo_open_1",
         "totalAmount": 55000
       },
       "ipAddress": "127.0.0.1",
-      "timestamp": "2026-09-06T06:17:22.153Z"
+      "timestamp": "2026-09-06T07:16:41.033Z"
     },
     {
-      "id": "audit_1788675442154_0w55b",
+      "id": "audit_1788679001034_mpu7l",
       "actorId": "usr_customer_1",
       "actorRole": "customer",
       "action": "PAYMENT_ESCROW_CONFIRMED",
@@ -7765,10 +8335,10 @@
         "status": "ESCROW_HELD"
       },
       "ipAddress": "127.0.0.1",
-      "timestamp": "2026-09-06T06:17:22.154Z"
+      "timestamp": "2026-09-06T07:16:41.034Z"
     },
     {
-      "id": "audit_1788675442154_k0wfd",
+      "id": "audit_1788679001034_ygy1v",
       "actorId": "usr_tech_1",
       "actorRole": "technician",
       "action": "DEVICE_CHECKED_IN",
@@ -7781,13 +8351,13 @@
         "backCondition": "MINOR_SCRATCHES",
         "frameCondition": "PRISTINE",
         "screenPowersOn": true,
-        "intakeTimestamp": "2026-09-06T06:17:22.154Z"
+        "intakeTimestamp": "2026-09-06T07:16:41.034Z"
       },
       "ipAddress": "127.0.0.1",
-      "timestamp": "2026-09-06T06:17:22.154Z"
+      "timestamp": "2026-09-06T07:16:41.034Z"
     },
     {
-      "id": "audit_1788675442155_6ueje",
+      "id": "audit_1788679001035_33gh5",
       "actorId": "usr_customer_1",
       "actorRole": "customer",
       "action": "SECURITY_AUDIT_VERIFIED",
@@ -7797,49 +8367,49 @@
         "passed": true
       },
       "ipAddress": "127.0.0.1",
-      "timestamp": "2026-09-06T06:17:22.155Z"
+      "timestamp": "2026-09-06T07:16:41.035Z"
     }
   ],
   "notifications": [
     {
-      "id": "notif_1788675442154_ns4n",
+      "id": "notif_1788679001034_z558",
       "userId": "usr_customer_1",
       "title": "Phone Checked In at Shop",
       "message": "Your Apple iPhone 13 has been received and verified by the technician. Digital check-in report is ready to view.",
       "type": "STATUS_CHANGE",
       "repairId": "job_demo_booked",
       "read": false,
-      "createdAt": "2026-09-06T06:17:22.154Z"
+      "createdAt": "2026-09-06T07:16:41.034Z"
     },
     {
-      "id": "notif_1788675442154_nwfb",
+      "id": "notif_1788679001034_ygch",
       "userId": "usr_customer_1",
       "title": "Payment Secured",
       "message": "Your payment of ₦55,000 is safely held in escrow. Take your phone to the technician to begin repair.",
       "type": "PAYMENT",
       "repairId": "job_demo_booked",
       "read": false,
-      "createdAt": "2026-09-06T06:17:22.154Z"
+      "createdAt": "2026-09-06T07:16:41.034Z"
     },
     {
-      "id": "notif_1788675442153_0wy5",
+      "id": "notif_1788679001034_z5th",
       "userId": "usr_tech_1",
       "title": "Payment Secured in Escrow",
       "message": "Payment of ₦55,000 for Apple iPhone 13 is now held in escrow. Customer will bring device.",
       "type": "PAYMENT",
       "repairId": "job_demo_booked",
       "read": false,
-      "createdAt": "2026-09-06T06:17:22.153Z"
+      "createdAt": "2026-09-06T07:16:41.034Z"
     },
     {
-      "id": "notif_1788675442153_qryv",
+      "id": "notif_1788679001033_mxmo",
       "userId": "usr_tech_1",
       "title": "Quote Accepted!",
       "message": "Tunde Adebayo accepted your quote of ₦55,000 for Apple iPhone 13. Waiting for escrow payment.",
       "type": "QUOTE",
-      "repairId": "job_1788675442136_j7om",
+      "repairId": "job_1788679001015_blxz",
       "read": false,
-      "createdAt": "2026-09-06T06:17:22.153Z"
+      "createdAt": "2026-09-06T07:16:41.033Z"
     },
     {
       "id": "notif_01",
@@ -7849,7 +8419,7 @@
       "type": "STATUS_CHANGE",
       "repairId": "job_demo_active",
       "read": false,
-      "createdAt": "2026-09-06T06:17:22.056Z"
+      "createdAt": "2026-09-06T07:16:40.905Z"
     },
     {
       "id": "notif_02",
@@ -7859,7 +8429,7 @@
       "type": "PAYMENT",
       "repairId": "job_demo_active",
       "read": true,
-      "createdAt": "2026-09-01T06:17:22.056Z"
+      "createdAt": "2026-09-01T07:16:40.905Z"
     }
   ],
   "messages": [
@@ -7870,7 +8440,7 @@
       "senderRole": "technician",
       "senderName": "Emeka Okafor",
       "text": "Good afternoon Mr. Tunde, we just finished opening the device. The frame is in great shape, so the screen replacement will sit completely flush.",
-      "createdAt": "2026-09-01T06:17:22.056Z"
+      "createdAt": "2026-09-01T07:16:40.905Z"
     },
     {
       "id": "msg_02",
@@ -7879,7 +8449,7 @@
       "senderRole": "customer",
       "senderName": "Tunde Adebayo",
       "text": "Awesome, thanks Emeka! Please ensure TrueTone calibration is copied over.",
-      "createdAt": "2026-09-01T06:17:22.056Z"
+      "createdAt": "2026-09-01T07:16:40.905Z"
     }
   ],
   "riskEvents": []

@@ -433,10 +433,143 @@ apiRouter.post('/technicians/match', (req: Request, res: Response) => {
 });
 
 /* -------------------------------------------------------------
- * 4. REPAIR REQUESTS & QUOTING (Strict Role & Ownership Isolation)
+ * 4. REPAIR REQUESTS, DRAFTS & QUOTING (Strict Role & Ownership Isolation)
  * ----------------------------------------------------------- */
+
+// 4.0 Repair Issues Catalog
+apiRouter.get('/repairs/issues', (req: Request, res: Response) => {
+  const category = req.query.category as string;
+  let issues = db.repairIssueCatalog.filter((i) => i.isActive);
+  if (category) {
+    issues = issues.filter((i) => i.category.toLowerCase() === category.toLowerCase());
+  }
+  return res.json(issues);
+});
+
+// 4.1 Repair Drafts (Customer Persistence)
+apiRouter.get('/repairs/draft', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
+  const draft = db.drafts.find((d) => d.customerId === req.user!.id);
+  return res.json(draft || null);
+});
+
+apiRouter.post('/repairs/draft', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
+  const {
+    deviceBrand,
+    deviceModel,
+    deviceModelId,
+    deviceType,
+    catalogMatch,
+    issues,
+    otherDescription,
+    description,
+    voiceNoteUrl,
+    voiceNoteDurationSeconds,
+    photos,
+    attachments,
+    customerLocation,
+    step,
+  } = req.body;
+
+  const now = new Date().toISOString();
+  let draft = db.drafts.find((d) => d.customerId === req.user!.id);
+
+  if (!draft) {
+    draft = {
+      id: `draft_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      customerId: req.user!.id,
+      updatedAt: now,
+    };
+    db.drafts.push(draft);
+  }
+
+  if (deviceBrand !== undefined) draft.deviceBrand = sanitizeString(deviceBrand, 80);
+  if (deviceModel !== undefined) draft.deviceModel = sanitizeString(deviceModel, 80);
+  if (deviceModelId !== undefined) draft.deviceModelId = sanitizeString(deviceModelId, 80);
+  if (deviceType !== undefined) draft.deviceType = deviceType === 'TABLET' ? 'TABLET' : 'PHONE';
+  if (catalogMatch !== undefined) draft.catalogMatch = Boolean(catalogMatch);
+  if (Array.isArray(issues)) draft.issues = issues.map((i) => sanitizeString(i, 80));
+  if (otherDescription !== undefined) draft.otherDescription = sanitizeString(otherDescription, 500);
+  if (description !== undefined) draft.description = sanitizeString(description, 2000);
+  if (voiceNoteUrl !== undefined) draft.voiceNoteUrl = sanitizeString(voiceNoteUrl, 1000);
+  if (voiceNoteDurationSeconds !== undefined) draft.voiceNoteDurationSeconds = Number(voiceNoteDurationSeconds) || 0;
+  if (Array.isArray(photos)) draft.photos = photos.filter((p) => typeof p === 'string').slice(0, 3);
+  if (Array.isArray(attachments)) draft.attachments = attachments.slice(0, 4);
+  if (step !== undefined) draft.step = Number(step);
+
+  if (customerLocation && isValidCoordinates(customerLocation.lat, customerLocation.lng)) {
+    draft.customerLocation = {
+      lat: Number(customerLocation.lat),
+      lng: Number(customerLocation.lng),
+      address: sanitizeString(customerLocation.address, 200) || '',
+      landmark: sanitizeString(customerLocation.landmark, 100),
+      area: sanitizeString(customerLocation.area, 80),
+      city: sanitizeString(customerLocation.city, 80) || 'Lagos',
+      state: sanitizeString(customerLocation.state, 80) || 'Lagos State',
+    };
+  }
+
+  draft.updatedAt = now;
+  db.save();
+
+  return res.json(draft);
+});
+
+apiRouter.delete('/repairs/draft', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
+  const draftIdx = db.drafts.findIndex((d) => d.customerId === req.user!.id);
+  if (draftIdx !== -1) {
+    db.drafts.splice(draftIdx, 1);
+    db.save();
+  }
+  return res.json({ success: true, message: 'Draft cleared.' });
+});
+
+// 4.2 Attachment Upload (Base64 / Data URL)
+apiRouter.post('/repairs/attachments/upload', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
+  const { fileData, type, mimeType, size, durationSeconds } = req.body;
+
+  if (!fileData || typeof fileData !== 'string') {
+    return res.status(400).json({ error: 'fileData string is required.' });
+  }
+
+  if (type !== 'IMAGE' && type !== 'AUDIO') {
+    return res.status(400).json({ error: "Attachment type must be 'IMAGE' or 'AUDIO'." });
+  }
+
+  // Max 8MB base64 payload size guard
+  if (fileData.length > 8 * 1024 * 1024) {
+    return res.status(400).json({ error: 'File size exceeds maximum permitted limit.' });
+  }
+
+  const attachment = {
+    id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    type: type as 'IMAGE' | 'AUDIO',
+    url: fileData,
+    mimeType: sanitizeString(mimeType, 100) || (type === 'IMAGE' ? 'image/jpeg' : 'audio/webm'),
+    size: Number(size) || Math.round(fileData.length * 0.75),
+    createdAt: new Date().toISOString(),
+    durationSeconds: durationSeconds ? Number(durationSeconds) : undefined,
+  };
+
+  return res.status(201).json(attachment);
+});
+
 apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
-  const { customerLocation, deviceBrand, deviceModel, deviceType, catalogMatch, issues, description, photos, voiceNoteUrl } = req.body;
+  const {
+    customerLocation,
+    deviceBrand,
+    deviceModel,
+    deviceModelId,
+    deviceType,
+    catalogMatch,
+    issues,
+    otherDescription,
+    description,
+    photos,
+    attachments,
+    voiceNoteUrl,
+    voiceNoteDurationSeconds,
+    status: requestedStatus,
+  } = req.body;
 
   if (!customerLocation || !isValidCoordinates(customerLocation.lat, customerLocation.lng)) {
     return res.status(400).json({ error: 'Valid customer location coordinates are required.' });
@@ -464,6 +597,13 @@ apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req
     state: sanitizeString(customerLocation.state, 80) || 'Lagos State',
   };
 
+  // Restrict to max 3 photos
+  const safePhotos = Array.isArray(photos)
+    ? photos.filter((p) => typeof p === 'string').slice(0, 3)
+    : [];
+
+  const initialStatus = requestedStatus === 'REQUESTED' ? 'REQUESTED' : 'MATCHING';
+
   const request: RepairRequest = {
     id: requestId,
     customerId: req.user!.id,
@@ -472,19 +612,30 @@ apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req
     customerLocation: validatedLocation,
     deviceBrand: sanitizeString(deviceBrand, 80),
     deviceModel: sanitizeString(deviceModel, 80),
+    deviceModelId: deviceModelId ? sanitizeString(deviceModelId, 80) : undefined,
     deviceType: (deviceType === 'TABLET' ? 'TABLET' : 'PHONE'),
     catalogMatch: catalogMatch !== undefined ? Boolean(catalogMatch) : true,
     issues: issues.map((i) => sanitizeString(i, 80)),
     description: sanitizeString(description, 2000),
-    photos: Array.isArray(photos) ? photos.filter((p) => typeof p === 'string') : [],
-    voiceNoteUrl: voiceNoteUrl ? sanitizeString(voiceNoteUrl, 500) : undefined,
-    status: 'REQUESTED' as RepairLifecycleStatus,
+    otherDescription: otherDescription ? sanitizeString(otherDescription, 500) : undefined,
+    photos: safePhotos,
+    attachments: Array.isArray(attachments) ? attachments.slice(0, 4) : [],
+    voiceNoteUrl: voiceNoteUrl ? sanitizeString(voiceNoteUrl, 1000) : undefined,
+    voiceNoteDurationSeconds: voiceNoteDurationSeconds ? Number(voiceNoteDurationSeconds) : undefined,
+    status: initialStatus as RepairLifecycleStatus,
     quotesCount: 0,
+    submittedAt: now,
     createdAt: now,
     updatedAt: now,
   };
 
   db.repairRequests.unshift(request);
+
+  // Clear customer's saved draft upon successful request submission
+  const draftIdx = db.drafts.findIndex((d) => d.customerId === req.user!.id);
+  if (draftIdx !== -1) {
+    db.drafts.splice(draftIdx, 1);
+  }
 
   // Notify matching nearby eligible technicians
   const matched = TechnicianMatchingService.matchTechnicians({
@@ -533,7 +684,11 @@ apiRouter.get('/repairs/requests', requireAuth, (req: AuthenticatedRequest, res:
     for (const r of db.repairRequests) {
       const hasQuoted = db.repairQuotes.some((q) => q.requestId === r.id && q.technicianId === req.user!.id);
       const isAssigned = r.selectedTechnicianId === req.user!.id;
-      const isOpen = r.status === 'REQUESTED' || r.status === 'QUOTING';
+      const isOpen =
+        r.status === 'REQUESTED' ||
+        r.status === 'QUOTING' ||
+        r.status === 'SUBMITTED' ||
+        r.status === 'MATCHING';
 
       let isEligible = false;
       let distanceKm: number | undefined;

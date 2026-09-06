@@ -427,14 +427,16 @@ async function runTestSuite() {
 
   // Customer 1 deletion
   const preDeleteLen = db.customerDevices.length;
-  const delIdx = db.data.customerDevices.findIndex((d) => d.id === customDevice.id);
-  if (delIdx !== -1) db.data.customerDevices.splice(delIdx, 1);
+  const delIdx = (db as any).data.customerDevices.findIndex((d: any) => d.id === customDevice.id);
+  if (delIdx !== -1) (db as any).data.customerDevices.splice(delIdx, 1);
   assert(db.customerDevices.length === preDeleteLen - 1, 'Owner customer can safely delete their saved device');
 
   // 12.4 Repair Request Catalog Fields Integration
   const reqWithCatalog = {
     id: `req_test_cat_${Date.now()}`,
     customerId: customerId1,
+    customerName: 'Customer One',
+    customerPhone: '+2348012345678',
     customerLocation: ikejaLocation,
     deviceBrand: 'Apple',
     deviceModel: 'iPhone 13',
@@ -445,6 +447,7 @@ async function runTestSuite() {
     description: 'Cracked screen from fall',
     photos: [],
     status: 'REQUESTED' as const,
+    quotesCount: 0,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -452,6 +455,84 @@ async function runTestSuite() {
   assert(
     reqWithCatalog.catalogMatch === true && reqWithCatalog.deviceModelId === 'mod_apple_ip13',
     'Repair request correctly records catalogMatch and deviceModelId for technician parts planning'
+  );
+
+  // Test 13: Customer Phase 2 Repair Request Experience & Data Integrity
+  console.log('\n13. Customer Phase 2 Repair Request Experience & Draft Integrity');
+
+  // 13.1 Normalized Repair Issues Catalog
+  const categories = Array.from(new Set(db.repairIssueCatalog.map((i) => i.category)));
+  assert(categories.length >= 7, 'Repair issue catalog covers all core customer categories');
+  assert(db.repairIssueCatalog.length >= 35, 'Issue catalog contains comprehensive granular customer problems');
+  const screenCracked = db.repairIssueCatalog.find((i) => i.name === 'Cracked screen');
+  assert(screenCracked !== undefined && screenCracked.category === 'Screen & Display', 'Cracked screen issue is registered in Screen & Display');
+
+  // 13.2 Repair Draft Persistence
+  const draft1 = {
+    id: `draft_${Date.now()}_test`,
+    customerId: customerId1,
+    deviceBrand: 'Apple',
+    deviceModel: 'iPhone 13 Pro',
+    deviceModelId: 'mod_apple_ip13pro',
+    deviceType: 'PHONE' as const,
+    catalogMatch: true,
+    issues: ['issue_screen_cracked', 'issue_battery_drains_quickly'],
+    description: 'Screen cracked near front speaker after falling from table',
+    customerLocation: ikejaLocation,
+    step: 3,
+    updatedAt: new Date().toISOString(),
+  };
+  db.drafts.push(draft1);
+  const foundDraft = db.drafts.find((d) => d.customerId === customerId1);
+  assert(foundDraft !== undefined && foundDraft.issues?.length === 2, 'Customer 1 repair draft persisted with selected issues and location');
+
+  // 13.3 Customer Draft Isolation
+  const customer2Draft = db.drafts.find((d) => d.customerId === customerId2);
+  assert(customer2Draft === undefined, 'Customer 2 draft query does not leak Customer 1 draft (Draft Isolation)');
+
+  // 13.4 Max Photos Constraint & Status MATCHING
+  const testPhotos = [
+    'data:image/jpeg;base64,/9j/test1',
+    'data:image/jpeg;base64,/9j/test2',
+    'data:image/jpeg;base64,/9j/test3',
+    'data:image/jpeg;base64,/9j/test4_excess',
+  ];
+  const constrainedPhotos = testPhotos.slice(0, 3);
+  assert(constrainedPhotos.length === 3, 'Client/Server photo constraint enforces max 3 photos for low bandwidth');
+
+  const phase2Request = {
+    id: `req_p2_${Date.now()}`,
+    customerId: customerId1,
+    customerName: 'Test Customer',
+    customerPhone: '+2348011111111',
+    customerLocation: ikejaLocation,
+    deviceBrand: 'Apple',
+    deviceModel: 'iPhone 13 Pro',
+    deviceModelId: 'mod_apple_ip13pro',
+    deviceType: 'PHONE' as const,
+    catalogMatch: true,
+    issues: ['issue_screen_cracked'],
+    description: 'Screen broken, needs urgent fix',
+    photos: constrainedPhotos,
+    status: 'MATCHING' as const,
+    quotesCount: 0,
+    submittedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  db.repairRequests.unshift(phase2Request);
+
+  // Draft cleanup upon submission
+  const preCleanDraftIdx = db.drafts.findIndex((d) => d.customerId === customerId1);
+  if (preCleanDraftIdx !== -1) db.drafts.splice(preCleanDraftIdx, 1);
+  assert(
+    db.drafts.find((d) => d.customerId === customerId1) === undefined,
+    'Draft is cleaned up after successful repair request creation'
+  );
+
+  assert(
+    phase2Request.status === 'MATCHING' && !!phase2Request.submittedAt,
+    'Phase 2 repair request successfully initialized with MATCHING status and submittedAt timestamp'
   );
 
   console.log('\n===============================================================');

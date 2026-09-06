@@ -10,8 +10,13 @@ export type PartsQuality =
   | 'UNKNOWN';
 
 export type RepairLifecycleStatus =
+  | 'DRAFT'
+  | 'SUBMITTED'
+  | 'MATCHING'
+  | 'TECHNICIANS_FOUND'
   | 'REQUESTED'
   | 'QUOTING'
+  | 'QUOTE_RECEIVED'
   | 'QUOTE_ACCEPTED'
   | 'PAYMENT_PENDING'
   | 'PAYMENT_CONFIRMED'
@@ -19,11 +24,13 @@ export type RepairLifecycleStatus =
   | 'DEVICE_DROPPED_OFF'
   | 'DEVICE_RECEIVED'
   | 'DIAGNOSING'
+  | 'IN_REPAIR'
   | 'REPAIR_IN_PROGRESS'
   | 'ADDITIONAL_DIAGNOSIS'
   | 'READY_FOR_PICKUP'
   | 'PICKED_UP'
   | 'COMPLETED'
+  | 'REPAIR_COMPLETED'
   | 'DISPUTED'
   | 'CANCELLED'
   | 'REFUNDED';
@@ -166,6 +173,60 @@ export interface RepairIssueOption {
   typicalCostRangeNaira: [number, number];
 }
 
+export type RepairIssueCategory =
+  | 'Screen & Display'
+  | 'Power & Battery'
+  | 'Camera'
+  | 'Audio'
+  | 'Network & Connectivity'
+  | 'Physical Damage'
+  | 'Software'
+  | 'Other';
+
+export interface RepairIssue {
+  id: string;
+  name: string;
+  category: RepairIssueCategory;
+  description?: string;
+  isActive: boolean;
+  sortOrder: number;
+  iconName?: string;
+  estimatedLaborMinutes?: number;
+  typicalCostRangeNaira?: [number, number];
+}
+
+export interface RepairRequestAttachment {
+  id: string;
+  repairRequestId?: string;
+  type: 'IMAGE' | 'AUDIO';
+  url: string;
+  mimeType?: string;
+  size?: number;
+  createdAt: string;
+  thumbnailUrl?: string;
+  durationSeconds?: number;
+}
+
+export interface RepairRequestDraft {
+  id: string;
+  customerId: string;
+  deviceBrand?: string;
+  deviceModel?: string;
+  deviceModelId?: string;
+  deviceType?: DeviceType;
+  catalogMatch?: boolean;
+  issues?: string[];
+  otherDescription?: string;
+  description?: string;
+  voiceNoteUrl?: string;
+  voiceNoteDurationSeconds?: number;
+  photos?: string[];
+  attachments?: RepairRequestAttachment[];
+  customerLocation?: LocationCoordinates;
+  step?: number;
+  updatedAt: string;
+}
+
 export interface RepairRequest {
   id: string;
   customerId: string;
@@ -174,17 +235,22 @@ export interface RepairRequest {
   customerLocation: LocationCoordinates;
   deviceBrand: string;
   deviceModel: string;
+  deviceModelId?: string;
   deviceType?: DeviceType;
   catalogMatch?: boolean;
   issues: string[];
   description: string;
+  otherDescription?: string;
   photos: string[];
+  attachments?: RepairRequestAttachment[];
   voiceNoteUrl?: string;
+  voiceNoteDurationSeconds?: number;
   status: RepairLifecycleStatus;
   quotesCount: number;
   quotes?: RepairQuote[];
   selectedTechnicianId?: string;
   selectedQuoteId?: string;
+  submittedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

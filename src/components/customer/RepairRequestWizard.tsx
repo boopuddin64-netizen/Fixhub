@@ -1,30 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  DeviceBrand,
-  DeviceFamily,
-  DeviceModel,
-  DeviceType,
   CustomerDevice,
-  RepairIssueOption,
+  DeviceType,
   LocationCoordinates,
+  RepairIssue,
+  RepairRequestDraft,
+  RepairRequestAttachment,
 } from '../../types';
 import { ApiClient } from '../../api/client';
 import {
   Smartphone,
   Tablet,
   Check,
-  MapPin,
   ChevronRight,
   ArrowLeft,
-  Search,
-  Sparkles,
-  AlertCircle,
-  Clock,
-  UploadCloud,
   X,
   Loader2,
-  ShieldCheck
+  ShieldCheck,
+  AlertCircle,
+  HelpCircle,
+  MapPin,
+  Camera,
+  Volume2,
+  Sparkles,
+  RefreshCw,
+  MessageSquare
 } from 'lucide-react';
+import { VoiceNoteRecorder } from './repair-flow/VoiceNoteRecorder';
+import { PhotoEvidenceUploader } from './repair-flow/PhotoEvidenceUploader';
+import { IssueSelector } from './repair-flow/IssueSelector';
+import { DeviceSelectorModal } from './repair-flow/DeviceSelectorModal';
+import { LocationSelector } from './repair-flow/LocationSelector';
+import { TechnicianRadarHandoff } from './repair-flow/TechnicianRadarHandoff';
 
 interface RepairRequestWizardProps {
   onCancel: () => void;
@@ -43,879 +50,734 @@ export const RepairRequestWizard: React.FC<RepairRequestWizardProps> = ({
   preselectedModel,
   preselectedIssue,
 }) => {
+  // Step 1: Device | Step 2: Issue | Step 3: Describe & Evidence | Step 4: Review | Step 5: Location | Step 6: Radar Handoff
   const [step, setStep] = useState<number>(1);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [createdRequestId, setCreatedRequestId] = useState<string | null>(null);
 
-  // Saved Devices
-  const [savedDevices, setSavedDevices] = useState<CustomerDevice[]>([]);
-  const [selectedSavedDeviceId, setSelectedSavedDeviceId] = useState<string | null>(
-    preselectedDevice?.id || null
+  // Draft Banner State
+  const [draftRestored, setDraftRestored] = useState<boolean>(false);
+  const saveTimeoutRef = useRef<number | null>(null);
+
+  // Step 1: Device State
+  const [deviceBrand, setDeviceBrand] = useState<string>(
+    preselectedDevice?.brandName || preselectedBrand || 'Apple'
   );
-
-  // Catalog State
+  const [deviceModel, setDeviceModel] = useState<string>(
+    preselectedDevice?.modelName || preselectedModel || 'iPhone 13'
+  );
+  const [deviceModelId, setDeviceModelId] = useState<string | undefined>(
+    preselectedDevice?.deviceModelId
+  );
   const [deviceType, setDeviceType] = useState<DeviceType>(
     preselectedDevice?.deviceType || 'PHONE'
   );
-  const [brands, setBrands] = useState<DeviceBrand[]>([]);
-  const [selectedBrand, setSelectedBrand] = useState<string>(
-    preselectedDevice?.brandName || preselectedBrand || 'Apple'
+  const [catalogMatch, setCatalogMatch] = useState<boolean>(
+    preselectedDevice ? preselectedDevice.catalogMatch : true
   );
-  const [families, setFamilies] = useState<DeviceFamily[]>([]);
-  const [selectedFamilyId, setSelectedFamilyId] = useState<string>('');
-  const [models, setModels] = useState<DeviceModel[]>([]);
-  const [popularModels, setPopularModels] = useState<DeviceModel[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>(
-    preselectedDevice?.modelName || preselectedModel || 'iPhone 13'
-  );
-  const [selectedModelId, setSelectedModelId] = useState<string | undefined>(
-    preselectedDevice?.deviceModelId
-  );
-  const [modelSearch, setModelSearch] = useState<string>('');
+  const [isDeviceModalOpen, setIsDeviceModalOpen] = useState<boolean>(false);
 
-  // Custom Device Entry State
-  const [isCustomDevice, setIsCustomDevice] = useState<boolean>(
-    preselectedDevice ? !preselectedDevice.catalogMatch : false
+  // Step 2: Issues State
+  const [issuesCatalog, setIssuesCatalog] = useState<RepairIssue[]>([]);
+  const [selectedIssueIds, setSelectedIssueIds] = useState<string[]>(
+    preselectedIssue ? [preselectedIssue] : ['issue_screen_cracked']
   );
-  const [customBrandName, setCustomBrandName] = useState<string>(
-    preselectedDevice && !preselectedDevice.catalogMatch ? preselectedDevice.brandName : ''
-  );
-  const [customModelName, setCustomModelName] = useState<string>(
-    preselectedDevice && !preselectedDevice.catalogMatch ? preselectedDevice.modelName : ''
-  );
-  const [saveToMyDevices, setSaveToMyDevices] = useState<boolean>(false);
+  const [otherDescription, setOtherDescription] = useState<string>('');
 
-  // Issue & Description State
-  const [issuesList, setIssuesList] = useState<RepairIssueOption[]>([]);
-  const [selectedIssues, setSelectedIssues] = useState<string[]>(
-    preselectedIssue ? [preselectedIssue] : ['screen_damaged']
-  );
+  // Step 3: Problem Description & Evidence
   const [description, setDescription] = useState<string>('');
-  const [photos, setPhotos] = useState<string[]>([
-    'https://images.unsplash.com/photo-1596742578443-7682ef5251cd?w=600&auto=format&fit=crop&q=80',
-  ]);
+  const [voiceNoteUrl, setVoiceNoteUrl] = useState<string | undefined>(undefined);
+  const [voiceNoteDuration, setVoiceNoteDuration] = useState<number | undefined>(undefined);
+  const [photos, setPhotos] = useState<string[]>([]);
 
-  // Location State
+  // Step 5: Location State (Defaults to Ikeja Computer Village corridor)
   const [location, setLocation] = useState<LocationCoordinates>({
     lat: 6.5964,
     lng: 3.3421,
     address: '14 Allen Avenue, Ikeja',
-    landmark: 'Opposite Oshopey Plaza',
     area: 'Ikeja',
     city: 'Lagos',
     state: 'Lagos State',
+    landmark: 'Near Computer Village',
   });
 
-  const [isLoadingCatalog, setIsLoadingCatalog] = useState<boolean>(false);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // Load Initial Data
+  // Load Issues Catalog & Check Drafts on Initial Mount
   useEffect(() => {
-    ApiClient.getCustomerDevices()
-      .then((devs) => {
-        setSavedDevices(devs);
-        if (preselectedDevice) {
-          setSelectedSavedDeviceId(preselectedDevice.id);
-        } else if (devs.length > 0 && !preselectedBrand && !preselectedModel) {
-          const primary = devs.find((d) => d.isPrimary) || devs[0];
-          setSelectedSavedDeviceId(primary.id);
-          setSelectedBrand(primary.brandName);
-          setSelectedModel(primary.modelName);
-          setSelectedModelId(primary.deviceModelId);
-          setDeviceType(primary.deviceType);
-          setIsCustomDevice(!primary.catalogMatch);
+    // 1. Fetch backend normalized issues catalog
+    ApiClient.getIssuesCatalog()
+      .then((issues) => {
+        if (issues && issues.length > 0) {
+          setIssuesCatalog(issues);
         }
       })
-      .catch(console.error);
+      .catch((err) => console.error('Failed to load issues catalog:', err));
 
-    ApiClient.getIssues().then(setIssuesList).catch(console.error);
-    ApiClient.getModels({ popular: true, deviceType }).then(setPopularModels).catch(console.error);
-  }, []);
-
-  // Refresh brands and popular models on device type change
-  useEffect(() => {
-    ApiClient.getBrands(deviceType).then(setBrands).catch(console.error);
-    ApiClient.getModels({ popular: true, deviceType }).then(setPopularModels).catch(console.error);
-  }, [deviceType]);
-
-  // Load Families when brand changes
-  useEffect(() => {
-    if (!selectedBrand || isCustomDevice) return;
-    const brandObj = brands.find((b) => b.name.toLowerCase() === selectedBrand.toLowerCase());
-    if (brandObj) {
-      ApiClient.getFamilies(brandObj.id, deviceType)
-        .then((fams) => {
-          setFamilies(fams);
-          setSelectedFamilyId('');
-        })
-        .catch(console.error);
-    }
-  }, [selectedBrand, brands, deviceType, isCustomDevice]);
-
-  // Load Models when brand or family changes
-  useEffect(() => {
-    if (!selectedBrand || isCustomDevice) return;
-    const brandObj = brands.find((b) => b.name.toLowerCase() === selectedBrand.toLowerCase());
-    if (brandObj) {
-      setIsLoadingCatalog(true);
-      ApiClient.getModels({
-        brandId: brandObj.id,
-        familyId: selectedFamilyId || undefined,
-        deviceType,
-      })
-        .then((modelList) => {
-          setModels(modelList);
-          if (modelList.length > 0 && !modelList.some((m) => m.name === selectedModel)) {
-            setSelectedModel(modelList[0].name);
-            setSelectedModelId(modelList[0].id);
+    // 2. Fetch active draft if available
+    ApiClient.getRepairDraft()
+      .then((draft) => {
+        if (draft && draft.deviceBrand && draft.deviceModel && !preselectedDevice && !preselectedModel) {
+          setDeviceBrand(draft.deviceBrand);
+          setDeviceModel(draft.deviceModel);
+          if (draft.deviceModelId) setDeviceModelId(draft.deviceModelId);
+          if (draft.deviceType) setDeviceType(draft.deviceType);
+          if (draft.catalogMatch !== undefined) setCatalogMatch(draft.catalogMatch);
+          if (draft.issues && draft.issues.length > 0) setSelectedIssueIds(draft.issues);
+          if (draft.otherDescription) setOtherDescription(draft.otherDescription);
+          if (draft.description) setDescription(draft.description);
+          if (draft.voiceNoteUrl) {
+            setVoiceNoteUrl(draft.voiceNoteUrl);
+            setVoiceNoteDuration(draft.voiceNoteDurationSeconds);
           }
-        })
-        .catch(console.error)
-        .finally(() => setIsLoadingCatalog(false));
-    }
-  }, [selectedBrand, selectedFamilyId, brands, deviceType, isCustomDevice]);
+          if (draft.photos && draft.photos.length > 0) setPhotos(draft.photos.slice(0, 3));
+          if (draft.customerLocation) setLocation(draft.customerLocation);
+          if (draft.step && draft.step >= 1 && draft.step <= 5) setStep(draft.step);
 
-  const handleSelectSavedDevice = (dev: CustomerDevice) => {
-    setSelectedSavedDeviceId(dev.id);
-    setSelectedBrand(dev.brandName);
-    setSelectedModel(dev.modelName);
-    setSelectedModelId(dev.deviceModelId);
-    setDeviceType(dev.deviceType);
-    setIsCustomDevice(!dev.catalogMatch);
-    if (!dev.catalogMatch) {
-      setCustomBrandName(dev.brandName);
-      setCustomModelName(dev.modelName);
-    }
-  };
+          setDraftRestored(true);
+        }
+      })
+      .catch(() => {
+        // Silent catch for non-blocking draft check
+      });
+  }, [preselectedDevice, preselectedModel]);
 
-  const handleSelectCatalogBrand = (brandName: string) => {
-    setSelectedSavedDeviceId(null);
-    setIsCustomDevice(false);
-    setSelectedBrand(brandName);
-    const firstModel = models.find((m) => m.brandName.toLowerCase() === brandName.toLowerCase());
-    if (firstModel) {
-      setSelectedModel(firstModel.name);
-      setSelectedModelId(firstModel.id);
-    }
-  };
+  // Debounced Draft Auto-Save
+  const triggerDraftSave = useCallback(() => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
-  const handleSelectPopularModel = (model: DeviceModel) => {
-    setSelectedSavedDeviceId(null);
-    setIsCustomDevice(false);
-    setSelectedBrand(model.brandName);
-    setSelectedModel(model.name);
-    setSelectedModelId(model.id);
-    setDeviceType(model.deviceType);
+    saveTimeoutRef.current = window.setTimeout(() => {
+      saveTimeoutRef.current = null;
+
+      ApiClient.saveRepairDraft({
+        step,
+        deviceBrand,
+        deviceModel,
+        deviceModelId,
+        deviceType,
+        catalogMatch,
+        issues: selectedIssueIds,
+        otherDescription,
+        description,
+        voiceNoteUrl,
+        voiceNoteDurationSeconds: voiceNoteDuration,
+        photos: photos.slice(0, 3),
+        customerLocation: location,
+      }).catch((err) => {
+        console.warn('Draft auto-save notice:', err);
+      });
+    }, 1200);
+  }, [
+    step,
+    deviceBrand,
+    deviceModel,
+    deviceModelId,
+    deviceType,
+    catalogMatch,
+    selectedIssueIds,
+    otherDescription,
+    description,
+    voiceNoteUrl,
+    voiceNoteDuration,
+    photos,
+    location,
+  ]);
+
+  useEffect(() => {
+    triggerDraftSave();
+  }, [triggerDraftSave]);
+
+  const handleStartFresh = async () => {
+    try {
+      await ApiClient.deleteRepairDraft();
+      setDraftRestored(false);
+      setStep(1);
+      setDeviceBrand('Apple');
+      setDeviceModel('iPhone 13');
+      setSelectedIssueIds(['issue_screen_cracked']);
+      setDescription('');
+      setVoiceNoteUrl(undefined);
+      setPhotos([]);
+      setOtherDescription('');
+    } catch (err) {
+      console.error('Error clearing draft:', err);
+    }
   };
 
   const toggleIssue = (issueId: string) => {
-    if (selectedIssues.includes(issueId)) {
-      if (selectedIssues.length > 1) {
-        setSelectedIssues(selectedIssues.filter((id) => id !== issueId));
+    setSelectedIssueIds((prev) => {
+      if (prev.includes(issueId)) {
+        return prev.filter((id) => id !== issueId);
+      } else {
+        return [...prev, issueId];
       }
-    } else {
-      setSelectedIssues([...selectedIssues, issueId]);
-    }
+    });
   };
 
-  const handleAddSamplePhoto = () => {
-    const samplePool = [
-      'https://images.unsplash.com/photo-1588508065123-287b28e013da?w=600&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1512499617640-c74ae3a79d37?w=600&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1563770660941-20978e870e26?w=600&auto=format&fit=crop&q=80',
-    ];
-    const nextPhoto = samplePool[photos.length % samplePool.length];
-    setPhotos([...photos, nextPhoto]);
+  // Convert selected issue IDs to human readable labels
+  const getSelectedIssueNames = (): string[] => {
+    return selectedIssueIds.map((id) => {
+      const found = issuesCatalog.find((i) => i.id === id);
+      if (found) return found.name;
+      // Fallback formatting for legacy issue strings
+      return id
+        .replace(/^issue_/, '')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+    });
   };
 
-  const handleSubmit = async () => {
+  // Final Submission Handler
+  const handleSubmitRequest = async () => {
     setIsSubmitting(true);
-    setErrorMsg(null);
-
-    const finalBrand = isCustomDevice ? customBrandName.trim() : selectedBrand;
-    const finalModel = isCustomDevice ? customModelName.trim() : selectedModel;
-
-    if (!finalBrand || !finalModel) {
-      setErrorMsg('Brand name and model name are required.');
-      setIsSubmitting(false);
-      return;
-    }
+    setSubmitError(null);
 
     try {
-      const result = await ApiClient.createRepairRequest({
-        customerLocation: location,
-        deviceBrand: finalBrand,
-        deviceModel: finalModel,
-        deviceModelId: selectedModelId,
-        deviceType,
-        catalogMatch: !isCustomDevice,
-        issues: selectedIssues,
-        description: description || 'Damage inspection needed.',
-        photos,
-      });
+      // Package attachments (Voice note + Photos)
+      const attachments: RepairRequestAttachment[] = [];
 
-      if (saveToMyDevices && !selectedSavedDeviceId) {
-        await ApiClient.addCustomerDevice({
-          brandName: finalBrand,
-          modelName: finalModel,
-          deviceModelId: selectedModelId,
-          deviceType,
-          catalogMatch: !isCustomDevice,
-          isPrimary: savedDevices.length === 0,
-        }).catch((err) => console.warn('Failed to save device bookmark:', err));
+      if (voiceNoteUrl) {
+        attachments.push({
+          id: `att_voice_${Date.now()}`,
+          type: 'AUDIO',
+          url: voiceNoteUrl,
+          durationSeconds: voiceNoteDuration || 5,
+          createdAt: new Date().toISOString(),
+        });
       }
 
-      onRequestCreated(result.id);
+      photos.slice(0, 3).forEach((p, idx) => {
+        attachments.push({
+          id: `att_photo_${Date.now()}_${idx}`,
+          type: 'IMAGE',
+          url: p,
+          createdAt: new Date().toISOString(),
+        });
+      });
+
+      const requestPayload = {
+        deviceBrand,
+        deviceModel,
+        deviceModelId,
+        deviceType,
+        catalogMatch,
+        issues: selectedIssueIds,
+        otherDescription: otherDescription.trim() || undefined,
+        description: description.trim() || (getSelectedIssueNames().join(', ') + ' repair needed'),
+        photos: photos.slice(0, 3),
+        attachments,
+        voiceNoteUrl,
+        customerLocation: location,
+      };
+
+      const created = await ApiClient.createRepairRequest(requestPayload);
+
+      // Transition to Step 6 (Technician Radar Handoff)
+      setCreatedRequestId(created.id);
+      setStep(6);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to submit repair request');
+      console.error('Failed to create repair request:', err);
+      setSubmitError(err.message || 'Could not submit repair request. Please check your connection and retry.');
+    } finally {
       setIsSubmitting(false);
     }
   };
 
-  const filteredModels = models.filter((m) =>
-    m.name.toLowerCase().includes(modelSearch.toLowerCase())
-  );
+  const stepTitles: { [key: number]: { title: string; subtitle: string } } = {
+    1: { title: 'My Device', subtitle: 'Which device needs repair?' },
+    2: { title: "What's wrong?", subtitle: 'Select everything that describes the problem.' },
+    3: { title: 'Describe the problem', subtitle: 'Help the technician understand what happened.' },
+    4: { title: 'Review your request', subtitle: 'Check your details before we search for technicians.' },
+    5: { title: 'Where are you located?', subtitle: "We'll use your location to find verified technicians near you." },
+    6: { title: 'Technician Discovery', subtitle: 'Matching your request with top certified shops nearby.' },
+  };
 
   return (
-    <div id="repair-request-wizard" className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
-      {/* Wizard Header with Progress */}
-      <div className="bg-slate-950 text-white p-5 sm:p-6">
+    <div id="repair-request-wizard-container" className="space-y-4">
+      {/* Top Header & Breadcrumb Bar */}
+      <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200 shadow-sm space-y-4">
+        {/* Navigation Top Bar */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            {step > 1 && (
+          <div className="flex items-center gap-2">
+            {step > 1 && step < 6 && (
               <button
+                type="button"
                 onClick={() => setStep(step - 1)}
-                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
-                title="Go back"
+                className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                title="Go back to previous step"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
             )}
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-extrabold uppercase tracking-widest text-cyan-400 bg-blue-500/20 px-2 py-0.5 rounded-full border border-blue-400/30">
-                  Step {step} of 4
-                </span>
-                <span className="text-xs text-slate-400 hidden sm:inline">• Escrow Guaranteed</span>
-              </div>
-              <h2 className="text-lg sm:text-xl font-black text-white leading-tight mt-1">
-                {step === 1 && 'Select Your Device'}
-                {step === 2 && 'What Needs Fixing?'}
-                {step === 3 && 'Damage Photos & Notes'}
-                {step === 4 && 'Confirm Location & Book'}
-              </h2>
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                {step === 6 ? 'Broadcast Complete' : `Step ${step} of 5`}
+              </span>
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-0.5">
+                {stepTitles[step]?.title || 'Repair Request'}
+              </h1>
             </div>
           </div>
+
           <button
+            type="button"
             onClick={onCancel}
-            className="text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+            title="Cancel and close wizard"
           >
-            Cancel
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Progress Bar */}
-        <div className="w-full bg-slate-800 h-1.5 rounded-full mt-4 overflow-hidden">
-          <div
-            className="bg-gradient-to-r from-blue-500 to-cyan-400 h-full transition-all duration-300"
-            style={{ width: `${(step / 4) * 100}%` }}
-          />
-        </div>
-      </div>
+        <p className="text-xs text-slate-500">
+          {stepTitles[step]?.subtitle}
+        </p>
 
-      <div className="p-5 sm:p-6">
-        {errorMsg && (
-          <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{errorMsg}</span>
+        {/* Step Progress Bar */}
+        {step < 6 && (
+          <div className="grid grid-cols-5 gap-1.5 pt-1">
+            {[1, 2, 3, 4, 5].map((s) => (
+              <div
+                key={s}
+                className={`h-1.5 rounded-full transition-all ${
+                  s < step
+                    ? 'bg-emerald-600'
+                    : s === step
+                    ? 'bg-emerald-500 ring-2 ring-emerald-500/20'
+                    : 'bg-slate-100'
+                }`}
+              />
+            ))}
           </div>
         )}
 
-        {/* ===================== STEP 1: SELECT DEVICE ===================== */}
+        {/* Draft Restored Banner */}
+        {draftRestored && step < 6 && (
+          <div className="p-3 rounded-2xl bg-blue-50 border border-blue-200 text-blue-900 text-xs flex items-center justify-between gap-3 animate-fadeIn">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
+              <span>We restored your saved repair draft.</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleStartFresh}
+              className="text-[11px] font-bold text-blue-700 hover:text-blue-950 underline shrink-0 cursor-pointer"
+            >
+              Start fresh
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Main Step Body Card */}
+      <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200 shadow-sm">
+        {/* ================= STEP 1: MY DEVICE ================= */}
         {step === 1 && (
-          <div className="space-y-5">
-            {/* 1. Saved Devices Quick Picker */}
-            {savedDevices.length > 0 && (
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    My Saved Devices
-                  </span>
-                  <span className="text-[11px] text-blue-600 font-semibold">1-Tap Select</span>
+          <div className="space-y-6 animate-fadeIn">
+            {/* Selected Device Presentation Card */}
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white shadow-lg space-y-4">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-cyan-300 border border-white/10">
+                    {deviceType === 'TABLET' ? (
+                      <Tablet className="w-6 h-6" />
+                    ) : (
+                      <Smartphone className="w-6 h-6" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">
+                        {deviceBrand}
+                      </span>
+                      {catalogMatch && (
+                        <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-bold border border-emerald-500/30">
+                          <Check className="w-3 h-3 text-emerald-400 stroke-[3]" />
+                          Verified Model
+                        </span>
+                      )}
+                    </div>
+                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                      {deviceBrand} {deviceModel}
+                    </h2>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {savedDevices.map((dev) => {
-                    const isSelected = selectedSavedDeviceId === dev.id;
-                    return (
-                      <button
-                        key={dev.id}
-                        type="button"
-                        onClick={() => handleSelectSavedDevice(dev)}
-                        className={`p-3 rounded-2xl border text-left transition-all flex items-center justify-between gap-3 cursor-pointer ${
-                          isSelected
-                            ? 'border-blue-600 bg-blue-50/70 ring-2 ring-blue-600/20 shadow-xs'
-                            : 'border-slate-200 hover:border-slate-300 bg-slate-50/50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div
-                            className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
-                              isSelected
-                                ? 'bg-blue-600 text-white border-blue-600'
-                                : 'bg-white text-slate-700 border-slate-200'
-                            }`}
-                          >
-                            {dev.deviceType === 'TABLET' ? (
-                              <Tablet className="w-4 h-4" />
-                            ) : (
-                              <Smartphone className="w-4 h-4" />
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-900 truncate">
-                              {dev.brandName} {dev.modelName}
-                            </p>
-                            <p className="text-[10px] text-slate-500 truncate">
-                              {dev.nickname ? `"${dev.nickname}" • ` : ''}
-                              {dev.color || 'Standard'}
-                            </p>
-                          </div>
-                        </div>
-
-                        {isSelected && (
-                          <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0">
-                            <Check className="w-3 h-3" />
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsDeviceModalOpen(true)}
+                  className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition-colors cursor-pointer"
+                >
+                  Change device
+                </button>
               </div>
-            )}
 
-            {/* Divider */}
-            <div className="relative flex py-1 items-center">
-              <div className="flex-grow border-t border-slate-200"></div>
-              <span className="flex-shrink mx-4 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                {savedDevices.length > 0 ? 'Or Choose Another Device' : 'Choose Device from Catalog'}
-              </span>
-              <div className="flex-grow border-t border-slate-200"></div>
+              <div className="flex items-center gap-2 text-xs text-slate-300 pt-1 border-t border-white/10">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Fix Hub certified repairers in Lagos have genuine parts ready for this device.</span>
+              </div>
             </div>
 
-            {/* Device Type & Custom Model Toggle */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-              <div className="flex items-center bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDeviceType('PHONE');
-                    setSelectedSavedDeviceId(null);
-                  }}
-                  className={`flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    deviceType === 'PHONE'
-                      ? 'bg-white text-blue-600 shadow-xs'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  <Smartphone className="w-3.5 h-3.5" />
-                  <span>Smartphones</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDeviceType('TABLET');
-                    setSelectedSavedDeviceId(null);
-                  }}
-                  className={`flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    deviceType === 'TABLET'
-                      ? 'bg-white text-blue-600 shadow-xs'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  <Tablet className="w-3.5 h-3.5" />
-                  <span>Tablets / iPads</span>
-                </button>
-              </div>
-
+            {/* Quick Change / Browse Button if needed */}
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+              <span>Not the device you want to fix?</span>
               <button
                 type="button"
-                onClick={() => {
-                  setIsCustomDevice(!isCustomDevice);
-                  setSelectedSavedDeviceId(null);
-                }}
-                className="text-xs text-blue-600 hover:underline font-semibold text-right cursor-pointer"
+                onClick={() => setIsDeviceModalOpen(true)}
+                className="font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer"
               >
-                {isCustomDevice ? '← Back to Verified Catalog' : "Can't find your model? Enter custom device"}
+                Choose another phone or tablet →
               </button>
             </div>
 
-            {/* Custom Device Entry or Catalog Discovery */}
-            {isCustomDevice ? (
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-blue-600" />
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    Manual Device Entry
-                  </h4>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Brand Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={customBrandName}
-                      onChange={(e) => setCustomBrandName(e.target.value)}
-                      placeholder="e.g. Itel, Nokia, Huawei, OnePlus"
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Model Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={customModelName}
-                      onChange={(e) => setCustomModelName(e.target.value)}
-                      placeholder="e.g. A70, G21, P30 Pro"
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  Technicians will inspect your custom model specifications during quote formulation.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Popular Models Shortcuts */}
-                {popularModels.length > 0 && (
-                  <div className="space-y-1.5">
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                      Popular Models in Nigeria
-                    </span>
-                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-                      {popularModels.slice(0, 7).map((pm) => (
-                        <button
-                          key={pm.id}
-                          type="button"
-                          onClick={() => handleSelectPopularModel(pm)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition-all cursor-pointer ${
-                            selectedModel === pm.name && !selectedSavedDeviceId
-                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                          }`}
-                        >
-                          {pm.brandName} {pm.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Brands Grid */}
-                <div className="space-y-2">
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Select Brand
-                  </span>
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                    {brands.map((b) => {
-                      const isSelected =
-                        selectedBrand.toLowerCase() === b.name.toLowerCase() && !selectedSavedDeviceId;
-                      return (
-                        <button
-                          key={b.id}
-                          type="button"
-                          id={`wizard-brand-${b.name.toLowerCase()}`}
-                          onClick={() => handleSelectCatalogBrand(b.name)}
-                          className={`p-2.5 rounded-xl border text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
-                            isSelected
-                              ? 'border-blue-600 bg-blue-50 shadow-xs ring-1 ring-blue-600/30'
-                              : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                          }`}
-                        >
-                          <span className="text-xs font-bold text-slate-900 truncate w-full">{b.name}</span>
-                          <span className="text-[10px] text-slate-400">{b.popularModelsCount || 'Many'} models</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Model Selection & Search */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      {selectedBrand} Models
-                    </span>
-                    {families.length > 0 && (
-                      <select
-                        value={selectedFamilyId}
-                        onChange={(e) => setSelectedFamilyId(e.target.value)}
-                        className="text-xs p-1 bg-slate-50 border border-slate-200 rounded-lg text-slate-700"
-                      >
-                        <option value="">All {selectedBrand} Series</option>
-                        {families.map((f) => (
-                          <option key={f.id} value={f.id}>
-                            {f.name}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
-                    <input
-                      type="text"
-                      value={modelSearch}
-                      onChange={(e) => setModelSearch(e.target.value)}
-                      placeholder={`Search ${selectedBrand} models...`}
-                      className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
-                    {isLoadingCatalog ? (
-                      <div className="p-4 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
-                        <span>Loading catalog...</span>
-                      </div>
-                    ) : filteredModels.length === 0 ? (
-                      <div className="p-4 text-center rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500 space-y-2">
-                        <p>No catalog model found matching "{modelSearch}".</p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsCustomDevice(true);
-                            setCustomBrandName(selectedBrand);
-                            setCustomModelName(modelSearch);
-                          }}
-                          className="text-blue-600 font-bold hover:underline"
-                        >
-                          Use "{modelSearch}" as custom model →
-                        </button>
-                      </div>
-                    ) : (
-                      filteredModels.map((m) => {
-                        const isSelected = selectedModel === m.name && !selectedSavedDeviceId;
-                        return (
-                          <button
-                            key={m.id}
-                            type="button"
-                            id={`model-select-${m.id}`}
-                            onClick={() => {
-                              setSelectedSavedDeviceId(null);
-                              setSelectedModel(m.name);
-                              setSelectedModelId(m.id);
-                            }}
-                            className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
-                              isSelected
-                                ? 'border-blue-600 bg-blue-50/70 shadow-xs'
-                                : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                            }`}
-                          >
-                            <div>
-                              <p className="text-xs font-bold text-slate-900">{m.name}</p>
-                              <p className="text-[10px] text-slate-400">
-                                {m.familyName || m.deviceType} • Released {m.releaseYear}
-                              </p>
-                            </div>
-                            {isSelected && (
-                              <div className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center">
-                                <Check className="w-2.5 h-2.5" />
-                              </div>
-                            )}
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Save to My Devices Checkbox */}
-            {!selectedSavedDeviceId && (
-              <label className="flex items-center gap-2 pt-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={saveToMyDevices}
-                  onChange={(e) => setSaveToMyDevices(e.target.checked)}
-                  className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
-                />
-                <span className="text-xs font-medium text-slate-700">
-                  Save this device to "My Devices" for 1-tap booking in the future
-                </span>
-              </label>
-            )}
-
-            {/* Step 1 Actions */}
-            <div className="pt-4 flex items-center justify-between border-t border-slate-100">
-              <span className="text-xs text-slate-500">
-                Selected:{' '}
-                <strong className="text-slate-900">
-                  {isCustomDevice
-                    ? `${customBrandName || 'Custom'} ${customModelName}`
-                    : `${selectedBrand} ${selectedModel}`}
-                </strong>
-              </span>
+            {/* Step 1 CTA */}
+            <div className="pt-2 flex items-center justify-between gap-3">
               <button
-                id="wizard-step1-next"
+                type="button"
+                onClick={onCancel}
+                className="px-4 py-3 text-xs font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
                 type="button"
                 onClick={() => setStep(2)}
-                disabled={isCustomDevice && (!customBrandName.trim() || !customModelName.trim())}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-xs sm:text-sm px-6 py-2.5 rounded-xl shadow-md shadow-blue-600/20 transition-all cursor-pointer"
+                className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm shadow-xl shadow-emerald-600/30 transition-all cursor-pointer"
               >
-                <span>Select Issues</span>
+                <span>Continue: What&apos;s wrong?</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
         )}
 
-        {/* ===================== STEP 2: SELECT ISSUES ===================== */}
+        {/* ================= STEP 2: WHAT'S WRONG? ================= */}
         {step === 2 && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Select one or more issues to fix
-              </p>
-              <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full">
-                {selectedIssues.length} Selected
-              </span>
-            </div>
+          <div className="space-y-6 animate-fadeIn">
+            <IssueSelector
+              issues={issuesCatalog}
+              selectedIssueIds={selectedIssueIds}
+              onToggleIssue={toggleIssue}
+              otherDescription={otherDescription}
+              onOtherDescriptionChange={setOtherDescription}
+            />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-80 overflow-y-auto pr-1">
-              {issuesList.map((iss) => {
-                const isSelected = selectedIssues.includes(iss.id);
-                return (
-                  <button
-                    key={iss.id}
-                    type="button"
-                    id={`issue-chip-${iss.id}`}
-                    onClick={() => toggleIssue(iss.id)}
-                    className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
-                      isSelected
-                        ? 'border-blue-600 bg-blue-50/60 shadow-xs ring-1 ring-blue-600/20'
-                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div
-                      className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 ${
-                        isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 bg-white'
-                      }`}
-                    >
-                      {isSelected && <Check className="w-3.5 h-3.5" />}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-slate-900">{iss.label}</p>
-                      <p className="text-[11px] text-slate-500 leading-tight mt-0.5">{iss.description}</p>
-                      <div className="flex items-center gap-2 mt-2 text-[10px] text-slate-400 font-medium">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-slate-400" /> ~{iss.estimatedLaborMinutes} mins
-                        </span>
-                        <span>•</span>
-                        <span className="text-emerald-700 font-semibold">
-                          ₦{iss.typicalCostRangeNaira[0].toLocaleString()} - ₦{iss.typicalCostRangeNaira[1].toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="pt-4 flex items-center justify-between border-t border-slate-100">
+            {/* Step 2 CTA */}
+            <div className="pt-3 flex items-center justify-between gap-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setStep(1)}
-                className="text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
+                className="px-4 py-3 text-xs font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
               >
-                Back to Device
+                ← Back
               </button>
               <button
-                id="wizard-step2-next"
                 type="button"
+                disabled={selectedIssueIds.length === 0}
                 onClick={() => setStep(3)}
-                disabled={selectedIssues.length === 0}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-xs sm:text-sm px-6 py-2.5 rounded-xl shadow-md shadow-blue-600/20 transition-all cursor-pointer"
+                className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:pointer-events-none text-white font-extrabold text-sm shadow-xl shadow-emerald-600/30 transition-all cursor-pointer"
               >
-                <span>Add Details & Photos</span>
+                <span>Continue: Describe problem</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
         )}
 
-        {/* ===================== STEP 3: DETAILS & PHOTOS ===================== */}
+        {/* ================= STEP 3: DESCRIBE THE PROBLEM & EVIDENCE ================= */}
         {step === 3 && (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Describe What Happened (Optional)
-              </label>
+          <div className="space-y-6 animate-fadeIn">
+            {/* WhatsApp-Style Conversational Inbound Prompt */}
+            <div className="flex items-start gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-black text-xs shrink-0 mt-0.5">
+                FH
+              </div>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl rounded-tl-xs p-3.5 text-xs sm:text-sm text-emerald-950 max-w-lg space-y-1">
+                <p className="font-bold">What happened to your device?</p>
+                <p className="text-emerald-800 text-[11px] leading-relaxed">
+                  You can type what happened in your own words, record a quick voice note, or attach photos of the damage.
+                </p>
+              </div>
+            </div>
+
+            {/* Outbound Description Composer Bubble */}
+            <div className="space-y-2 pl-2 sm:pl-10">
+              <label className="text-xs font-bold text-slate-700">Your notes for the technician</label>
               <textarea
+                rows={3}
+                placeholder="e.g., The phone slipped while getting out of a cab. Screen shattered and touch is partially unresponsive..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="e.g. Phone fell on asphalt. Glass cracked, touch still works but flickers near top speaker..."
-                rows={3}
-                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-3.5 rounded-2xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 shadow-xs"
               />
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Photos of Damaged Device
-                </label>
-                <span className="text-[11px] text-slate-400">Enables accurate technician quotes</span>
-              </div>
-
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
-                {photos.map((url, idx) => (
-                  <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 group">
-                    <img src={url} alt="Damage evidence" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setPhotos(photos.filter((_, i) => i !== idx))}
-                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-slate-900/80 text-white flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-                {photos.length < 4 && (
-                  <button
-                    type="button"
-                    onClick={handleAddSamplePhoto}
-                    className="aspect-square rounded-xl border-2 border-dashed border-slate-200 hover:border-blue-400 hover:bg-blue-50/30 flex flex-col items-center justify-center text-slate-400 hover:text-blue-600 transition-all cursor-pointer p-2 text-center"
-                  >
-                    <UploadCloud className="w-6 h-6 mb-1" />
-                    <span className="text-[11px] font-semibold">+ Add Photo</span>
-                  </button>
-                )}
-              </div>
+            {/* Voice Note Recording Section */}
+            <div className="pl-2 sm:pl-10">
+              <VoiceNoteRecorder
+                voiceNoteUrl={voiceNoteUrl}
+                voiceNoteDurationSeconds={voiceNoteDuration}
+                onChange={(url, duration) => {
+                  setVoiceNoteUrl(url);
+                  setVoiceNoteDuration(duration);
+                }}
+              />
             </div>
 
-            <div className="pt-4 flex items-center justify-between border-t border-slate-100">
+            {/* Photo Evidence Section (Max 3, Client-side compressed) */}
+            <div className="pl-2 sm:pl-10 border-t border-slate-100 pt-4">
+              <PhotoEvidenceUploader
+                photos={photos}
+                onChange={setPhotos}
+                maxPhotos={3}
+              />
+            </div>
+
+            {/* Step 3 CTA */}
+            <div className="pt-3 flex items-center justify-between gap-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setStep(2)}
-                className="text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
+                className="px-4 py-3 text-xs font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
               >
-                Back to Issues
+                ← Back
               </button>
               <button
-                id="wizard-step3-next"
                 type="button"
                 onClick={() => setStep(4)}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm px-6 py-2.5 rounded-xl shadow-md shadow-blue-600/20 transition-all cursor-pointer"
+                className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm shadow-xl shadow-emerald-600/30 transition-all cursor-pointer"
               >
-                <span>Confirm Location & Book</span>
+                <span>Continue: Review request</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
         )}
 
-        {/* ===================== STEP 4: LOCATION & CONFIRM ===================== */}
+        {/* ================= STEP 4: REVIEW REQUEST ================= */}
         {step === 4 && (
-          <div className="space-y-4">
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-              <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-                <MapPin className="w-4 h-4 text-blue-600" />
-                <span>Service Location in Lagos</span>
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 font-medium mb-1">Street Address</label>
-                <input
-                  type="text"
-                  value={location.address}
-                  onChange={(e) => setLocation({ ...location, address: e.target.value })}
-                  className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs text-slate-500 font-medium mb-1">Area / Landmark</label>
-                  <input
-                    type="text"
-                    value={location.landmark || ''}
-                    onChange={(e) => setLocation({ ...location, landmark: e.target.value, area: e.target.value })}
-                    className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs"
-                    placeholder="e.g. Opposite Slot Ikeja"
-                  />
+          <div className="space-y-5 animate-fadeIn">
+            {/* Review Sections Breakdown */}
+            <div className="space-y-3">
+              {/* 1. Device Review */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center">
+                    <Smartphone className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Device</span>
+                    <p className="text-sm font-black text-slate-900">{deviceBrand} {deviceModel}</p>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs text-slate-500 font-medium mb-1">City / State</label>
-                  <input
-                    type="text"
-                    value={`${location.city}, ${location.state}`}
-                    readOnly
-                    className="w-full p-2 bg-slate-100 border border-slate-200 rounded-lg text-xs text-slate-600"
-                  />
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                >
+                  Change
+                </button>
+              </div>
+
+              {/* 2. Problems Review */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-start justify-between gap-2">
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Selected Problems ({selectedIssueIds.length})
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {getSelectedIssueNames().map((name, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 text-xs font-bold"
+                      >
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+                  {otherDescription && (
+                    <p className="text-xs text-slate-600 italic mt-1">
+                      &ldquo;{otherDescription}&rdquo;
+                    </p>
+                  )}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-800 underline shrink-0 cursor-pointer"
+                >
+                  Change
+                </button>
+              </div>
+
+              {/* 3. Notes & Evidence Review */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-start justify-between gap-2">
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Description & Attachments
+                  </span>
+                  {description ? (
+                    <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                      {description}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">No additional notes written</p>
+                  )}
+
+                  <div className="flex items-center gap-3 pt-1">
+                    {voiceNoteUrl && (
+                      <span className="inline-flex items-center gap-1.5 text-xs text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                        <Volume2 className="w-3.5 h-3.5" />
+                        Voice note ({voiceNoteDuration || 5}s)
+                      </span>
+                    )}
+                    {photos.length > 0 && (
+                      <span className="inline-flex items-center gap-1.5 text-xs text-blue-800 font-bold bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                        <Camera className="w-3.5 h-3.5" />
+                        {photos.length} photo{photos.length === 1 ? '' : 's'} attached
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStep(3)}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-800 underline shrink-0 cursor-pointer"
+                >
+                  Edit
+                </button>
+              </div>
+
+              {/* 4. Location Preview */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                    <MapPin className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Target Location</span>
+                    <p className="text-xs font-bold text-slate-900">{location.address || `${location.area}, ${location.city}`}</p>
+                    <p className="text-[11px] text-slate-500">{location.city}, {location.state}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStep(5)}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                >
+                  Change
+                </button>
               </div>
             </div>
 
-            {/* Summary Review Card */}
-            <div className="p-4 rounded-2xl border border-blue-100 bg-blue-50/40 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-500 font-semibold uppercase">Device</span>
-                <span className="text-xs font-bold text-slate-900">
-                  {isCustomDevice ? `${customBrandName} ${customModelName}` : `${selectedBrand} ${selectedModel}`}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-500 font-semibold uppercase">Selected Issues</span>
-                <span className="text-xs font-bold text-blue-700">{selectedIssues.length} issue(s) reported</span>
-              </div>
-              <div className="flex items-center justify-between text-[11px] text-slate-600 pt-2 border-t border-blue-200/50">
-                <span className="flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Fix Hub Escrow Protection</span>
-                </span>
-                <span className="text-emerald-700 font-bold">100% Protected</span>
-              </div>
+            {/* Escrow Guarantee Banner */}
+            <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 flex items-center gap-3 text-xs text-emerald-950">
+              <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+              <span>
+                <strong>100% Escrow Protection:</strong> Submitting this request is completely free. When you choose a quote, your payment is held securely in escrow until you verify the repair is complete.
+              </span>
             </div>
 
-            <div className="pt-4 flex items-center justify-between border-t border-slate-100">
+            {/* Step 4 CTA */}
+            <div className="pt-3 flex items-center justify-between gap-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setStep(3)}
-                className="text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
+                className="px-4 py-3 text-xs font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
               >
-                Back to Photos
+                ← Back
               </button>
               <button
-                id="wizard-submit-btn"
                 type="button"
-                onClick={handleSubmit}
+                onClick={() => setStep(5)}
+                className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm shadow-xl shadow-emerald-600/30 transition-all cursor-pointer"
+              >
+                <span>Continue to Location</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ================= STEP 5: LOCATION SELECTION ================= */}
+        {step === 5 && (
+          <div className="space-y-6 animate-fadeIn">
+            <LocationSelector
+              location={location}
+              onChange={setLocation}
+            />
+
+            {submitError && (
+              <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                <span>{submitError}</span>
+              </div>
+            )}
+
+            {/* Step 5 CTA -> Submit Request */}
+            <div className="pt-3 flex items-center justify-between gap-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setStep(4)}
                 disabled={isSubmitting}
-                className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-extrabold text-xs sm:text-sm px-7 py-3 rounded-2xl shadow-lg shadow-blue-600/25 transition-all cursor-pointer"
+                className="px-4 py-3 text-xs font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+              >
+                ← Back
+              </button>
+              <button
+                type="button"
+                id="submit-repair-request-btn"
+                onClick={handleSubmitRequest}
+                disabled={isSubmitting}
+                className="flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-sm shadow-xl shadow-emerald-600/30 transition-all cursor-pointer disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin text-white" />
-                    <span>Broadcasting Request...</span>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Broadcasting to Technicians...</span>
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4 text-cyan-200" />
-                    <span>Find Nearby Technicians</span>
+                    <span>Find Technicians</span>
+                    <ChevronRight className="w-4 h-4" />
                   </>
                 )}
               </button>
             </div>
           </div>
         )}
+
+        {/* ================= STEP 6: TECHNICIAN RADAR DISCOVERY ================= */}
+        {step === 6 && (
+          <TechnicianRadarHandoff
+            deviceBrand={deviceBrand}
+            deviceModel={deviceModel}
+            problemSummary={getSelectedIssueNames().slice(0, 2).join(', ')}
+            locationSummary={location.area || location.city}
+            onViewQuotes={() => {
+              if (createdRequestId) {
+                onRequestCreated(createdRequestId);
+              } else {
+                onCancel();
+              }
+            }}
+          />
+        )}
       </div>
+
+      {/* Device Selection Modal for Step 1 "Change Device" */}
+      <DeviceSelectorModal
+        isOpen={isDeviceModalOpen}
+        onClose={() => setIsDeviceModalOpen(false)}
+        currentBrand={deviceBrand}
+        currentModel={deviceModel}
+        onSelectDevice={(data) => {
+          setDeviceBrand(data.brandName);
+          setDeviceModel(data.modelName);
+          setDeviceModelId(data.deviceModelId);
+          setDeviceType(data.deviceType);
+          setCatalogMatch(data.catalogMatch);
+        }}
+      />
     </div>
   );
 };

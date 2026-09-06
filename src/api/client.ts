@@ -5,6 +5,9 @@ import {
   CustomerDevice,
   DeviceType,
   RepairIssueOption,
+  RepairIssue,
+  RepairRequestDraft,
+  RepairRequestAttachment,
 } from '../types/index';
 
 const API_BASE = '/api';
@@ -129,6 +132,11 @@ export class ApiClient {
     return this.request<RepairIssueOption[]>('/devices/issues');
   }
 
+  public static getIssuesCatalog(category?: string) {
+    const qs = category ? `?category=${encodeURIComponent(category)}` : '';
+    return this.request<RepairIssue[]>(`/repairs/issues${qs}`);
+  }
+
   // Customer Saved Devices
   public static getCustomerDevices() {
     return this.request<CustomerDevice[]>('/customer/devices');
@@ -204,6 +212,37 @@ export class ApiClient {
   public static updateTechnicianProfile(data: any) {
     return this.request<any>('/technicians/profile', {
       method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Repair Drafts
+  public static getRepairDraft() {
+    return this.request<RepairRequestDraft | null>('/repairs/draft');
+  }
+
+  public static saveRepairDraft(draft: Partial<RepairRequestDraft>) {
+    return this.request<RepairRequestDraft>('/repairs/draft', {
+      method: 'POST',
+      body: JSON.stringify(draft),
+    });
+  }
+
+  public static deleteRepairDraft() {
+    return this.request<{ success: boolean; message: string }>('/repairs/draft', {
+      method: 'DELETE',
+    });
+  }
+
+  public static uploadAttachment(data: {
+    fileData: string;
+    type: 'IMAGE' | 'AUDIO';
+    mimeType?: string;
+    size?: number;
+    durationSeconds?: number;
+  }) {
+    return this.request<RepairRequestAttachment>('/repairs/attachments/upload', {
+      method: 'POST',
       body: JSON.stringify(data),
     });
   }

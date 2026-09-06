@@ -20,8 +20,12 @@ import {
   NotificationItem,
   MessageItem,
   WarrantyRecord,
+  RepairIssue,
+  RepairRequestDraft,
+  RepairRequestAttachment,
 } from '../src/types/index';
 import { seedBrands, seedFamilies, seedModels } from './data/deviceCatalogData';
+import { standardRepairIssues } from './data/repairIssuesData';
 
 export interface DatabaseSchema {
   version: number;
@@ -33,6 +37,8 @@ export interface DatabaseSchema {
   deviceModels: DeviceModel[];
   customerDevices: CustomerDevice[];
   repairIssues: RepairIssueOption[];
+  repairIssueCatalog: RepairIssue[];
+  drafts: RepairRequestDraft[];
   repairRequests: RepairRequest[];
   repairQuotes: RepairQuote[];
   repairJobs: RepairJob[];
@@ -1022,6 +1028,8 @@ function getInitialSeedData(): DatabaseSchema {
     deviceModels,
     customerDevices,
     repairIssues,
+    repairIssueCatalog: [...standardRepairIssues],
+    drafts: [],
     repairRequests,
     repairQuotes,
     repairJobs,
@@ -1062,6 +1070,12 @@ class Database {
           }
           if (!parsed.deviceModels || parsed.deviceModels.length < seedModels.length) {
             parsed.deviceModels = [...seedModels];
+          }
+          if (!parsed.repairIssueCatalog || parsed.repairIssueCatalog.length < standardRepairIssues.length) {
+            parsed.repairIssueCatalog = [...standardRepairIssues];
+          }
+          if (!parsed.drafts) {
+            parsed.drafts = [];
           }
           return parsed;
         }
@@ -1109,6 +1123,8 @@ class Database {
   public get deviceModels() { return this.data.deviceModels; }
   public get customerDevices() { return this.data.customerDevices; }
   public get repairIssues() { return this.data.repairIssues; }
+  public get repairIssueCatalog() { return this.data.repairIssueCatalog; }
+  public get drafts() { return this.data.drafts; }
   public get repairRequests() { return this.data.repairRequests; }
   public get repairQuotes() { return this.data.repairQuotes; }
   public get repairJobs() { return this.data.repairJobs; }

@@ -79,7 +79,15 @@ export const CustomerHomeView: React.FC<CustomerHomeViewProps> = ({
       ]);
 
       setActiveJobs(jobs.filter((j) => j.status !== 'COMPLETED' && j.status !== 'CANCELLED'));
-      setPendingRequests(reqs.filter((r) => r.status === 'REQUESTED' || r.status === 'QUOTING'));
+      setPendingRequests(
+        reqs.filter(
+          (r) =>
+            r.status === 'REQUESTED' ||
+            r.status === 'QUOTING' ||
+            r.status === 'SUBMITTED' ||
+            r.status === 'MATCHING'
+        )
+      );
       setSavedDevices(devs);
       setTopTechs(techs.slice(0, 3));
       setBrands(brandList);
@@ -293,16 +301,21 @@ export const CustomerHomeView: React.FC<CustomerHomeViewProps> = ({
             <button
               id="hero-repair-my-phone-btn"
               onClick={() => onStartRepair()}
-              className="group flex items-center gap-2.5 bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white font-extrabold text-sm sm:text-base px-7 py-3.5 rounded-2xl shadow-xl shadow-blue-600/30 transition-all transform hover:-translate-y-0.5 cursor-pointer"
+              className="group flex items-center gap-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-sm sm:text-base px-6 py-3.5 rounded-2xl shadow-xl shadow-emerald-600/30 transition-all transform hover:-translate-y-0.5 cursor-pointer text-left"
             >
-              <Wrench className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              <span>Book a Phone Repair</span>
-              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                <Wrench className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <span className="block text-sm sm:text-base font-black leading-tight">Repair my device</span>
+                <span className="block text-[11px] text-emerald-100 font-medium">Tell us what&apos;s wrong →</span>
+              </div>
+              <ArrowRight className="w-5 h-5 text-emerald-200 group-hover:translate-x-1 transition-transform ml-2 shrink-0" />
             </button>
 
             <button
               onClick={onOpenDevicesManager}
-              className="px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/10 transition-colors cursor-pointer flex items-center gap-1.5"
+              className="px-4 py-3.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/10 transition-colors cursor-pointer flex items-center gap-1.5"
             >
               <Smartphone className="w-4 h-4 text-cyan-300" />
               <span>My Saved Devices ({savedDevices.length})</span>
