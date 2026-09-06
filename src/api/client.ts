@@ -1,3 +1,12 @@
+import {
+  DeviceBrand,
+  DeviceFamily,
+  DeviceModel,
+  CustomerDevice,
+  DeviceType,
+  RepairIssueOption,
+} from '../types/index';
+
 const API_BASE = '/api';
 
 export class ApiClient {
@@ -80,17 +89,93 @@ export class ApiClient {
     return this.request<any>('/auth/me');
   }
 
-  // Devices
-  public static getBrands() {
-    return this.request<any[]>('/devices/brands');
+  // Devices & Catalog
+  public static getBrands(deviceType?: DeviceType) {
+    return this.request<DeviceBrand[]>(`/devices/brands${deviceType ? `?deviceType=${deviceType}` : ''}`);
   }
 
-  public static getModels(brandId?: string) {
-    return this.request<any[]>(`/devices/models${brandId ? `?brandId=${brandId}` : ''}`);
+  public static getFamilies(brandId?: string, deviceType?: DeviceType) {
+    const params = new URLSearchParams();
+    if (brandId) params.append('brandId', brandId);
+    if (deviceType) params.append('deviceType', deviceType);
+    const qs = params.toString();
+    return this.request<DeviceFamily[]>(`/devices/families${qs ? `?${qs}` : ''}`);
+  }
+
+  public static getModels(params?: {
+    brandId?: string;
+    familyId?: string;
+    deviceType?: DeviceType;
+    search?: string;
+    popular?: boolean;
+  }) {
+    const query = new URLSearchParams();
+    if (params?.brandId) query.append('brandId', params.brandId);
+    if (params?.familyId) query.append('familyId', params.familyId);
+    if (params?.deviceType) query.append('deviceType', params.deviceType);
+    if (params?.search) query.append('search', params.search);
+    if (params?.popular) query.append('popular', 'true');
+    const qs = query.toString();
+    return this.request<DeviceModel[]>(`/devices/models${qs ? `?${qs}` : ''}`);
+  }
+
+  public static searchDevices(q: string, deviceType?: DeviceType) {
+    const params = new URLSearchParams({ q });
+    if (deviceType) params.append('deviceType', deviceType);
+    return this.request<{ brands: DeviceBrand[]; models: DeviceModel[] }>(`/devices/search?${params.toString()}`);
   }
 
   public static getIssues() {
-    return this.request<any[]>('/devices/issues');
+    return this.request<RepairIssueOption[]>('/devices/issues');
+  }
+
+  // Customer Saved Devices
+  public static getCustomerDevices() {
+    return this.request<CustomerDevice[]>('/customer/devices');
+  }
+
+  public static addCustomerDevice(data: {
+    brandName: string;
+    modelName: string;
+    deviceModelId?: string;
+    deviceType?: DeviceType;
+    nickname?: string;
+    color?: string;
+    storage?: string;
+    isPrimary?: boolean;
+    catalogMatch?: boolean;
+  }) {
+    return this.request<CustomerDevice>('/customer/devices', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public static updateCustomerDevice(
+    id: string,
+    data: {
+      nickname?: string;
+      color?: string;
+      storage?: string;
+      isPrimary?: boolean;
+    }
+  ) {
+    return this.request<CustomerDevice>(`/customer/devices/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public static setPrimaryCustomerDevice(id: string) {
+    return this.request<CustomerDevice>(`/customer/devices/${id}/primary`, {
+      method: 'POST',
+    });
+  }
+
+  public static deleteCustomerDevice(id: string) {
+    return this.request<{ success: boolean; message: string }>(`/customer/devices/${id}`, {
+      method: 'DELETE',
+    });
   }
 
   // Technicians

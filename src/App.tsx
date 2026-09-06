@@ -7,6 +7,7 @@ import { WorkflowProgressRibbon } from './components/common/WorkflowProgressRibb
 import { AuthAndOnboardingGateway } from './components/auth/AuthAndOnboardingGateway';
 import { CustomerHomeView } from './components/customer/CustomerHomeView';
 import { RepairRequestWizard } from './components/customer/RepairRequestWizard';
+import { SavedDevicesManager } from './components/customer/SavedDevicesManager';
 import { QuoteComparisonView } from './components/customer/QuoteComparisonView';
 import { ActiveRepairTracker } from './components/customer/ActiveRepairTracker';
 import { EscrowPaymentModal } from './components/customer/EscrowPaymentModal';
@@ -20,7 +21,7 @@ import { PartsCatalogView } from './components/technician/PartsCatalogView';
 import { TechnicianProfileView } from './components/technician/TechnicianProfileView';
 import { RepairChatDrawer } from './components/messaging/RepairChatDrawer';
 import { ApiClient } from './api/client';
-import { RepairJob, RepairRequest, RepairQuote, NotificationItem, TechnicianProfile } from './types';
+import { RepairJob, RepairRequest, RepairQuote, NotificationItem, TechnicianProfile, CustomerDevice } from './types';
 import { Wrench, Plus, Sparkles, AlertCircle, Clock } from 'lucide-react';
 
 function MainAppContent() {
@@ -29,6 +30,13 @@ function MainAppContent() {
   // Navigation State
   const [currentTab, setCurrentTab] = useState<string>('home');
   const [showWizard, setShowWizard] = useState<boolean>(false);
+  const [showDevicesManager, setShowDevicesManager] = useState<boolean>(false);
+  const [wizardPrefill, setWizardPrefill] = useState<{
+    device?: CustomerDevice;
+    brand?: string;
+    model?: string;
+    issue?: string;
+  } | null>(null);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [selectedJobId, setSelectedJobId] = useState<string | null>('job_demo_active');
   const [selectedQuoteForPayment, setSelectedQuoteForPayment] = useState<RepairQuote | null>(null);
@@ -129,16 +137,24 @@ function MainAppContent() {
         {/* ===================== CUSTOMER EXPERIENCE ===================== */}
         {role === 'customer' && (
           <>
-            {/* Show 5-step Repair Request Wizard */}
+            {/* Show 4-step Repair Request Wizard */}
             {showWizard ? (
               <RepairRequestWizard
-                onCancel={() => setShowWizard(false)}
+                onCancel={() => {
+                  setShowWizard(false);
+                  setWizardPrefill(null);
+                }}
                 onRequestCreated={(reqId) => {
                   setShowWizard(false);
+                  setWizardPrefill(null);
                   setSelectedRequestId(reqId);
                   setCurrentTab('quotes');
                   loadData();
                 }}
+                preselectedDevice={wizardPrefill?.device}
+                preselectedBrand={wizardPrefill?.brand}
+                preselectedModel={wizardPrefill?.model}
+                preselectedIssue={wizardPrefill?.issue}
               />
             ) : currentTab === 'quotes' && activeRequest ? (
               <QuoteComparisonView
@@ -154,7 +170,10 @@ function MainAppContent() {
                     <p className="text-xs text-slate-500">Live tracking and completed warranties</p>
                   </div>
                   <button
-                    onClick={() => setShowWizard(true)}
+                    onClick={() => {
+                      setWizardPrefill(null);
+                      setShowWizard(true);
+                    }}
                     className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-blue-600/20 cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
@@ -175,7 +194,10 @@ function MainAppContent() {
                     <Wrench className="w-10 h-10 text-slate-300 mx-auto" />
                     <p className="text-sm font-bold text-slate-700">No active repair in progress</p>
                     <button
-                      onClick={() => setShowWizard(true)}
+                      onClick={() => {
+                        setWizardPrefill(null);
+                        setShowWizard(true);
+                      }}
                       className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer"
                     >
                       Book a Phone Repair
@@ -211,15 +233,38 @@ function MainAppContent() {
                 )}
               </div>
             ) : currentTab === 'profile' ? (
-              <CustomerProfileView onViewWarranties={() => setCurrentTab('passport')} />
+              <CustomerProfileView
+                onViewWarranties={() => setCurrentTab('passport')}
+                onOpenDevicesManager={() => setShowDevicesManager(true)}
+              />
             ) : (
               <CustomerHomeView
-                onStartRepair={() => setShowWizard(true)}
+                onStartRepair={(options) => {
+                  setWizardPrefill(options || null);
+                  setShowWizard(true);
+                }}
                 onOpenRepair={(jobId) => {
                   setSelectedJobId(jobId);
                   setCurrentTab('repairs');
                 }}
+                onOpenQuotes={(requestId) => {
+                  setSelectedRequestId(requestId);
+                  setCurrentTab('quotes');
+                }}
                 onViewWarranties={() => setCurrentTab('passport')}
+                onOpenDevicesManager={() => setShowDevicesManager(true)}
+              />
+            )}
+
+            {/* Customer Saved Devices Modal */}
+            {showDevicesManager && (
+              <SavedDevicesManager
+                onClose={() => setShowDevicesManager(false)}
+                onSelectDeviceForRepair={(dev) => {
+                  setShowDevicesManager(false);
+                  setWizardPrefill({ device: dev });
+                  setShowWizard(true);
+                }}
               />
             )}
           </>

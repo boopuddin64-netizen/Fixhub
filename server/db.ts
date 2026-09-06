@@ -6,7 +6,9 @@ import {
   CustomerProfile,
   TechnicianProfile,
   DeviceBrand,
+  DeviceFamily,
   DeviceModel,
+  CustomerDevice,
   RepairIssueOption,
   RepairRequest,
   RepairQuote,
@@ -19,6 +21,7 @@ import {
   MessageItem,
   WarrantyRecord,
 } from '../src/types/index';
+import { seedBrands, seedFamilies, seedModels } from './data/deviceCatalogData';
 
 export interface DatabaseSchema {
   version: number;
@@ -26,7 +29,9 @@ export interface DatabaseSchema {
   customerProfiles: CustomerProfile[];
   technicianProfiles: TechnicianProfile[];
   deviceBrands: DeviceBrand[];
+  deviceFamilies: DeviceFamily[];
   deviceModels: DeviceModel[];
+  customerDevices: CustomerDevice[];
   repairIssues: RepairIssueOption[];
   repairRequests: RepairRequest[];
   repairQuotes: RepairQuote[];
@@ -66,44 +71,43 @@ function getInitialSeedData(): DatabaseSchema {
   const pastDate = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
   const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  // Brands
-  const deviceBrands: DeviceBrand[] = [
-    { id: 'brand_apple', name: 'Apple', popularModelsCount: 14 },
-    { id: 'brand_samsung', name: 'Samsung', popularModelsCount: 18 },
-    { id: 'brand_google', name: 'Google Pixel', popularModelsCount: 8 },
-    { id: 'brand_tecno', name: 'Tecno', popularModelsCount: 12 },
-    { id: 'brand_infinix', name: 'Infinix', popularModelsCount: 10 },
-    { id: 'brand_xiaomi', name: 'Xiaomi / Redmi', popularModelsCount: 9 },
-    { id: 'brand_oneplus', name: 'OnePlus', popularModelsCount: 6 },
-    { id: 'brand_other', name: 'Other Brand', popularModelsCount: 5 },
-  ];
+  // Brands, Families, Models
+  const deviceBrands: DeviceBrand[] = [...seedBrands];
+  const deviceFamilies: DeviceFamily[] = [...seedFamilies];
+  const deviceModels: DeviceModel[] = [...seedModels];
 
-  // Models
-  const deviceModels: DeviceModel[] = [
-    // Apple
-    { id: 'model_iphone15pm', brandId: 'brand_apple', brandName: 'Apple', name: 'iPhone 15 Pro Max', releaseYear: 2023, commonIssues: ['Screen Cracked', 'Back Glass Damaged', 'Battery Drain'] },
-    { id: 'model_iphone14pro', brandId: 'brand_apple', brandName: 'Apple', name: 'iPhone 14 Pro', releaseYear: 2022, commonIssues: ['Screen Damaged', 'Camera Lens Cracked', 'Battery Replacement'] },
-    { id: 'model_iphone13', brandId: 'brand_apple', brandName: 'Apple', name: 'iPhone 13', releaseYear: 2021, commonIssues: ['OLED Green Line', 'Screen Cracked', 'Battery Health Below 75%', 'Speaker Low'] },
-    { id: 'model_iphone12', brandId: 'brand_apple', brandName: 'Apple', name: 'iPhone 12', releaseYear: 2020, commonIssues: ['Screen Shattered', 'Charging Port Loose', 'Battery Replacement'] },
-    { id: 'model_iphone11', brandId: 'brand_apple', brandName: 'Apple', name: 'iPhone 11', releaseYear: 2019, commonIssues: ['LCD Screen Replacement', 'Battery Replacement', 'Face ID Issue'] },
-    { id: 'model_iphonex', brandId: 'brand_apple', brandName: 'Apple', name: 'iPhone X / XS', releaseYear: 2018, commonIssues: ['OLED Blank Screen', 'Back Glass Cracked', 'Battery Replacement'] },
-    // Samsung
-    { id: 'model_samsungs24u', brandId: 'brand_samsung', brandName: 'Samsung', name: 'Galaxy S24 Ultra', releaseYear: 2024, commonIssues: ['Screen Cracked', 'Camera Glass Shattered', 'S-Pen Sensor Issue'] },
-    { id: 'model_samsungs23', brandId: 'brand_samsung', brandName: 'Samsung', name: 'Galaxy S23', releaseYear: 2023, commonIssues: ['AMOLED Screen Replacement', 'Battery Replacement', 'Charging Port'] },
-    { id: 'model_samsungs22', brandId: 'brand_samsung', brandName: 'Samsung', name: 'Galaxy S22 Ultra', releaseYear: 2022, commonIssues: ['AMOLED Screen Blank', 'Battery Overheating', 'Back Cover'] },
-    { id: 'model_samsunga54', brandId: 'brand_samsung', brandName: 'Samsung', name: 'Galaxy A54 5G', releaseYear: 2023, commonIssues: ['Screen Shattered', 'Charging Port Moist', 'Microphone Low'] },
-    { id: 'model_samsunga14', brandId: 'brand_samsung', brandName: 'Samsung', name: 'Galaxy A14', releaseYear: 2023, commonIssues: ['Screen Broken', 'Speaker Buzzing', 'Software Bootloop'] },
-    // Google
-    { id: 'model_pixel8pro', brandId: 'brand_google', brandName: 'Google Pixel', name: 'Pixel 8 Pro', releaseYear: 2023, commonIssues: ['Screen Replacement', 'Camera Bar Glass', 'Battery Replacement'] },
-    { id: 'model_pixel7', brandId: 'brand_google', brandName: 'Google Pixel', name: 'Pixel 7', releaseYear: 2022, commonIssues: ['OLED Screen Damage', 'Camera Glass Crack', 'Overheating'] },
-    // Tecno
-    { id: 'model_tecnocamon30', brandId: 'brand_tecno', brandName: 'Tecno', name: 'Camon 30 Pro 5G', releaseYear: 2024, commonIssues: ['Screen Broken', 'Charging Port Problem', 'Camera Not Focusing'] },
-    { id: 'model_tecnospark20', brandId: 'brand_tecno', brandName: 'Tecno', name: 'Spark 20 Pro', releaseYear: 2024, commonIssues: ['LCD Screen Replacement', 'Battery Swollen', 'Water Damage'] },
-    // Infinix
-    { id: 'model_infinixnote40', brandId: 'brand_infinix', brandName: 'Infinix', name: 'Note 40 Pro', releaseYear: 2024, commonIssues: ['Curved AMOLED Broken', 'Fast Charge Port Faulty', 'Speaker Buzz'] },
-    { id: 'model_infinixhot40', brandId: 'brand_infinix', brandName: 'Infinix', name: 'Hot 40i', releaseYear: 2024, commonIssues: ['Screen Cracked', 'Mic Not Working', 'Battery Drain'] },
-    // Xiaomi
-    { id: 'model_redminote13', brandId: 'brand_xiaomi', brandName: 'Xiaomi / Redmi', name: 'Redmi Note 13 Pro', releaseYear: 2024, commonIssues: ['Screen Shattered', 'Charging Board Fault', 'Back Housing Crack'] },
+  // Customer Saved Devices
+  const customerDevices: CustomerDevice[] = [
+    {
+      id: 'cdev_demo_1',
+      customerId: 'usr_customer_1',
+      deviceModelId: 'model_ip13',
+      brandName: 'Apple',
+      modelName: 'iPhone 13',
+      deviceType: 'PHONE',
+      nickname: 'Daily Driver',
+      color: 'Midnight Blue',
+      storage: '128GB',
+      isPrimary: true,
+      catalogMatch: true,
+      createdAt: oneMonthAgo,
+      updatedAt: pastDate,
+    },
+    {
+      id: 'cdev_demo_2',
+      customerId: 'usr_customer_1',
+      deviceModelId: 'model_ipadair4',
+      brandName: 'Apple',
+      modelName: 'iPad Air 10.9-inch (4th generation)',
+      deviceType: 'TABLET',
+      nickname: 'Work iPad',
+      color: 'Space Gray',
+      storage: '64GB',
+      isPrimary: false,
+      catalogMatch: true,
+      createdAt: pastDate,
+      updatedAt: pastDate,
+    },
   ];
 
   // Common Repair Issues
@@ -1014,7 +1018,9 @@ function getInitialSeedData(): DatabaseSchema {
     customerProfiles,
     technicianProfiles,
     deviceBrands,
+    deviceFamilies,
     deviceModels,
+    customerDevices,
     repairIssues,
     repairRequests,
     repairQuotes,
@@ -1045,6 +1051,18 @@ class Database {
         const fileContent = fs.readFileSync(DB_FILE_PATH, 'utf-8');
         const parsed = JSON.parse(fileContent);
         if (parsed && parsed.version) {
+          if (!parsed.deviceFamilies || parsed.deviceFamilies.length === 0) {
+            parsed.deviceFamilies = [...seedFamilies];
+          }
+          if (!parsed.customerDevices) {
+            parsed.customerDevices = [];
+          }
+          if (!parsed.deviceBrands || parsed.deviceBrands.length < seedBrands.length) {
+            parsed.deviceBrands = [...seedBrands];
+          }
+          if (!parsed.deviceModels || parsed.deviceModels.length < seedModels.length) {
+            parsed.deviceModels = [...seedModels];
+          }
           return parsed;
         }
       }
@@ -1087,7 +1105,9 @@ class Database {
   public get customerProfiles() { return this.data.customerProfiles; }
   public get technicianProfiles() { return this.data.technicianProfiles; }
   public get deviceBrands() { return this.data.deviceBrands; }
+  public get deviceFamilies() { return this.data.deviceFamilies; }
   public get deviceModels() { return this.data.deviceModels; }
+  public get customerDevices() { return this.data.customerDevices; }
   public get repairIssues() { return this.data.repairIssues; }
   public get repairRequests() { return this.data.repairRequests; }
   public get repairQuotes() { return this.data.repairQuotes; }

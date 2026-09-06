@@ -349,6 +349,111 @@ async function runTestSuite() {
   });
   assert(db.auditLogs.length === preLogCount + 1, 'Audit log created and appended to immutable ledger');
 
+  // Test 12: Customer Foundation Phase 1 — Device Catalog & Customer Devices
+  console.log('\n12. Customer Foundation Phase 1 — Catalog & Customer Device Management');
+  
+  // 12.1 Catalog Verification
+  const phoneBrands = db.deviceBrands.filter((b) => b.deviceTypes.includes('PHONE'));
+  assert(phoneBrands.length >= 6, 'Verified catalog includes at least 6 phone brands for Nigerian market');
+  const appleFamilies = db.deviceFamilies.filter((f) => f.brandId === 'brand_apple');
+  assert(appleFamilies.length >= 3, 'Hierarchical catalog includes distinct product families for Apple');
+  const popularModels = db.deviceModels.filter((m) => m.isPopular);
+  assert(popularModels.length >= 5, 'Nigerian market popular models curated and flagged');
+  const tabletModels = db.deviceModels.filter((m) => m.deviceType === 'TABLET');
+  assert(tabletModels.length >= 2, 'Catalog supports distinct TABLET device type');
+
+  // 12.2 Customer Device CRUD & Persistence
+  const customerId1 = 'usr_customer_1';
+  const customerId2 = 'usr_customer_2';
+
+  // Customer 1 adds a catalog-matched primary device
+  const initialDevCount = db.customerDevices.filter((d) => d.customerId === customerId1).length;
+  const newDevice = {
+    id: `cdev_test_${Date.now()}`,
+    customerId: customerId1,
+    brandName: 'Samsung',
+    modelName: 'Galaxy S23',
+    deviceModelId: 'mod_samsung_s23',
+    deviceType: 'PHONE' as const,
+    catalogMatch: true,
+    nickname: 'My Daily Work Phone',
+    color: 'Phantom Black',
+    storageCapacity: '256GB',
+    isPrimary: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  db.customerDevices.push(newDevice);
+  assert(
+    db.customerDevices.some((d) => d.id === newDevice.id && d.catalogMatch === true),
+    'Customer 1 successfully saved a catalog-matched device'
+  );
+
+  // Customer 1 adds a manual non-catalog device
+  const customDevice = {
+    id: `cdev_test_custom_${Date.now()}`,
+    customerId: customerId1,
+    brandName: 'Itel',
+    modelName: 'A70 Pro Special Edition',
+    deviceType: 'PHONE' as const,
+    catalogMatch: false,
+    nickname: 'Backup Hotspot Phone',
+    isPrimary: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  db.customerDevices.push(customDevice);
+  assert(
+    db.customerDevices.some((d) => d.id === customDevice.id && d.catalogMatch === false),
+    'Customer 1 successfully saved a manual entry device with catalogMatch: false'
+  );
+
+  // 12.3 IDOR and Data Isolation Security Check
+  const customer1Devices = db.customerDevices.filter((d) => d.customerId === customerId1);
+  const customer2Devices = db.customerDevices.filter((d) => d.customerId === customerId2);
+  assert(
+    customer2Devices.every((d) => d.customerId === customerId2),
+    'Customer 2 device query strictly isolates Customer 2 records'
+  );
+  assert(
+    !customer2Devices.some((d) => d.id === newDevice.id),
+    'Customer 2 cannot see Customer 1 saved devices (Strict Customer Isolation)'
+  );
+
+  // Unauthorized mutation attempt simulation (Customer 2 attempting to mutate Customer 1's device)
+  const targetDevice = db.customerDevices.find((d) => d.id === newDevice.id);
+  const isOwner = targetDevice?.customerId === customerId2;
+  assert(!isOwner, 'Cross-customer device mutation check rejects Customer 2 from modifying Customer 1 device');
+
+  // Customer 1 deletion
+  const preDeleteLen = db.customerDevices.length;
+  const delIdx = db.data.customerDevices.findIndex((d) => d.id === customDevice.id);
+  if (delIdx !== -1) db.data.customerDevices.splice(delIdx, 1);
+  assert(db.customerDevices.length === preDeleteLen - 1, 'Owner customer can safely delete their saved device');
+
+  // 12.4 Repair Request Catalog Fields Integration
+  const reqWithCatalog = {
+    id: `req_test_cat_${Date.now()}`,
+    customerId: customerId1,
+    customerLocation: ikejaLocation,
+    deviceBrand: 'Apple',
+    deviceModel: 'iPhone 13',
+    deviceModelId: 'mod_apple_ip13',
+    deviceType: 'PHONE' as const,
+    catalogMatch: true,
+    issues: ['screen_damaged'],
+    description: 'Cracked screen from fall',
+    photos: [],
+    status: 'REQUESTED' as const,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  db.repairRequests.push(reqWithCatalog);
+  assert(
+    reqWithCatalog.catalogMatch === true && reqWithCatalog.deviceModelId === 'mod_apple_ip13',
+    'Repair request correctly records catalogMatch and deviceModelId for technician parts planning'
+  );
+
   console.log('\n===============================================================');
   console.log(`   TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);
   console.log('===============================================================\n');

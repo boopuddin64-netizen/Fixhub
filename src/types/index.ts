@@ -108,21 +108,53 @@ export interface TechnicianProfile {
   };
 }
 
+export type DeviceType = 'PHONE' | 'TABLET';
+
 export interface DeviceBrand {
   id: string;
   name: string;
+  slug?: string;
+  deviceTypes?: DeviceType[];
   logoUrl?: string;
   popularModelsCount: number;
+}
+
+export interface DeviceFamily {
+  id: string;
+  brandId: string;
+  name: string;
+  deviceType: DeviceType;
 }
 
 export interface DeviceModel {
   id: string;
   brandId: string;
   brandName: string;
+  familyId?: string;
+  familyName?: string;
   name: string;
   releaseYear: number;
+  deviceType?: DeviceType;
+  isPopular?: boolean;
+  isActive?: boolean;
   commonIssues: string[];
   imageUrl?: string;
+}
+
+export interface CustomerDevice {
+  id: string;
+  customerId: string;
+  deviceModelId?: string;
+  brandName: string;
+  modelName: string;
+  deviceType: DeviceType;
+  nickname?: string;
+  color?: string;
+  storage?: string;
+  isPrimary: boolean;
+  catalogMatch: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface RepairIssueOption {
@@ -142,6 +174,8 @@ export interface RepairRequest {
   customerLocation: LocationCoordinates;
   deviceBrand: string;
   deviceModel: string;
+  deviceType?: DeviceType;
+  catalogMatch?: boolean;
   issues: string[];
   description: string;
   photos: string[];

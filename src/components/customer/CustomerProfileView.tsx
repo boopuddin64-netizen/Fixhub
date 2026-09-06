@@ -14,9 +14,13 @@ import {
 
 interface CustomerProfileViewProps {
   onViewWarranties: () => void;
+  onOpenDevicesManager?: () => void;
 }
 
-export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({ onViewWarranties }) => {
+export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
+  onViewWarranties,
+  onOpenDevicesManager,
+}) => {
   const { user, customerProfile, logout, isBorrowedDevice } = useAuth();
 
   return (
@@ -54,6 +58,25 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({ onView
 
       {/* Quick Navigation Items */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs divide-y divide-slate-100">
+        {onOpenDevicesManager && (
+          <button
+            id="profile-my-devices-btn"
+            onClick={onOpenDevicesManager}
+            className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center">
+                <Smartphone className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-900">My Saved Devices</p>
+                <p className="text-xs text-slate-500">Manage registered phones, colors, and storage</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-400" />
+          </button>
+        )}
+
         <button
           onClick={onViewWarranties}
           className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left cursor-pointer"
