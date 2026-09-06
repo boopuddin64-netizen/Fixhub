@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { Camera, UploadCloud, X, Image as ImageIcon, Loader2, Sparkles } from 'lucide-react';
+import { Camera, X, Loader2, Sparkles } from 'lucide-react';
+import { ApiClient } from '../../../api/client';
 
 interface PhotoEvidenceUploaderProps {
   photos: string[];
@@ -67,7 +68,18 @@ export const PhotoEvidenceUploader: React.FC<PhotoEvidenceUploaderProps> = ({
 
     try {
       const compressedList = await Promise.all(toProcess.map(compressImage));
-      onChange([...photos, ...compressedList].slice(0, maxPhotos));
+      
+      const uploadedUrls: string[] = [];
+      for (const base64 of compressedList) {
+        const res = await ApiClient.uploadAttachment({
+          fileData: base64,
+          type: 'IMAGE',
+          mimeType: 'image/jpeg'
+        });
+        uploadedUrls.push(res.url);
+      }
+      
+      onChange([...photos, ...uploadedUrls].slice(0, maxPhotos));
     } catch (err) {
       console.error('Error processing photos:', err);
     } finally {
@@ -81,7 +93,6 @@ export const PhotoEvidenceUploader: React.FC<PhotoEvidenceUploaderProps> = ({
     onChange(next);
   };
 
-  // Curated realistic sample images for quick testing on desktop without requiring phone cameras
   const sampleDamagePhotos = [
     {
       label: 'Cracked Front Glass',

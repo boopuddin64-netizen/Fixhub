@@ -523,7 +523,7 @@ apiRouter.delete('/repairs/draft', requireAuth, requireRole(['customer']), (req:
   return res.json({ success: true, message: 'Draft cleared.' });
 });
 
-// 4.2 Attachment Upload (Base64 / Data URL)
+// 4.2 Attachment Upload (Base64 / Data URL to local file)
 apiRouter.post('/repairs/attachments/upload', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
   const { fileData, type, mimeType, size, durationSeconds } = req.body;
 
@@ -540,17 +540,54 @@ apiRouter.post('/repairs/attachments/upload', requireAuth, requireRole(['custome
     return res.status(400).json({ error: 'File size exceeds maximum permitted limit.' });
   }
 
-  const attachment = {
-    id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-    type: type as 'IMAGE' | 'AUDIO',
-    url: fileData,
-    mimeType: sanitizeString(mimeType, 100) || (type === 'IMAGE' ? 'image/jpeg' : 'audio/webm'),
-    size: Number(size) || Math.round(fileData.length * 0.75),
-    createdAt: new Date().toISOString(),
-    durationSeconds: durationSeconds ? Number(durationSeconds) : undefined,
-  };
+  try {
+    const attachId = `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const attachExt = type === 'IMAGE' ? 'jpg' : 'webm';
+    const filename = `${attachId}.${attachExt}`;
+    
+    const attachmentsDir = path.resolve(process.cwd(), './data/attachments');
+    if (!fs.existsSync(attachmentsDir)) {
+      fs.mkdirSync(attachmentsDir, { recursive: true });
+    }
 
-  return res.status(201).json(attachment);
+    // Extract base64 part
+    const matches = fileData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) {
+      return res.status(400).json({ error: 'Invalid base64 format.' });
+    }
+    const buffer = Buffer.from(matches[2], 'base64');
+    fs.writeFileSync(path.join(attachmentsDir, filename), buffer);
+
+    const attachment = {
+      id: attachId,
+      type: type as 'IMAGE' | 'AUDIO',
+      url: `/api/repairs/attachments/${filename}`,
+      mimeType: sanitizeString(mimeType, 100) || matches[1] || (type === 'IMAGE' ? 'image/jpeg' : 'audio/webm'),
+      size: buffer.length || Number(size) || Math.round(fileData.length * 0.75),
+      createdAt: new Date().toISOString(),
+      durationSeconds: durationSeconds ? Number(durationSeconds) : undefined,
+      ownerId: req.user!.id,
+    };
+
+    return res.status(201).json(attachment);
+  } catch (err) {
+    console.error('Error saving attachment:', err);
+    return res.status(500).json({ error: 'Failed to process attachment.' });
+  }
+});
+
+apiRouter.get('/repairs/attachments/:filename', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  const { filename } = req.params;
+  const attachmentsDir = path.resolve(process.cwd(), './data/attachments');
+  const filePath = path.join(attachmentsDir, filename);
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Attachment not found.' });
+  }
+
+  // Basic security: In a real app, verify `req.user.id` against the attachment owner or technician assignment
+  // For Phase 2.5, we ensure they are authenticated at least.
+  res.sendFile(filePath);
 });
 
 apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {

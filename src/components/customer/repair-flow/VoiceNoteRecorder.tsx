@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, Square, Play, Pause, Trash2, Volume2, AlertCircle } from 'lucide-react';
+import { Mic, Square, Play, Pause, Trash2, Volume2, AlertCircle, Loader2 } from 'lucide-react';
+import { ApiClient } from '../../../api/client';
 
 interface VoiceNoteRecorderProps {
   voiceNoteUrl?: string;
@@ -39,6 +40,7 @@ export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
   onChange,
 }) => {
   const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playbackSeconds, setPlaybackSeconds] = useState<number>(0);
@@ -162,12 +164,24 @@ export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
       const audioBlob = new Blob(audioChunksRef.current, { type: finalMime });
       const finalDuration = recordingSecondsRef.current || 1;
 
+      setIsProcessing(true);
       const reader = new FileReader();
-      reader.onloadend = () => {
+      reader.onloadend = async () => {
         const base64Data = reader.result as string;
-        window.setTimeout(() => {
-          onChange(base64Data, finalDuration);
-        }, 0);
+        try {
+          const res = await ApiClient.uploadAttachment({
+            fileData: base64Data,
+            type: 'AUDIO',
+            mimeType: finalMime,
+            durationSeconds: finalDuration
+          });
+          onChange(res.url, finalDuration);
+        } catch (err) {
+          console.error("Upload failed", err);
+          setErrorMessage("Failed to upload voice note. You can try again.");
+        } finally {
+          setIsProcessing(false);
+        }
       };
       reader.readAsDataURL(audioBlob);
 
@@ -315,6 +329,11 @@ export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
           >
             <Trash2 className="w-4 h-4" />
           </button>
+        </div>
+      ) : isProcessing ? (
+        <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200">
+           <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" />
+           <span className="text-xs font-bold text-slate-700">Uploading voice note...</span>
         </div>
       ) : isRecording ? (
         /* Active Recording State */

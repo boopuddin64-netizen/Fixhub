@@ -33,6 +33,7 @@ interface DeviceSelectorModalProps {
   }) => void;
   currentBrand?: string;
   currentModel?: string;
+  inline?: boolean;
 }
 
 export const DeviceSelectorModal: React.FC<DeviceSelectorModalProps> = ({
@@ -41,6 +42,7 @@ export const DeviceSelectorModal: React.FC<DeviceSelectorModalProps> = ({
   onSelectDevice,
   currentBrand,
   currentModel,
+  inline = false,
 }) => {
   const [deviceType, setDeviceType] = useState<DeviceType>('PHONE');
   const [savedDevices, setSavedDevices] = useState<CustomerDevice[]>([]);
@@ -145,10 +147,12 @@ export const DeviceSelectorModal: React.FC<DeviceSelectorModalProps> = ({
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-xs animate-fadeIn">
-      <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header */}
+  if (!isOpen && !inline) return null;
+
+  const content = (
+    <div className={`w-full max-w-lg bg-white rounded-3xl overflow-hidden flex flex-col ${inline ? 'border border-slate-200' : 'shadow-2xl border border-slate-200 max-h-[90vh]'}`}>
+      {/* Header */}
+      {!inline && (
         <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2.5">
             {selectedBrand && !searchQuery ? (
@@ -186,8 +190,25 @@ export const DeviceSelectorModal: React.FC<DeviceSelectorModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
+      )}
 
-        {/* Device Type Toggle (Phone vs Tablet) */}
+      {/* When inline, we might still want a back button if we are deep in selection */}
+      {inline && (selectedBrand || selectedFamily) && !searchQuery && (
+        <div className="p-3 border-b border-slate-100 flex items-center gap-2 bg-slate-50">
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedFamily) setSelectedFamily(null);
+              else setSelectedBrand(null);
+            }}
+            className="flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-slate-900"
+          >
+            <ArrowLeft className="w-4 h-4" /> Back
+          </button>
+        </div>
+      )}
+
+      {/* Device Type Toggle (Phone vs Tablet) */}
         <div className="p-3 bg-slate-100/70 border-b border-slate-200/60 flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 p-1 bg-white rounded-xl border border-slate-200">
             <button
@@ -440,7 +461,14 @@ export const DeviceSelectorModal: React.FC<DeviceSelectorModalProps> = ({
             </>
           )}
         </div>
-      </div>
+    </div>
+  );
+  
+  if (inline) return content;
+  
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-xs animate-fadeIn">
+      {content}
     </div>
   );
 };

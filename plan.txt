@@ -1,0 +1,16 @@
+1. Refactor `RepairRequestWizard` to hold the chat state.
+   Instead of displaying one "step" full screen, we display a list of chat bubbles.
+   The bubbles are generated dynamically from the current state (`deviceBrand`, `selectedIssueIds`, `description`, `location`, etc.).
+2. At the bottom, a fixed `Composer`.
+   The `Composer` includes a text input, attachment button, mic button.
+   When the user types and hits send, it updates `description` if it's the "Describe" phase, or maybe it updates "otherDescription" if it's the "Issues" phase.
+   Actually, WhatsApp bots usually guide you. 
+   State machine:
+   - Phase 1 (Device): We show "Which phone needs repair?" and render Quick Replies in the chat stream: [Saved Device], [Choose another device]. 
+   - Phase 2 (Issues): "Got it. What's wrong with it?" We render the `IssueSelector` as inline chips. The user selects them and taps "Send" or just selects and we automatically move on.
+   - Phase 3 (Description): "Anything else happening?" The user can type, use voice note, or attach photos.
+   - Phase 4 (Location): "Let's confirm where you'll take the phone." We render the `LocationSelector` inline or as a modal.
+   - Phase 5 (Review): "Here's your repair request."
+3. Media Storage:
+   We need to fix the `base64` issue.
+   Server side: `server/routes/api.ts` -> store attachments in a folder or memory, return an ID.
