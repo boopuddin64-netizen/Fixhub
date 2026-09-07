@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RepairRequest, RepairQuote, MatchScoreResult, TechnicianProfile } from '../../types';
+import { RepairRequest, RepairQuote, MatchScoreResult, TechnicianProfile, RepairJob } from '../../types';
 import { ApiClient } from '../../api/client';
 import {
   Wrench,
@@ -18,7 +18,7 @@ import {
 
 interface QuoteComparisonViewProps {
   request: RepairRequest;
-  onSelectQuoteToPay: (quote: RepairQuote) => void;
+  onSelectQuoteToPay: (quote: RepairQuote, job: RepairJob) => void;
   onBack: () => void;
 }
 
@@ -31,6 +31,11 @@ export const QuoteComparisonView: React.FC<QuoteComparisonViewProps> = ({
   const [matchedTechs, setMatchedTechs] = useState<MatchScoreResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTechProfile, setSelectedTechProfile] = useState<TechnicianProfile | null>(null);
+
+  const [confirmedJob, setConfirmedJob] = useState<RepairJob | null>(null);
+  const [selectedQuote, setSelectedQuote] = useState<RepairQuote | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -54,6 +59,24 @@ export const QuoteComparisonView: React.FC<QuoteComparisonViewProps> = ({
     fetchData();
   }, [request]);
 
+  const handleAcceptQuote = async (quote: RepairQuote) => {
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      const response = await ApiClient.acceptQuote(request.id, quote.id);
+      if (response && response.job) {
+        setConfirmedJob(response.job);
+        setSelectedQuote(quote);
+      } else {
+        throw new Error('Failed to create booking.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'An error occurred during booking creation.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const getQualityBadgeColor = (q: string) => {
     switch (q) {
       case 'ORIGINAL_OEM':
@@ -67,6 +90,101 @@ export const QuoteComparisonView: React.FC<QuoteComparisonViewProps> = ({
     }
   };
 
+  if (confirmedJob && selectedQuote) {
+    return (
+      <div id="booking-confirmed-panel" className="max-w-xl mx-auto bg-white border border-slate-200 rounded-2xl shadow-md p-6 sm:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-200">
+        <div className="text-center space-y-3">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+            <CheckCircle2 className="w-8 h-8" />
+          </div>
+          <h2 className="text-2xl font-extrabold text-slate-950">Repair Booking Confirmed!</h2>
+          <p className="text-sm text-slate-600">
+            Your repair request with <span className="font-bold text-slate-900">{selectedQuote.businessName}</span> is now scheduled.
+          </p>
+        </div>
+
+        {/* Reference and Security Codes Card */}
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+          <div className="flex justify-between items-center pb-3 border-b border-slate-200">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Booking Reference</span>
+            <span className="font-mono text-sm font-extrabold text-blue-700 bg-blue-50 px-2.5 py-1 rounded border border-blue-200">
+              {confirmedJob.bookingRef || `FH-${confirmedJob.id.toUpperCase().slice(-6)}`}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 text-center">
+            <div className="p-3 bg-white border border-slate-200 rounded-lg">
+              <span className="block text-[10px] text-slate-500 font-bold uppercase mb-1">Drop-off Code</span>
+              <span className="font-mono font-bold text-base text-slate-800">{confirmedJob.dropOffCode}</span>
+            </div>
+            <div className="p-3 bg-white border border-slate-200 rounded-lg">
+              <span className="block text-[10px] text-slate-500 font-bold uppercase mb-1">Pickup Code</span>
+              <span className="font-mono font-bold text-base text-slate-800">{confirmedJob.pickupCode}</span>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-slate-500 text-center leading-relaxed">
+            Keep these security codes private. Provide them to the technician at the shop during device check-in and pickup.
+          </p>
+        </div>
+
+        {/* Financial & Job Overview */}
+        <div className="space-y-2.5">
+          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Repair Quote Summary</h4>
+          <div className="p-4 border border-slate-200 rounded-xl space-y-2.5 text-xs text-slate-600">
+            <div className="flex justify-between">
+              <span>Device & Issue:</span>
+              <span className="font-semibold text-slate-900">{request.deviceBrand} {request.deviceModel}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Selected Technician:</span>
+              <span className="font-semibold text-slate-900">{selectedQuote.businessName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Warranty Days:</span>
+              <span className="font-semibold text-emerald-700 font-bold">{selectedQuote.warrantyDays} Days Covered</span>
+            </div>
+            <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-sm font-bold text-slate-900">
+              <span>Total Guaranteed Amount:</span>
+              <span className="text-blue-700 text-base">₦{selectedQuote.totalAmount.toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Informative Security/Escrow notice */}
+        <div className="p-4 bg-blue-50 border border-blue-200 text-blue-900 rounded-xl space-y-1">
+          <div className="flex items-center gap-1.5 font-bold text-blue-800 text-xs">
+            <AlertCircle className="w-4 h-4" />
+            <span>Escrow Payment Required:</span>
+          </div>
+          <p className="text-[11px] text-blue-800 leading-relaxed">
+            Payment will be completed in the next step to lock your funds safely in secure escrow. No money is released to the technician until you test the device and confirm your absolute satisfaction.
+          </p>
+        </div>
+
+        {/* CTA Buttons */}
+        <div className="space-y-2 pt-2">
+          <button
+            id="proceed-to-payment-btn"
+            onClick={() => onSelectQuoteToPay(selectedQuote, confirmedJob)}
+            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-blue-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>Proceed to Escrow Payment</span>
+          </button>
+          
+          <button
+            id="pay-later-btn"
+            onClick={onBack}
+            className="w-full py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all flex items-center justify-center cursor-pointer"
+          >
+            <span>Complete Payment Later (View Repairs)</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div id="quote-comparison-view" className="space-y-6">
       {/* Top Banner */}
@@ -74,7 +192,7 @@ export const QuoteComparisonView: React.FC<QuoteComparisonViewProps> = ({
         <div>
           <button
             onClick={onBack}
-            className="text-xs text-slate-400 hover:text-white flex items-center gap-1 mb-1 cursor-pointer"
+            className="text-xs text-slate-400 hover:text-white flex items-center gap-1 mb-1 cursor-pointer bg-transparent border-none"
           >
             ← Back to Repairs
           </button>
@@ -95,6 +213,13 @@ export const QuoteComparisonView: React.FC<QuoteComparisonViewProps> = ({
           <p className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Quote(s) Received</p>
         </div>
       </div>
+
+      {errorMsg && (
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
 
       {/* Received Quotes Section */}
       <div className="space-y-3">
@@ -188,11 +313,12 @@ export const QuoteComparisonView: React.FC<QuoteComparisonViewProps> = ({
                 {/* Accept Button */}
                 <button
                   id={`accept-quote-btn-${quote.id}`}
-                  onClick={() => onSelectQuoteToPay(quote)}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  onClick={() => handleAcceptQuote(quote)}
+                  disabled={isSubmitting}
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   <ShieldCheck className="w-4 h-4" />
-                  <span>Accept Quote & Pay in Escrow</span>
+                  <span>{isSubmitting ? 'Booking Repair...' : 'Accept Quote & Book'}</span>
                 </button>
               </div>
             ))}

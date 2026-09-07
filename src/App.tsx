@@ -14,6 +14,8 @@ import { EscrowPaymentModal } from './components/customer/EscrowPaymentModal';
 import { VerifiedReviewModal } from './components/customer/VerifiedReviewModal';
 import { WarrantyPassportView } from './components/customer/WarrantyPassportView';
 import { CustomerProfileView } from './components/customer/CustomerProfileView';
+import { CustomerRepairsView } from './components/repairs/CustomerRepairsView';
+import { TechnicianDiscoveryView } from './components/customer/technician-discovery/TechnicianDiscoveryView';
 import { TechnicianDashboardView } from './components/technician/TechnicianDashboardView';
 import { TechnicianJobWorkspace } from './components/technician/TechnicianJobWorkspace';
 import { TechnicianStoreSetupView } from './components/technician/TechnicianStoreSetupView';
@@ -39,7 +41,7 @@ function MainAppContent() {
   } | null>(null);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [selectedJobId, setSelectedJobId] = useState<string | null>('job_demo_active');
-  const [selectedQuoteForPayment, setSelectedQuoteForPayment] = useState<RepairQuote | null>(null);
+  const [paymentTarget, setPaymentTarget] = useState<{ job: RepairJob; quote: RepairQuote } | null>(null);
 
   // Chat & Notifications Drawers
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
@@ -148,7 +150,7 @@ function MainAppContent() {
                   setShowWizard(false);
                   setWizardPrefill(null);
                   setSelectedRequestId(reqId);
-                  setCurrentTab('quotes');
+                  setCurrentTab('discovery');
                   loadData();
                 }}
                 preselectedDevice={wizardPrefill?.device}
@@ -156,55 +158,39 @@ function MainAppContent() {
                 preselectedModel={wizardPrefill?.model}
                 preselectedIssue={wizardPrefill?.issue}
               />
+            ) : currentTab === 'discovery' && selectedRequestId ? (
+              <TechnicianDiscoveryView
+                requestId={selectedRequestId}
+                onBack={() => setCurrentTab('repairs')}
+              />
             ) : currentTab === 'quotes' && activeRequest ? (
               <QuoteComparisonView
                 request={activeRequest}
-                onSelectQuoteToPay={(quote) => setSelectedQuoteForPayment(quote)}
+                onSelectQuoteToPay={(quote, job) => {
+                  setPaymentTarget({ quote, job });
+                  setSelectedJobId(job.id);
+                }}
                 onBack={() => setCurrentTab('home')}
               />
             ) : currentTab === 'repairs' ? (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-extrabold text-slate-900">Your Phone Repairs</h2>
-                    <p className="text-xs text-slate-500">Live tracking and completed warranties</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setWizardPrefill(null);
-                      setShowWizard(true);
-                    }}
-                    className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-blue-600/20 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>New Repair</span>
-                  </button>
-                </div>
-
-                {activeJob ? (
-                  <ActiveRepairTracker
-                    job={activeJob}
-                    technician={activeJobTech}
-                    onOpenChat={() => setIsChatOpen(true)}
-                    onRefresh={loadData}
-                    onOpenReviewModal={() => setShowReviewModal(true)}
-                  />
-                ) : (
-                  <div className="p-8 rounded-2xl border border-dashed border-slate-300 bg-white text-center space-y-3">
-                    <Wrench className="w-10 h-10 text-slate-300 mx-auto" />
-                    <p className="text-sm font-bold text-slate-700">No active repair in progress</p>
-                    <button
-                      onClick={() => {
-                        setWizardPrefill(null);
-                        setShowWizard(true);
-                      }}
-                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer"
-                    >
-                      Book a Phone Repair
-                    </button>
-                  </div>
-                )}
-              </div>
+              <CustomerRepairsView
+                jobs={jobs}
+                requests={requests}
+                technicians={technicians}
+                selectedJobId={selectedJobId}
+                onSelectJob={(jobId) => setSelectedJobId(jobId)}
+                onOpenDiscovery={(requestId) => {
+                  setSelectedRequestId(requestId);
+                  setCurrentTab('discovery');
+                }}
+                onStartNewRepair={() => {
+                  setWizardPrefill(null);
+                  setShowWizard(true);
+                }}
+                onOpenChat={() => setIsChatOpen(true)}
+                onOpenReviewModal={() => setShowReviewModal(true)}
+                onRefresh={loadData}
+              />
             ) : currentTab === 'passport' ? (
               <WarrantyPassportView />
             ) : currentTab === 'messages' ? (
@@ -329,13 +315,13 @@ function MainAppContent() {
       )}
 
       {/* Escrow Payment Modal */}
-      {selectedQuoteForPayment && activeJob && (
+      {paymentTarget && (
         <EscrowPaymentModal
-          job={activeJob}
-          quote={selectedQuoteForPayment}
-          onClose={() => setSelectedQuoteForPayment(null)}
+          job={paymentTarget.job}
+          quote={paymentTarget.quote}
+          onClose={() => setPaymentTarget(null)}
           onPaymentSuccess={() => {
-            setSelectedQuoteForPayment(null);
+            setPaymentTarget(null);
             setCurrentTab('repairs');
             loadData();
           }}

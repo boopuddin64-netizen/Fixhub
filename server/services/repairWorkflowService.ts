@@ -100,10 +100,12 @@ export class RepairWorkflowService {
     const techPayout = total - platformFee;
 
     const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const bookingRef = `FH-${Math.floor(100000 + Math.random() * 900000)}`;
     const now = new Date().toISOString();
 
     const job: RepairJob = {
       id: jobId,
+      bookingRef,
       requestId: request.id,
       quoteId: quote.id,
       customerId: request.customerId,

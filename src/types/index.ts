@@ -339,6 +339,7 @@ export interface WarrantyRecord {
 
 export interface RepairJob {
   id: string;
+  bookingRef?: string;
   requestId: string;
   quoteId: string;
   customerId: string;
@@ -476,3 +477,5 @@ export interface MatchScoreResult {
   };
   technician: TechnicianProfile;
 }
+
+export type TechnicianMatchResult = MatchScoreResult;

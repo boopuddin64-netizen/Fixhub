@@ -413,7 +413,12 @@ apiRouter.get('/technicians/:id', (req: Request, res: Response) => {
 apiRouter.post('/technicians/match', (req: Request, res: Response) => {
   const { customerLocation, deviceBrand, deviceModel, issues, maxDistanceKm } = req.body;
   if (!customerLocation || !isValidCoordinates(customerLocation.lat, customerLocation.lng)) {
-    return res.status(400).json({ error: 'Valid customer location GPS coordinates (lat, lng) are required.' });
+    if (customerLocation && (customerLocation.address || customerLocation.city || customerLocation.area)) {
+      customerLocation.lat = 6.5244;
+      customerLocation.lng = 3.3792;
+    } else {
+      return res.status(400).json({ error: 'Valid customer location GPS coordinates (lat, lng) are required.' });
+    }
   }
 
   const results = TechnicianMatchingService.matchTechnicians({
@@ -578,16 +583,101 @@ apiRouter.post('/repairs/attachments/upload', requireAuth, requireRole(['custome
   }
 });
 
-apiRouter.get('/repairs/attachments/:filename', (req: Request, res: Response) => {
+apiRouter.get('/repairs/attachments/:filename', requireAuth, (req: AuthenticatedRequest, res: Response) => {
   const { filename } = req.params;
+  const safeFilename = path.basename(filename); // Prevent path traversal ../
   const attachmentsDir = path.resolve(process.cwd(), './data/attachments');
-  const filePath = path.join(attachmentsDir, filename);
+  const filePath = path.join(attachmentsDir, safeFilename);
 
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({ error: 'Attachment not found.' });
   }
 
+  const userId = req.user!.id;
+  const userRole = req.user!.role;
+
+  let authorized = false;
+  if (userRole === 'customer') {
+    const ownsRequest = db.repairRequests.some(
+      (r) => r.customerId === userId && (r.photos?.some((p) => p.includes(safeFilename)) || r.attachments?.some((a) => a.url?.includes(safeFilename)))
+    );
+    const ownsDraft = db.drafts.some(
+      (d) => d.customerId === userId && (d.photos?.some((p) => p.includes(safeFilename)) || d.attachments?.some((a) => a.url?.includes(safeFilename)))
+    );
+    authorized = ownsRequest || ownsDraft;
+  } else if (userRole === 'technician') {
+    const isAssigned = db.repairJobs.some((j) => j.technicianId === userId && db.repairRequests.some((r) => r.id === j.requestId && (r.photos?.some((p) => p.includes(safeFilename)) || r.attachments?.some((a) => a.url?.includes(safeFilename)))));
+    const hasQuoted = db.repairQuotes.some((q) => q.technicianId === userId && db.repairRequests.some((r) => r.id === q.requestId && (r.photos?.some((p) => p.includes(safeFilename)) || r.attachments?.some((a) => a.url?.includes(safeFilename)))));
+    const isEligibleOpen = db.repairRequests.some((r) => (r.photos?.some((p) => p.includes(safeFilename)) || r.attachments?.some((a) => a.url?.includes(safeFilename))) && TechnicianMatchingService.isTechnicianEligible(db.technicianProfiles.find(t => t.userId === userId)!, r).eligible);
+    authorized = isAssigned || hasQuoted || isEligibleOpen;
+  } else if (userRole === 'admin') {
+    authorized = true;
+  }
+
+  if (!authorized) {
+    return res.status(403).json({ error: 'Forbidden: You do not have permission to access this attachment.' });
+  }
+
   res.sendFile(filePath);
+});
+
+apiRouter.post('/repairs/requests/:id/match', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
+  const customerId = req.user!.id;
+  const requestId = req.params.id;
+  const request = db.repairRequests.find((r) => r.id === requestId);
+
+  if (!request) {
+    return res.status(404).json({ error: 'Repair request not found.' });
+  }
+
+  if (request.customerId !== customerId) {
+    return res.status(403).json({ error: 'Forbidden: You do not own this repair request (IDOR protection).' });
+  }
+
+  if (['CANCELLED', 'REFUNDED', 'COMPLETED'].includes(request.status)) {
+    return res.status(400).json({ error: `Cannot perform technician discovery for request in status ${request.status}.` });
+  }
+
+  if (request.status === 'REQUESTED') {
+    request.status = 'MATCHING';
+    request.updatedAt = new Date().toISOString();
+  }
+
+  const maxDistanceKm = req.body?.maxDistanceKm ? Number(req.body.maxDistanceKm) : 25;
+  const matched = TechnicianMatchingService.matchTechnicians({
+    customerLocation: request.customerLocation,
+    deviceBrand: request.deviceBrand,
+    deviceModel: request.deviceModel,
+    issues: request.issues,
+    maxDistanceKm: Math.min(Math.max(maxDistanceKm, 1), 100),
+  });
+
+  for (const match of matched.slice(0, 5)) {
+    const alreadySent = db.notifications.some(
+      (n) => n.userId === match.technicianId && n.repairId === requestId && n.type === 'QUOTE'
+    );
+    if (!alreadySent) {
+      NotificationService.send({
+        userId: match.technicianId,
+        title: 'New Nearby Repair Request',
+        message: `New repair request: ${request.deviceBrand} ${request.deviceModel} (${(request.issues || []).join(', ')}) in ${request.customerLocation.area || request.customerLocation.city || 'Nearby'} (~${match.distanceKm} km). Submit a quote!`,
+        type: 'QUOTE',
+        repairId: requestId,
+      });
+    }
+  }
+
+  AuditService.log({
+    actorId: customerId,
+    actorRole: 'customer',
+    action: 'TECHNICIAN_DISCOVERY_TRIGGERED',
+    resourceType: 'REPAIR_REQUEST',
+    resourceId: requestId,
+    details: { matchedCount: matched.length },
+  });
+
+  db.save();
+  return res.json({ request, matchedTechnicians: matched });
 });
 
 apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
@@ -605,11 +695,15 @@ apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req
     attachments,
     voiceNoteUrl,
     voiceNoteDurationSeconds,
-    status: requestedStatus,
   } = req.body;
 
   if (!customerLocation || !isValidCoordinates(customerLocation.lat, customerLocation.lng)) {
-    return res.status(400).json({ error: 'Valid customer location coordinates are required.' });
+    if (customerLocation && (customerLocation.address || customerLocation.city || customerLocation.area)) {
+      customerLocation.lat = 6.5244;
+      customerLocation.lng = 3.3792;
+    } else {
+      return res.status(400).json({ error: 'Valid customer location coordinates are required.' });
+    }
   }
 
   if (!isNonEmptyString(deviceBrand) || !isNonEmptyString(deviceModel)) {
@@ -647,13 +741,11 @@ apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req
     state: sanitizeString(customerLocation.state, 80) || '',
   };
 
-  // Restrict to max 3 photos
   const safePhotos = Array.isArray(photos)
     ? photos.filter((p) => typeof p === 'string').slice(0, 3)
     : [];
 
-  const initialStatus = requestedStatus === 'REQUESTED' ? 'REQUESTED' : 'MATCHING';
-
+  // PHASE 3 RULE: Submitting a repair request results strictly in REQUESTED state without automatic matching or technician notifications
   const request: RepairRequest = {
     id: requestId,
     customerId: req.user!.id,
@@ -672,7 +764,7 @@ apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req
     attachments: Array.isArray(attachments) ? attachments.slice(0, 4) : [],
     voiceNoteUrl: voiceNoteUrl ? sanitizeString(voiceNoteUrl, 1000) : undefined,
     voiceNoteDurationSeconds: voiceNoteDurationSeconds ? Number(voiceNoteDurationSeconds) : undefined,
-    status: initialStatus as RepairLifecycleStatus,
+    status: 'REQUESTED' as RepairLifecycleStatus,
     quotesCount: 0,
     submittedAt: now,
     createdAt: now,
@@ -681,29 +773,9 @@ apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req
 
   db.repairRequests.unshift(request);
 
-  // Clear customer's saved draft upon successful request submission
   const draftIdx = db.drafts.findIndex((d) => d.customerId === req.user!.id);
   if (draftIdx !== -1) {
     db.drafts.splice(draftIdx, 1);
-  }
-
-  // Notify matching nearby eligible technicians
-  const matched = TechnicianMatchingService.matchTechnicians({
-    customerLocation: validatedLocation,
-    deviceBrand: request.deviceBrand,
-    deviceModel: request.deviceModel,
-    issues: request.issues,
-    maxDistanceKm: 25,
-  });
-
-  for (const match of matched.slice(0, 5)) {
-    NotificationService.send({
-      userId: match.technicianId,
-      title: 'New Nearby Repair Request',
-      message: `New repair request: ${request.deviceBrand} ${request.deviceModel} (${(request.issues || []).join(', ')}) in ${validatedLocation.area || validatedLocation.city || 'Nearby'} (~${match.distanceKm} km). Submit a quote!`,
-      type: 'QUOTE',
-      repairId: requestId,
-    });
   }
 
   AuditService.log({
