@@ -122,3 +122,128 @@ export function sanitizeRepairRequestForTechnician(
     estimatedDistanceKm,
   };
 }
+
+export interface LocationValidationResult {
+  valid: boolean;
+  error?: string;
+  sanitizedLocation?: LocationCoordinates;
+}
+
+export function validateCustomerLocationPayload(
+  payload: any,
+  isProduction: boolean
+): LocationValidationResult {
+  if (!payload || typeof payload !== 'object') {
+    return { valid: false, error: 'Location data is required.' };
+  }
+
+  const {
+    lat,
+    lng,
+    address,
+    landmark,
+    area,
+    city,
+    state,
+    country,
+    accuracyMeters,
+    timestamp,
+    capturedAt,
+    source,
+  } = payload;
+
+  // 1. Source validation
+  const validSources = ['GPS', 'GEOCODED', 'MANUAL', 'DEVELOPMENT_FALLBACK'];
+  if (source && !validSources.includes(source)) {
+    return { valid: false, error: 'Invalid location source specified.' };
+  }
+
+  // 2. Production / Development isolation
+  if (isProduction) {
+    if (source === 'DEVELOPMENT_FALLBACK') {
+      return {
+        valid: false,
+        error: 'Development fallback locations are not allowed in production. Please select or enter a real location.',
+      };
+    }
+    // Hardcoded fallback coordinates check
+    if (Number(lat) === 4.8156 && Number(lng) === 7.0498) {
+      return {
+        valid: false,
+        error: 'Development fallback locations are not allowed in production. Please select or enter a real location.',
+      };
+    }
+  }
+
+  // 3. Latitude & Longitude validation
+  const hasLat = lat !== undefined && lat !== null && lat !== '';
+  const hasLng = lng !== undefined && lng !== null && lng !== '';
+  let validCoords = false;
+  let parsedLat = 0;
+  let parsedLng = 0;
+
+  if (hasLat || hasLng) {
+    parsedLat = Number(lat);
+    parsedLng = Number(lng);
+
+    if (isNaN(parsedLat) || !isFinite(parsedLat) || parsedLat < -90 || parsedLat > 90) {
+      return { valid: false, error: 'Latitude must be a valid number between -90 and 90.' };
+    }
+    if (isNaN(parsedLng) || !isFinite(parsedLng) || parsedLng < -180 || parsedLng > 180) {
+      return { valid: false, error: 'Longitude must be a valid number between -180 and 180.' };
+    }
+
+    if (parsedLat !== 0 || parsedLng !== 0) {
+      validCoords = true;
+    }
+  }
+
+  // 4. Accuracy validation
+  let parsedAccuracy: number | undefined = undefined;
+  if (accuracyMeters !== undefined && accuracyMeters !== null && accuracyMeters !== '') {
+    parsedAccuracy = Number(accuracyMeters);
+    if (isNaN(parsedAccuracy) || !isFinite(parsedAccuracy) || parsedAccuracy < 0) {
+      return { valid: false, error: 'Accuracy must be a non-negative number.' };
+    }
+  }
+
+  // 5. GPS Source validation
+  if (source === 'GPS' && !validCoords) {
+    return { valid: false, error: 'Valid device GPS coordinates (latitude and longitude) are required when source is GPS.' };
+  }
+
+  // 6. Location Consistency:
+  // Must have either valid coordinates OR non-empty textual location (address, area, city, or state)
+  const hasTextualLocation =
+    isNonEmptyString(address) ||
+    isNonEmptyString(area) ||
+    isNonEmptyString(city) ||
+    isNonEmptyString(state);
+
+  if (!validCoords && !hasTextualLocation) {
+    return {
+      valid: false,
+      error: 'Please enable GPS location or manually enter/select a valid location.',
+    };
+  }
+
+  const sanitized: LocationCoordinates = {
+    lat: parsedLat,
+    lng: parsedLng,
+    address: sanitizeString(address, 200),
+    landmark: landmark ? sanitizeString(landmark, 100) : undefined,
+    area: sanitizeString(area, 80) || undefined,
+    city: sanitizeString(city, 80) || sanitizeString(area, 80) || '',
+    state: sanitizeString(state, 80) || '',
+    country: sanitizeString(country, 60) || 'Nigeria',
+    accuracyMeters: parsedAccuracy,
+    timestamp: timestamp ? String(timestamp) : undefined,
+    capturedAt: capturedAt ? String(capturedAt) : undefined,
+    source: (source as any) || (validCoords ? 'GPS' : 'MANUAL'),
+  };
+
+  return {
+    valid: true,
+    sanitizedLocation: sanitized,
+  };
+}

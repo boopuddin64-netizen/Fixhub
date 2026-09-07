@@ -22,6 +22,7 @@ import { TechnicianStoreSetupView } from './components/technician/TechnicianStor
 import { PartsCatalogView } from './components/technician/PartsCatalogView';
 import { TechnicianProfileView } from './components/technician/TechnicianProfileView';
 import { RepairChatDrawer } from './components/messaging/RepairChatDrawer';
+import { GoogleMapsProvider } from './components/maps/GoogleMapsProvider';
 import { ApiClient } from './api/client';
 import { RepairJob, RepairRequest, RepairQuote, NotificationItem, TechnicianProfile, CustomerDevice } from './types';
 import { Wrench, Plus, Sparkles, AlertCircle, Clock } from 'lucide-react';
@@ -370,7 +371,9 @@ function MainAppContent() {
 export function App() {
   return (
     <AuthProvider>
-      <MainAppContent />
+      <GoogleMapsProvider>
+        <MainAppContent />
+      </GoogleMapsProvider>
     </AuthProvider>
   );
 }

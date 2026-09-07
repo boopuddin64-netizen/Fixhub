@@ -24,6 +24,7 @@ import {
   isValidCoordinates,
   sanitizeCustomerLocationForTechnician,
   sanitizeRepairRequestForTechnician,
+  validateCustomerLocationPayload,
 } from '../utils/validation';
 import { POPULAR_NIGERIAN_LOCATIONS } from '../../src/data/nigerianLocations';
 
@@ -517,6 +518,95 @@ apiRouter.post('/technicians/match', (req: Request, res: Response) => {
 });
 
 /* -------------------------------------------------------------
+ * 3.1 GOOGLE MAPS PLATFORM GEOCODING PROXY
+ * ----------------------------------------------------------- */
+apiRouter.get('/maps/geocode/reverse', async (req: Request, res: Response) => {
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+
+  if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
+    return res.status(400).json({ error: 'Valid lat and lng query parameters are required' });
+  }
+
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
+
+  if (apiKey) {
+    try {
+      const gUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${encodeURIComponent(lat)},${encodeURIComponent(lng)}&key=${encodeURIComponent(apiKey)}&region=ng`;
+      const response = await fetch(gUrl);
+      const data = (await response.json()) as any;
+
+      if (data && data.status === 'OK' && Array.isArray(data.results) && data.results.length > 0) {
+        const top = data.results[0];
+        let street = '';
+        let neighborhood = '';
+        let city = '';
+        let state = '';
+        let country = 'Nigeria';
+
+        if (Array.isArray(top.address_components)) {
+          for (const comp of top.address_components) {
+            const types = comp.types || [];
+            if (types.includes('route') || types.includes('street_address')) {
+              street = comp.long_name;
+            } else if (types.includes('sublocality') || types.includes('neighborhood')) {
+              neighborhood = comp.long_name;
+            } else if (types.includes('locality') || types.includes('administrative_area_level_2')) {
+              city = comp.long_name;
+            } else if (types.includes('administrative_area_level_1')) {
+              state = comp.long_name;
+            } else if (types.includes('country')) {
+              country = comp.long_name;
+            }
+          }
+        }
+
+        return res.json({
+          resolved: true,
+          location: {
+            address: top.formatted_address,
+            street,
+            landmark: neighborhood || undefined,
+            area: neighborhood || city,
+            city: city || 'Port Harcourt',
+            state: state || 'Rivers State',
+            country,
+          },
+          source: 'GOOGLE_MAPS',
+        });
+      }
+    } catch (err) {
+      console.warn('Google Maps Geocoding API proxy error:', err);
+    }
+  }
+
+  // Fallback to local Rivers State catalog lookup
+  const locMatch = POPULAR_NIGERIAN_LOCATIONS.find((loc) => {
+    const dLat = Math.abs(loc.lat - lat);
+    const dLng = Math.abs(loc.lng - lng);
+    return dLat < 0.08 && dLng < 0.08;
+  });
+
+  if (locMatch) {
+    return res.json({
+      resolved: true,
+      location: {
+        address: locMatch.landmark ? `${locMatch.name} (near ${locMatch.landmark})` : locMatch.name,
+        street: locMatch.name,
+        landmark: locMatch.landmark,
+        area: locMatch.name,
+        city: locMatch.city,
+        state: locMatch.state,
+        country: 'Nigeria',
+      },
+      source: 'LOCAL_CATALOG',
+    });
+  }
+
+  return res.json({ resolved: false });
+});
+
+/* -------------------------------------------------------------
  * 4. REPAIR REQUESTS, DRAFTS & QUOTING (Strict Role & Ownership Isolation)
  * ----------------------------------------------------------- */
 
@@ -781,23 +871,9 @@ apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req
   geocodeCustomerLocation(customerLocation);
 
   const isProduction = process.env.NODE_ENV === 'production';
-  const hasCoordinates = isValidCoordinates(customerLocation.lat, customerLocation.lng) && 
-                         Number(customerLocation.lat) !== 0 && 
-                         Number(customerLocation.lng) !== 0;
-
-  const hasManualText = isNonEmptyString(customerLocation.address) || 
-                        isNonEmptyString(customerLocation.area) || 
-                        isNonEmptyString(customerLocation.city) || 
-                        isNonEmptyString(customerLocation.state);
-
-  if (!hasCoordinates && !hasManualText) {
-    return res.status(400).json({ error: 'Please enable GPS location or manually enter/select a valid location.' });
-  }
-
-  if (isProduction && (customerLocation.source === 'DEVELOPMENT_FALLBACK' || 
-      (Number(customerLocation.lat) === 4.8156 && Number(customerLocation.lng) === 7.0498) ||
-      (Number(customerLocation.lat) === 4.8156 && Number(customerLocation.lng) === 7.0128))) {
-    return res.status(400).json({ error: 'Development fallback locations are not allowed in production. Please select or enter a real location.' });
+  const locationValidation = validateCustomerLocationPayload(customerLocation, isProduction);
+  if (!locationValidation.valid || !locationValidation.sanitizedLocation) {
+    return res.status(400).json({ error: locationValidation.error || 'Invalid location data.' });
   }
 
   if (!isNonEmptyString(deviceBrand) || !isNonEmptyString(deviceModel)) {
@@ -825,20 +901,7 @@ apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req
     return res.status(200).json(recentDuplicate);
   }
 
-  const validatedLocation = {
-    lat: Number(customerLocation.lat),
-    lng: Number(customerLocation.lng),
-    address: sanitizeString(customerLocation.address, 200) || `${customerLocation.area || ''}${customerLocation.city ? `, ${customerLocation.city}` : ''}`,
-    landmark: sanitizeString(customerLocation.landmark, 100),
-    area: sanitizeString(customerLocation.area, 80),
-    city: sanitizeString(customerLocation.city, 80) || customerLocation.area || '',
-    state: sanitizeString(customerLocation.state, 80) || '',
-    accuracyMeters: customerLocation.accuracyMeters ? Number(customerLocation.accuracyMeters) : undefined,
-    timestamp: customerLocation.timestamp,
-    capturedAt: customerLocation.capturedAt,
-    country: customerLocation.country || 'Nigeria',
-    source: customerLocation.source,
-  };
+  const validatedLocation = locationValidation.sanitizedLocation;
 
   const safePhotos = Array.isArray(photos)
     ? photos.filter((p) => typeof p === 'string').slice(0, 3)
@@ -1026,40 +1089,13 @@ apiRouter.patch('/repairs/requests/:id/location', requireAuth, requireRole(['cus
   geocodeCustomerLocation(customerLocation);
 
   const isProduction = process.env.NODE_ENV === 'production';
-  const hasCoordinates = isValidCoordinates(customerLocation.lat, customerLocation.lng) && 
-                         Number(customerLocation.lat) !== 0 && 
-                         Number(customerLocation.lng) !== 0;
-
-  const hasManualText = isNonEmptyString(customerLocation.address) || 
-                        isNonEmptyString(customerLocation.area) || 
-                        isNonEmptyString(customerLocation.city) || 
-                        isNonEmptyString(customerLocation.state);
-
-  if (!hasCoordinates && !hasManualText) {
-    return res.status(400).json({ error: 'Please enable GPS location or manually enter/select a valid location.' });
+  const locationValidation = validateCustomerLocationPayload(customerLocation, isProduction);
+  if (!locationValidation.valid || !locationValidation.sanitizedLocation) {
+    return res.status(400).json({ error: locationValidation.error || 'Invalid location data.' });
   }
 
-  if (isProduction && (customerLocation.source === 'DEVELOPMENT_FALLBACK' || 
-      (Number(customerLocation.lat) === 4.8156 && Number(customerLocation.lng) === 7.0498) ||
-      (Number(customerLocation.lat) === 4.8156 && Number(customerLocation.lng) === 7.0128))) {
-    return res.status(400).json({ error: 'Development fallback locations are not allowed in production. Please select or enter a real location.' });
-  }
-
-  request.customerLocation = {
-    lat: customerLocation.lat ?? 0,
-    lng: customerLocation.lng ?? 0,
-    address: sanitizeString(customerLocation.address, 200) || '',
-    landmark: sanitizeString(customerLocation.landmark, 100),
-    area: sanitizeString(customerLocation.area, 80) || '',
-    city: sanitizeString(customerLocation.city, 80) || customerLocation.area || '',
-    state: sanitizeString(customerLocation.state, 80) || '',
-    accuracyMeters: customerLocation.accuracyMeters ? Number(customerLocation.accuracyMeters) : undefined,
-    timestamp: customerLocation.timestamp,
-    capturedAt: customerLocation.capturedAt,
-    country: customerLocation.country || 'Nigeria',
-    source: customerLocation.source || 'MANUAL',
-  };
-
+  // Authoritative location saved, preserving real GPS coordinates
+  request.customerLocation = locationValidation.sanitizedLocation;
   request.updatedAt = new Date().toISOString();
 
   // Re-match technicians
@@ -1070,6 +1106,7 @@ apiRouter.patch('/repairs/requests/:id/location', requireAuth, requireRole(['cus
     issues: request.issues,
   });
 
+  db.save();
   return res.json({ success: true, request, matchedTechnicians });
 });
 

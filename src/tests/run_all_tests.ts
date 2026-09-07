@@ -6,6 +6,8 @@ import { RepairWorkflowService } from '../../server/services/repairWorkflowServi
 import { QuoteAccuracyService } from '../../server/services/quoteAccuracyService';
 import { AuditService } from '../../server/services/auditService';
 import { runPhase3CertificationSuite } from './phase3_certification';
+import { runLocationFixTests } from './location_fix.test';
+import { runGoogleMapsIntegrationTests } from './google_maps_integration.test';
 import {
   validateNumber,
   isValidCoordinates,
@@ -754,6 +756,16 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   const certResults = await runPhase3CertificationSuite();
   passed += certResults.passed;
   failed += certResults.failed;
+
+  // Run the 12 Location Architecture & Phase 3 Verification tests
+  const locationResults = await runLocationFixTests();
+  passed += locationResults.passed;
+  failed += locationResults.failed;
+
+  // Run Google Maps Platform Integration tests
+  const gmpResults = await runGoogleMapsIntegrationTests();
+  passed += gmpResults.passed;
+  failed += gmpResults.failed;
 
   console.log('\n===============================================================');
   console.log(`   GLOBAL TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);
