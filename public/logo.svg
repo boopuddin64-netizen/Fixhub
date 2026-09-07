@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="fhBgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+
+    <!-- Phone Glass Screen Gradient -->
+    <linearGradient id="fhScreenGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a8a" />
+      <stop offset="60%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+
+    <!-- Emerald Escrow Gradient -->
+    <linearGradient id="fhShieldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+
+    <!-- Tool Metallic Gradient -->
+    <linearGradient id="fhToolGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="50%" stop-color="#e2e8f0" />
+      <stop offset="100%" stop-color="#94a3b8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Base Rounded Container with subtle border -->
+  <rect x="6" y="6" width="108" height="108" rx="26" fill="url(#fhBgGradient)" stroke="#334155" stroke-width="2" />
+
+  <!-- Smartphone Body Frame -->
+  <rect x="26" y="16" width="48" height="84" rx="10" fill="#0b1120" stroke="#475569" stroke-width="2.5" />
+  <!-- Screen Glass Area -->
+  <rect x="30" y="24" width="40" height="66" rx="5" fill="url(#fhScreenGradient)" opacity="0.95" />
+  <!-- Phone Speaker / Camera Notch -->
+  <rect x="42" y="19" width="16" height="2.5" rx="1.25" fill="#64748b" />
+  <!-- Phone Home Bar -->
+  <rect x="43" y="84" width="14" height="2" rx="1" fill="#ffffff" opacity="0.6" />
+
+  <!-- Precision Repair Cross-Tools (Wrench + Bit) -->
+  <!-- Diagonal Wrench Shaft -->
+  <g transform="rotate(-35 60 55)">
+    <!-- Wrench Head 1 -->
+    <path d="M 52 30 C 47 33 46 40 50 45 L 53 43 C 51 39 52 35 55 33 Z" fill="url(#fhToolGradient)" />
+    <!-- Wrench Handle -->
+    <rect x="53" y="38" width="8" height="36" rx="3.5" fill="url(#fhToolGradient)" filter="drop-shadow(0 2px 4px rgba(0,0,0,0.4))" />
+    <!-- Center Grip Groove -->
+    <rect x="55.5" y="44" width="3" height="22" rx="1.5" fill="#475569" opacity="0.5" />
+    <!-- Wrench Head 2 -->
+    <path d="M 54 74 C 50 78 51 85 56 88 L 58 85 C 55 83 54 79 57 76 Z" fill="url(#fhToolGradient)" />
+  </g>
+
+  <!-- Escrow Security Shield & Lock Badge (Bottom Right Anchor) -->
+  <g transform="translate(62, 58)">
+    <!-- Outer Shield Glow / Border -->
+    <path d="M 22 2 L 40 8 C 40 26 28 39 22 44 C 16 39 4 26 4 8 Z" fill="#092f22" opacity="0.9" />
+    <!-- Inner Shield Body -->
+    <path d="M 22 4 L 38 10 C 38 25 27 37 22 41 C 17 37 6 25 6 10 Z" fill="url(#fhShieldGradient)" stroke="#34d399" stroke-width="1.5" />
+    <!-- Security Padlock Inside Shield -->
+    <!-- Shackle -->
+    <path d="M 18 19 L 18 16 C 18 13.8 19.8 12 22 12 C 24.2 12 26 13.8 26 16 L 26 19" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" />
+    <!-- Lock Body -->
+    <rect x="15" y="19" width="14" height="11" rx="2.5" fill="#ffffff" />
+    <!-- Keyhole / Checkmark Accent -->
+    <circle cx="22" cy="23.5" r="1.5" fill="#047857" />
+    <path d="M 22 24.5 L 22 27.5" stroke="#047857" stroke-width="1.5" stroke-linecap="round" />
+  </g>
+</svg>

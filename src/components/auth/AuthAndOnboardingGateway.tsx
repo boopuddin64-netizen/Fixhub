@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { FixhubLogo } from '../common/FixhubLogo';
 import {
   Smartphone,
   Wrench,
@@ -23,11 +24,13 @@ import {
 interface AuthAndOnboardingGatewayProps {
   onComplete: () => void;
   initialRole?: 'customer' | 'technician';
+  onOpenIntro?: () => void;
 }
 
 export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> = ({
   onComplete,
   initialRole = 'customer',
+  onOpenIntro,
 }) => {
   const { login, registerCustomer, registerTechnician, isLoading } = useAuth();
 
@@ -44,8 +47,8 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
   const [custPassword, setCustPassword] = useState('password123');
   const [custAddress, setCustAddress] = useState('');
   const [custLandmark, setCustLandmark] = useState('');
-  const [custCity, setCustCity] = useState('Lagos');
-  const [custState, setCustState] = useState('Lagos State');
+  const [custCity, setCustCity] = useState('Port Harcourt');
+  const [custState, setCustState] = useState('Rivers State');
   const [custIsBorrowed, setCustIsBorrowed] = useState(false);
 
   // Technician Registration State
@@ -56,8 +59,8 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
   const [techPassword, setTechPassword] = useState('password123');
   const [techShopAddress, setTechShopAddress] = useState('');
   const [techLandmark, setTechLandmark] = useState('');
-  const [techArea, setTechArea] = useState('Computer Village, Ikeja');
-  const [techCity, setTechCity] = useState('Lagos');
+  const [techArea, setTechArea] = useState('Garrison, Port Harcourt');
+  const [techCity, setTechCity] = useState('Port Harcourt');
   const [techSupportedBrands, setTechSupportedBrands] = useState<string[]>([
     'Apple',
     'Samsung',
@@ -97,27 +100,27 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
   };
 
   const handlePreFillCustomerRegister = () => {
-    setCustName('Tunde Adebayo');
+    setCustName('Tamuno Briggs');
     setCustPhone('+234 803 123 4567');
-    setCustEmail(`tunde.${Date.now().toString().slice(-4)}@fixhub.ng`);
+    setCustEmail(`tamuno.${Date.now().toString().slice(-4)}@fixhub.ng`);
     setCustPassword('password123');
-    setCustAddress('24 Allen Avenue, Ikeja');
-    setCustLandmark('Beside Ikeja City Mall');
-    setCustCity('Lagos');
-    setCustState('Lagos State');
+    setCustAddress('Plot 14 Aba Road, Garrison');
+    setCustLandmark('Near Garrison Junction');
+    setCustCity('Port Harcourt');
+    setCustState('Rivers State');
     setCustIsBorrowed(false);
   };
 
   const handlePreFillTechnicianRegister = () => {
-    setTechName('Emeka Okafor');
-    setTechBusinessName('Okafor Express Fix & Micro-Soldering');
+    setTechName('Baridura Nwiido');
+    setTechBusinessName('Rivers Precision Microsoldering & Tech Hub');
     setTechPhone('+234 802 987 6543');
-    setTechEmail(`emeka.${Date.now().toString().slice(-4)}@fixhub.ng`);
+    setTechEmail(`baridura.${Date.now().toString().slice(-4)}@fixhub.ng`);
     setTechPassword('password123');
-    setTechShopAddress('Shop 14, Digital Bridge Plaza, Computer Village, Ikeja');
-    setTechLandmark('Near Medical Road Junction');
-    setTechArea('Computer Village, Ikeja');
-    setTechCity('Lagos');
+    setTechShopAddress('Shop 12, Garrison Tech Plaza, Aba Road');
+    setTechLandmark('Near Garrison Junction');
+    setTechArea('Garrison, Port Harcourt');
+    setTechCity('Port Harcourt');
     setTechSupportedBrands(['Apple', 'Samsung', 'Google Pixel', 'Tecno', 'Infinix']);
   };
 
@@ -168,7 +171,7 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
         landmark: techLandmark,
         area: techArea,
         city: techCity,
-        state: 'Lagos State',
+        state: 'Rivers State',
         supportedBrands: techSupportedBrands,
       });
       onComplete();
@@ -183,17 +186,29 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
       className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4 sm:p-6"
     >
       {/* Brand Header */}
-      <div className="w-full max-w-xl text-center space-y-2 mb-6">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-bold uppercase tracking-wider">
-          <ShieldCheck className="w-4 h-4 text-blue-400" />
-          <span>Fix Hub Nigeria • Certified Repair Marketplace</span>
+      <div className="w-full max-w-xl text-center space-y-3 mb-6 flex flex-col items-center">
+        <FixhubLogo size="lg" theme="dark" variant="full" showTagline={false} />
+
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Port Harcourt & Rivers State • 100% Escrow Protection</span>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-          Nigeria's Safe Phone Repair & Escrow Hub
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
-          Verified Computer Village workshops, escrow buyer security, intake scans, and 90-day digital warranty passports.
+
+        <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
+          Connect with verified local phone technicians. Your money is protected in escrow until you inspect and test your device.
         </p>
+
+        {onOpenIntro && (
+          <button
+            type="button"
+            id="auth-open-intro-guide-btn"
+            onClick={onOpenIntro}
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold cursor-pointer transition-colors"
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-emerald-400" />
+            <span>How Fixhub Works (Intro Guide)</span>
+          </button>
+        )}
       </div>
 
       {/* Main Authentication Card */}
@@ -461,13 +476,13 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
             </div>
 
             <div>
-              <label className="font-bold text-slate-300 block mb-1">Delivery / Pickup Address in Lagos</label>
+              <label className="font-bold text-slate-300 block mb-1">Your Location Address (e.g. Aba Road, Port Harcourt)</label>
               <input
                 type="text"
                 value={custAddress}
                 onChange={(e) => setCustAddress(e.target.value)}
                 required
-                placeholder="24 Allen Avenue, Ikeja"
+                placeholder="e.g. Plot 14 Aba Road, Garrison"
                 className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>

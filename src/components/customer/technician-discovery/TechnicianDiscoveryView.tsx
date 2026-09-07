@@ -143,6 +143,7 @@ export const TechnicianDiscoveryView: React.FC<TechnicianDiscoveryViewProps> = (
       <TechnicianDetailsView
         match={selectedMatch}
         onBack={() => setSelectedMatch(null)}
+        customerLocation={request?.customerLocation}
       />
     );
   }
@@ -340,6 +341,7 @@ export const TechnicianDiscoveryView: React.FC<TechnicianDiscoveryViewProps> = (
               key={match.technician.userId}
               match={match}
               onViewShop={() => setSelectedMatch(match)}
+              customerLocation={request?.customerLocation}
             />
           ))}
         </div>

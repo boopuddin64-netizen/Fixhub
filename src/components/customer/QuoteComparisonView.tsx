@@ -198,7 +198,7 @@ export const QuoteComparisonView: React.FC<QuoteComparisonViewProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
-            {request.customerLocation?.address || 'Lagos'} ({request.customerLocation?.area || request.customerLocation?.city || 'Lagos'})
+            {request.customerLocation?.address || request.customerLocation?.city || 'Rivers State'} {request.customerLocation?.area ? `(${request.customerLocation.area})` : ''}
           </p>
         </div>
         <div className="text-right">

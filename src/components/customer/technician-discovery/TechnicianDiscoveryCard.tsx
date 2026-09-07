@@ -5,11 +5,13 @@ import { TechnicianMatchResult } from '../../../types';
 interface TechnicianDiscoveryCardProps {
   match: TechnicianMatchResult;
   onViewShop: () => void;
+  customerLocation?: { lat?: number; lng?: number; address?: string };
 }
 
 export const TechnicianDiscoveryCard: React.FC<TechnicianDiscoveryCardProps> = ({
   match,
   onViewShop,
+  customerLocation,
 }) => {
   const { technician, distanceKm, breakdown } = match;
   const rating = technician.rating || 4.8;
@@ -18,8 +20,23 @@ export const TechnicianDiscoveryCard: React.FC<TechnicianDiscoveryCardProps> = (
 
   const handleGetDirections = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const address = encodeURIComponent(`${technician.shopAddress}, ${technician.city || 'Lagos'}`);
-    window.open(`https://www.google.com/maps/search/?api=1&query=${address}`, '_blank', 'noopener,noreferrer');
+    const origin =
+      customerLocation?.lat && customerLocation?.lng
+        ? `${customerLocation.lat},${customerLocation.lng}`
+        : encodeURIComponent(customerLocation?.address || '');
+
+    const destLat = technician.shopLocation?.lat;
+    const destLng = technician.shopLocation?.lng;
+    const destination =
+      destLat && destLng
+        ? `${destLat},${destLng}`
+        : encodeURIComponent(`${technician.shopAddress}, ${technician.city || 'Port Harcourt'}`);
+
+    const url = origin
+      ? `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}`
+      : `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
+
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   return (

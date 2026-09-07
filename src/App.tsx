@@ -23,12 +23,20 @@ import { PartsCatalogView } from './components/technician/PartsCatalogView';
 import { TechnicianProfileView } from './components/technician/TechnicianProfileView';
 import { RepairChatDrawer } from './components/messaging/RepairChatDrawer';
 import { GoogleMapsProvider } from './components/maps/GoogleMapsProvider';
+import { IntroScreen } from './components/intro/IntroScreen';
+import { LoadingIntroScreen } from './components/common/LoadingIntroScreen';
+import { GestureContainer } from './components/common/GestureContainer';
 import { ApiClient } from './api/client';
 import { RepairJob, RepairRequest, RepairQuote, NotificationItem, TechnicianProfile, CustomerDevice } from './types';
 import { Wrench, Plus, Sparkles, AlertCircle, Clock } from 'lucide-react';
 
 function MainAppContent() {
   const { user, role, logout } = useAuth();
+
+  // Fresh-start loading screen animation state
+  const [isLoadingIntro, setIsLoadingIntro] = useState<boolean>(true);
+  const [showIntroGuide, setShowIntroGuide] = useState<boolean>(false);
+  const [preferredInitialRole, setPreferredInitialRole] = useState<'customer' | 'technician'>('customer');
 
   // Navigation State
   const [currentTab, setCurrentTab] = useState<string>('home');
@@ -93,9 +101,118 @@ function MainAppContent() {
     }
   }, [role]);
 
-  // If user is unauthenticated, show the complete Split Onboarding & Registration Screen
+  // Gesture Back Handler (Swipe right)
+  const canGoBack =
+    showIntroGuide ||
+    isChatOpen ||
+    isNotifsOpen ||
+    !!paymentTarget ||
+    showReviewModal ||
+    showDevicesManager ||
+    showWizard ||
+    currentTab === 'discovery' ||
+    currentTab === 'quotes' ||
+    (role === 'technician' && currentTab !== 'dashboard') ||
+    (role === 'customer' && currentTab !== 'home');
+
+  const handleBack = useCallback(() => {
+    // Check if any child component wants to intercept and handle the back navigation (e.g. wizard step back)
+    const customEvent = new CustomEvent('fixhub:navigate-back', { cancelable: true });
+    const wasCancelled = !window.dispatchEvent(customEvent);
+    if (wasCancelled) {
+      return;
+    }
+
+    if (showIntroGuide) {
+      setShowIntroGuide(false);
+      return;
+    }
+    if (isChatOpen) {
+      setIsChatOpen(false);
+      return;
+    }
+    if (isNotifsOpen) {
+      setIsNotifsOpen(false);
+      return;
+    }
+    if (paymentTarget) {
+      setPaymentTarget(null);
+      return;
+    }
+    if (showReviewModal) {
+      setShowReviewModal(false);
+      return;
+    }
+    if (showDevicesManager) {
+      setShowDevicesManager(false);
+      return;
+    }
+    if (showWizard) {
+      setShowWizard(false);
+      setWizardPrefill(null);
+      return;
+    }
+    if (currentTab === 'discovery') {
+      setCurrentTab('repairs');
+      return;
+    }
+    if (currentTab === 'quotes') {
+      setCurrentTab('home');
+      return;
+    }
+    if (role === 'technician') {
+      if (currentTab !== 'dashboard') {
+        setCurrentTab('dashboard');
+      }
+    } else {
+      if (currentTab !== 'home') {
+        setCurrentTab('home');
+      }
+    }
+  }, [
+    showIntroGuide,
+    isChatOpen,
+    isNotifsOpen,
+    paymentTarget,
+    showReviewModal,
+    showDevicesManager,
+    showWizard,
+    currentTab,
+    role,
+  ]);
+
+  // If user is unauthenticated, show the complete Split Onboarding & Registration Screen or Fresh Intro
   if (!user) {
-    return <AuthAndOnboardingGateway onComplete={() => loadData()} />;
+    return (
+      <GestureContainer
+        onBack={showIntroGuide ? () => setShowIntroGuide(false) : undefined}
+        onRefresh={loadData}
+        canGoBack={showIntroGuide}
+      >
+        {/* Fresh Start Loading Screen Animation */}
+        {isLoadingIntro && (
+          <LoadingIntroScreen
+            onComplete={() => setIsLoadingIntro(false)}
+            minDurationMs={1900}
+          />
+        )}
+
+        {showIntroGuide ? (
+          <IntroScreen
+            onComplete={(prefRole) => {
+              setShowIntroGuide(false);
+              if (prefRole) setPreferredInitialRole(prefRole);
+            }}
+          />
+        ) : (
+          <AuthAndOnboardingGateway
+            onComplete={() => loadData()}
+            initialRole={preferredInitialRole}
+            onOpenIntro={() => setShowIntroGuide(true)}
+          />
+        )}
+      </GestureContainer>
+    );
   }
 
   const activeJobs = jobs.filter((j) => j.status !== 'COMPLETED' && j.status !== 'CANCELLED');
@@ -104,12 +221,15 @@ function MainAppContent() {
   const activeJobTech = activeJob ? technicians.find((t) => t.userId === activeJob.technicianId) : null;
 
   return (
-    <div className="min-h-screen bg-slate-100/70 text-slate-900 flex flex-col font-sans selection:bg-blue-500 selection:text-white">
-      {/* Top Main App Header */}
-      <Header
-        onOpenNotifications={() => setIsNotifsOpen(true)}
-        unreadNotifsCount={notifications.filter((n) => !n.read).length}
-      />
+    <GestureContainer onBack={handleBack} onRefresh={loadData} canGoBack={canGoBack}>
+      <div className="min-h-screen bg-slate-100/70 text-slate-900 flex flex-col font-sans selection:bg-blue-500 selection:text-white">
+        {/* Top Main App Header */}
+        <Header
+          onOpenNotifications={() => setIsNotifsOpen(true)}
+          unreadNotifsCount={notifications.filter((n) => !n.read).length}
+          onOpenIntro={() => setShowIntroGuide(true)}
+          onReplayIntro={() => setIsLoadingIntro(true)}
+        />
 
       {/* Guided Workflow Progress Ribbon */}
       <WorkflowProgressRibbon
@@ -364,7 +484,25 @@ function MainAppContent() {
           setCurrentTab('repairs');
         }}
       />
-    </div>
+
+      {/* Fresh Start Loading Screen Animation */}
+      {isLoadingIntro && (
+        <LoadingIntroScreen
+          onComplete={() => setIsLoadingIntro(false)}
+          minDurationMs={1900}
+        />
+      )}
+
+      {/* Interactive Guided Intro Screen Modal (Optional) */}
+      {showIntroGuide && (
+        <IntroScreen
+          onComplete={() => {
+            setShowIntroGuide(false);
+          }}
+        />
+      )}
+      </div>
+    </GestureContainer>
   );
 }
 

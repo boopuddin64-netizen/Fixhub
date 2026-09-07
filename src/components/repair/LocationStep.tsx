@@ -13,16 +13,22 @@ export const LocationStep: React.FC<LocationStepProps> = ({
   onChangeLocation,
   onContinue,
 }) => {
-  const isLocationValid = Boolean(location && (location.address || location.area || location.city));
+  const isLocationValid = Boolean(
+    location &&
+      (location.address ||
+        location.area ||
+        location.city ||
+        (location.lat !== 0 && location.lng !== 0))
+  );
 
   return (
     <div className="space-y-4 animate-fadeIn">
       <div>
         <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">
-          Where should we find technicians?
+          Set your location
         </h3>
         <p className="text-xs sm:text-sm text-slate-500 mt-1">
-          Provide your repair location so we match you with nearby verified repair shops.
+          Provide your location so we can match you with nearby verified repair shops.
         </p>
       </div>
 

@@ -11,7 +11,7 @@ interface GooglePlaceAutocompleteProps {
 
 export const GooglePlaceAutocomplete: React.FC<GooglePlaceAutocompleteProps> = ({
   onPlaceSelected,
-  placeholder = 'Search Google Maps in Nigeria (e.g. Garrison Junction, Port Harcourt)...',
+  placeholder = 'Search address, street, or area in Nigeria...',
   initialValue = '',
 }) => {
   const placesLib = useMapsLibrary('places');
@@ -121,14 +121,14 @@ export const GooglePlaceAutocomplete: React.FC<GooglePlaceAutocompleteProps> = (
           lng,
           address: formattedAddress,
           landmark: neighborhood || undefined,
-          area: neighborhood || city,
-          city: city || 'Port Harcourt',
-          state: state || 'Rivers State',
+          area: neighborhood || city || undefined,
+          city: city || undefined,
+          state: state || undefined,
           country,
-          source: 'GPS', // Google-verified exact coordinates
+          source: 'GEOCODED',
           capturedAt: new Date().toISOString(),
           timestamp: new Date().toISOString(),
-          accuracyMeters: 5, // Exact place coordinate accuracy
+          accuracyMeters: 5,
         });
       } catch (err) {
         console.error('Failed to fetch place details:', err);

@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { LocationCoordinates } from '../../../types';
 import { searchNigerianLocations, NigerianArea, POPULAR_NIGERIAN_LOCATIONS } from '../../../data/nigerianLocations';
 import { reverseGeocode } from '../../../utils/reverseGeocoding';
-import { MapPin, Navigation, Search, Check, AlertCircle, ExternalLink, RefreshCw, Compass, Globe } from 'lucide-react';
+import { MapPin, Navigation, Search, Check, AlertCircle, ExternalLink, Loader2, X, ChevronDown } from 'lucide-react';
 import { useGoogleMaps } from '../../maps/GoogleMapsProvider';
 import { GooglePlaceAutocomplete } from '../../maps/GooglePlaceAutocomplete';
 import { InteractiveLocationMap } from '../../maps/InteractiveLocationMap';
@@ -18,17 +18,32 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
 }) => {
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchFocused, setSearchFocused] = useState<boolean>(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [iframeBlocked, setIframeBlocked] = useState<boolean>(false);
   const [isManualInput, setIsManualInput] = useState<boolean>(false);
+  const [unresolvedGpsPrompt, setUnresolvedGpsPrompt] = useState<boolean>(false);
+  const [customStreetInput, setCustomStreetInput] = useState<string>('');
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const { hasKey } = useGoogleMaps();
 
-  const isDev = Boolean((import.meta as any).env?.DEV || (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production'));
-  const searchResults = searchNigerianLocations(searchQuery);
+  const isProduction = typeof process !== 'undefined' && process.env?.NODE_ENV === 'production';
+  const isDev = !isProduction && Boolean((import.meta as any).env?.DEV);
 
+  const filteredAreas = searchQuery.trim() ? searchNigerianLocations(searchQuery) : [];
+  const popularHubs = POPULAR_NIGERIAN_LOCATIONS.slice(0, 8);
+
+  const hasLocation = Boolean(
+    location &&
+      (location.lat !== 0 || location.lng !== 0 || location.address || location.city)
+  );
+
+  // 1. Uber/Bolt: Use current location (GPS)
   const handleUseCurrentLocation = () => {
     setLocationError(null);
     setIframeBlocked(false);
+    setUnresolvedGpsPrompt(false);
 
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       setIframeBlocked(true);
@@ -41,17 +56,18 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
       async (pos) => {
         setIsLocating(false);
 
-        // 1. Authoritative real GPS coordinates from device
+        // Authoritative real GPS coordinates from device
         const rawLat = pos.coords.latitude;
         const rawLng = pos.coords.longitude;
         const accuracy = pos.coords.accuracy;
         const timestampIso = new Date(pos.timestamp).toISOString();
 
-        // 2. Reverse geocoding attempt
+        // Reverse geocoding attempt (Layer 1 Google Proxy -> Layer 2 Nominatim)
         const geocodeResult = await reverseGeocode(rawLat, rawLng);
 
         if (geocodeResult.resolved && geocodeResult.location) {
           const loc = geocodeResult.location;
+          setUnresolvedGpsPrompt(false);
           onChange({
             lat: rawLat,
             lng: rawLng,
@@ -67,9 +83,9 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
             source: 'GPS',
           });
         } else {
-          // Geocoding failed: DO NOT fabricate or invent a city/state!
-          // Retain authoritative coordinates, accuracy, timestamp, source = "GPS"
-          setIsManualInput(true);
+          // State 2: GPS Succeeded, but Reverse Geocoding Unresolved
+          // REAL GPS coordinates remain source of truth! NEVER fabricate city/state or substitute hub!
+          setUnresolvedGpsPrompt(true);
           onChange({
             lat: rawLat,
             lng: rawLng,
@@ -88,9 +104,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
       },
       (err) => {
         setIsLocating(false);
-        console.warn('Geolocation blocked or unavailable in preview environment:', err);
-        // Explicitly identify browser/iframe restriction
-        // NEVER fabricate or silently switch to Port Harcourt
+        console.warn('Geolocation unavailable or restricted:', err);
         setIframeBlocked(true);
         setLocationError('Live location is unavailable in this preview.');
       },
@@ -108,7 +122,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
     onChange({
       lat: area.lat,
       lng: area.lng,
-      address: `${area.name}, ${area.city}`,
+      address: area.landmark ? `${area.name} (near ${area.landmark})` : `${area.name}, ${area.city}`,
       landmark: area.landmark,
       area: area.name,
       city: area.city,
@@ -117,8 +131,22 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
       source: 'MANUAL',
     });
     setSearchQuery('');
+    setSearchFocused(false);
     setLocationError(null);
     setIframeBlocked(false);
+    setUnresolvedGpsPrompt(false);
+  };
+
+  const handleSaveUnresolvedStreet = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!location) return;
+    onChange({
+      ...location,
+      address: customStreetInput.trim() || location.address,
+      area: customStreetInput.trim() || location.area,
+      source: 'GPS', // GPS coordinates remain authoritative!
+    });
+    setUnresolvedGpsPrompt(false);
   };
 
   const updateManualField = (fields: Partial<LocationCoordinates>) => {
@@ -139,129 +167,308 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
       ...fields,
     };
 
-    // If coordinates were 0 and not GPS, attempt local lookup match
     if (!isPreservingGps && updated.lat === 0 && updated.lng === 0) {
-      const matchedArea = searchNigerianLocations(updated.city || updated.area || updated.state)[0];
-      if (matchedArea) {
-        updated.lat = matchedArea.lat;
-        updated.lng = matchedArea.lng;
-        if (!updated.state) updated.state = matchedArea.state;
+      const matched = searchNigerianLocations(updated.city || updated.area || updated.state)[0];
+      if (matched) {
+        updated.lat = matched.lat;
+        updated.lng = matched.lng;
+        if (!updated.state) updated.state = matched.state;
       }
     }
 
     onChange(updated);
   };
 
-  const hasLocation = Boolean(
-    location &&
-      (location.lat !== 0 || location.lng !== 0 || location.address || location.city)
-  );
-
   return (
     <div id="repair-location-selector" className="space-y-4">
-      {/* ACTIVE LOCATION DISPLAY CARD */}
+      {/* 1. UBER/BOLT SEARCH & GPS BAR */}
+      <div className="space-y-2.5">
+        {/* Unified Search Input */}
+        <div className="relative">
+          {hasKey ? (
+            <GooglePlaceAutocomplete
+              onPlaceSelected={(newLoc) => {
+                onChange(newLoc);
+                setLocationError(null);
+                setIframeBlocked(false);
+                setUnresolvedGpsPrompt(false);
+              }}
+              placeholder="Where are you located? (Search address, area, or landmark)..."
+              initialValue={location?.address || ''}
+            />
+          ) : (
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+              <input
+                ref={searchInputRef}
+                id="location-search-input"
+                type="text"
+                placeholder="Where are you located? (e.g. Garrison, Aba Road, Rumuola)..."
+                value={searchQuery}
+                onFocus={() => setSearchFocused(true)}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-10 py-3 rounded-2xl border border-slate-200/90 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 shadow-2xs transition-all"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSearchFocused(false);
+                  }}
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 p-1 cursor-pointer bg-transparent border-none"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Autocomplete Suggestions Dropdown (for catalog search when Google Places is not configured) */}
+          {!hasKey && searchFocused && (
+            <div className="absolute top-full left-0 right-0 mt-1.5 z-30 bg-white rounded-2xl border border-slate-200 shadow-lg max-h-60 overflow-y-auto divide-y divide-slate-100">
+              {filteredAreas.length > 0 ? (
+                filteredAreas.map((area, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleSelectArea(area)}
+                    className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <MapPin className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <div>
+                        <p className="text-xs font-bold text-slate-900">{area.name}</p>
+                        <p className="text-[11px] text-slate-500">
+                          {area.city}, {area.state} {area.landmark ? `• near ${area.landmark}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    {area.isTechHub && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200/60">
+                        Repair Hub
+                      </span>
+                    )}
+                  </button>
+                ))
+              ) : searchQuery.trim() ? (
+                <div className="p-4 text-center">
+                  <p className="text-xs text-slate-600 font-medium">
+                    No predefined area found for "{searchQuery}".
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange({
+                        lat: location?.lat || 4.8156,
+                        lng: location?.lng || 7.0128,
+                        address: searchQuery.trim(),
+                        area: searchQuery.trim(),
+                        city: 'Port Harcourt',
+                        state: 'Rivers State',
+                        country: 'Nigeria',
+                        source: 'MANUAL',
+                      });
+                      setSearchFocused(false);
+                    }}
+                    className="mt-2 text-xs text-emerald-700 font-bold hover:underline cursor-pointer"
+                  >
+                    Set "{searchQuery}" as my location
+                  </button>
+                </div>
+              ) : (
+                <div className="p-3">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    Popular Areas in Rivers State
+                  </p>
+                  <div className="space-y-1">
+                    {popularHubs.map((hub, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => handleSelectArea(hub)}
+                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 flex items-center justify-between cursor-pointer"
+                      >
+                        <span className="text-xs font-bold text-slate-800">{hub.name}</span>
+                        <span className="text-[10px] text-slate-400">{hub.city}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Use Current Location Button */}
+        <button
+          type="button"
+          id="btn-use-current-location"
+          onClick={handleUseCurrentLocation}
+          disabled={isLocating}
+          className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white text-xs font-bold transition-all shadow-2xs cursor-pointer disabled:opacity-50"
+        >
+          {isLocating ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin text-emerald-200" />
+              <span>Finding your location...</span>
+            </>
+          ) : (
+            <>
+              <Navigation className="w-4 h-4 text-emerald-200" />
+              <span>Use current location</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* STATE 3: GPS BLOCKED BY BROWSER / IFRAME */}
+      {iframeBlocked && (
+        <div
+          id="state-gps-blocked"
+          className="p-4 rounded-2xl bg-amber-50/90 border border-amber-200 space-y-3 animate-fadeIn"
+        >
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1 text-xs">
+              <p className="font-extrabold text-amber-950">
+                Live location is unavailable in this preview.
+              </p>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Embedded browser iframes restrict device GPS access. You can search your area below or open Fixhub in a new browser tab.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+            <button
+              type="button"
+              id="btn-select-manually"
+              onClick={() => {
+                if (searchInputRef.current) {
+                  searchInputRef.current.focus();
+                }
+              }}
+              className="flex items-center justify-center gap-1.5 py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-2xs transition-all cursor-pointer"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span>Search Area</span>
+            </button>
+
+            <button
+              type="button"
+              id="btn-open-new-tab"
+              onClick={handleOpenInNewTab}
+              className="flex items-center justify-center gap-1.5 py-2 px-3 bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold rounded-xl border border-slate-300 shadow-2xs transition-all cursor-pointer"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+              <span>Open in New Tab</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* STATE 2: GPS FOUND BUT UNRESOLVED STREET ADDRESS */}
+      {unresolvedGpsPrompt && location?.source === 'GPS' && (
+        <form
+          onSubmit={handleSaveUnresolvedStreet}
+          className="p-4 rounded-2xl bg-blue-50 border border-blue-200 space-y-2.5 animate-fadeIn"
+        >
+          <div className="flex items-start gap-2">
+            <MapPin className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-xs font-extrabold text-blue-950">
+                We found your coordinates, but could not resolve your street address.
+              </p>
+              <p className="text-[11px] text-blue-800">
+                Please enter your street name or nearest landmark so technicians can find you.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <input
+              type="text"
+              value={customStreetInput}
+              onChange={(e) => setCustomStreetInput(e.target.value)}
+              placeholder="e.g. 15 Aba Road, near Garrison Junction"
+              className="flex-1 px-3 py-2 rounded-xl border border-blue-200 bg-white text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            />
+            <button
+              type="submit"
+              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-2xs cursor-pointer shrink-0"
+            >
+              Save
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* 2. INTERACTIVE MAP (Uber/Bolt style) */}
+      <InteractiveLocationMap
+        location={
+          location && (location.lat !== 0 || location.lng !== 0)
+            ? location
+            : {
+                lat: 4.8156,
+                lng: 7.0128,
+                address: 'Port Harcourt, Rivers State',
+                area: 'Garrison',
+                city: 'Port Harcourt',
+                state: 'Rivers State',
+                country: 'Nigeria',
+                source: 'MANUAL',
+              }
+        }
+        onChangeLocation={(newLoc) => {
+          onChange(newLoc);
+          setUnresolvedGpsPrompt(false);
+          setLocationError(null);
+        }}
+      />
+
+      {/* 3. ACTIVE SELECTED LOCATION CARD */}
       {hasLocation && location ? (
         <div
           id="active-location-card"
-          className={`p-4 rounded-2xl border space-y-2 ${
-            location.source === 'DEVELOPMENT_FALLBACK'
-              ? 'bg-amber-50/80 border-amber-300'
-              : location.source === 'GPS' && (!location.city || !location.state)
-              ? 'bg-amber-50 border-amber-200'
-              : location.source === 'GPS'
-              ? 'bg-emerald-50 border-emerald-200'
-              : 'bg-slate-50 border-slate-200'
-          }`}
+          className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1.5"
         >
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-start gap-2.5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
-                  location.source === 'DEVELOPMENT_FALLBACK'
-                    ? 'bg-amber-600 text-white'
-                    : location.source === 'GPS'
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-slate-700 text-white'
+                className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                  location.source === 'GPS'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-slate-100 text-slate-700'
                 }`}
               >
-                <MapPin className="w-4 h-4" />
+                <MapPin className="w-5 h-5" />
               </div>
-              <div className="space-y-1">
-                {/* State Labels */}
-                <span className="text-[11px] font-bold uppercase tracking-wider block">
-                  {location.source === 'GPS' && location.city && location.state ? (
-                    // State A: GPS detected with resolved location
-                    <span id="state-gps-detected" className="text-emerald-800 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                      Live GPS Location Detected
-                    </span>
-                  ) : location.source === 'GPS' ? (
-                    // State B: GPS detected but address unresolved
-                    <span id="state-gps-unresolved" className="text-amber-800 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
-                      GPS Location Detected
-                    </span>
-                  ) : location.source === 'DEVELOPMENT_FALLBACK' ? (
-                    // State E: Development fallback
-                    <span id="state-dev-fallback" className="text-amber-900 font-extrabold flex items-center gap-1">
-                      ⚠️ Development Test Location
-                    </span>
-                  ) : (
-                    // State D: Manual location
-                    <span id="state-manual-location" className="text-slate-700">
-                      Location Selected Manually
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-black text-slate-900 leading-snug">
+                    {location.address || location.area || `${location.city}, ${location.state}`}
+                  </p>
+                  {location.source === 'GPS' && (
+                    <span
+                      id="state-gps-detected"
+                      className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200/60 rounded-full text-[10px] font-bold shrink-0"
+                    >
+                      GPS Confirmed
                     </span>
                   )}
-                </span>
-
-                {/* Location Details */}
-                {location.source === 'DEVELOPMENT_FALLBACK' ? (
-                  <div>
-                    <p className="text-sm font-black text-slate-900">
-                      Port Harcourt, Rivers State
-                    </p>
-                    <p className="text-xs text-slate-600">
-                      Lat: {location.lat.toFixed(4)}, Lng: {location.lng.toFixed(4)} (Development Fallback Only)
-                    </p>
-                  </div>
-                ) : location.source === 'GPS' && (!location.city || !location.state) ? (
-                  // State B Details
-                  <div className="space-y-1">
-                    <p className="text-sm font-black text-slate-900">
-                      Coordinates: {location.lat.toFixed(5)}, {location.lng.toFixed(5)}
-                    </p>
-                    {location.accuracyMeters && (
-                      <p className="text-[10px] font-bold text-amber-900 bg-amber-100/60 px-2 py-0.5 rounded-md inline-block">
-                        Accuracy: ±{Math.round(location.accuracyMeters)} m
-                      </p>
-                    )}
-                    <div className="p-2.5 bg-amber-100/60 border border-amber-300/80 rounded-xl text-[11px] text-amber-900 space-y-1 mt-1 font-medium">
-                      <p className="font-extrabold flex items-center gap-1 text-amber-950">
-                        <AlertCircle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                        <span>Address could not be determined. Please confirm your repair area.</span>
-                      </p>
-                      <p className="text-[10px] text-amber-800">
-                        Your device coordinates have been securely saved. Please fill in your street, city, and state below so technicians can quote accurately.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  // State A or D Details
-                  <div>
-                    <p className="text-sm font-black text-slate-900 leading-snug">
-                      {location.address || location.area || `${location.city}, ${location.state}`}
-                    </p>
-                    <p className="text-xs text-slate-600">
-                      {[location.city, location.state].filter(Boolean).join(', ')}{' '}
-                      {location.landmark ? `(near ${location.landmark})` : ''}
-                    </p>
-                    {location.source === 'GPS' && location.accuracyMeters && (
-                      <p className="text-[10px] font-bold text-emerald-800 bg-emerald-100/50 px-2 py-0.5 rounded-md inline-block mt-1">
-                        Accuracy: ±{Math.round(location.accuracyMeters)} m
-                      </p>
-                    )}
-                  </div>
-                )}
+                  {location.source === 'DEVELOPMENT_FALLBACK' && (
+                    <span
+                      id="state-dev-fallback"
+                      className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-full text-[10px] font-bold shrink-0"
+                    >
+                      Test Location
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500">
+                  {[location.city, location.state].filter(Boolean).join(', ') || 'Nigeria'}
+                  {location.landmark ? ` • near ${location.landmark}` : ''}
+                </p>
               </div>
             </div>
 
@@ -279,296 +486,145 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                 });
                 setLocationError(null);
                 setIframeBlocked(false);
+                setUnresolvedGpsPrompt(false);
               }}
-              className="text-[10px] font-bold text-slate-500 hover:text-slate-800 px-2.5 py-1 rounded bg-slate-100 border border-slate-200 cursor-pointer shrink-0"
+              className="text-xs font-bold text-slate-500 hover:text-slate-800 px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200/80 cursor-pointer shrink-0 transition-colors"
             >
               Change
             </button>
           </div>
         </div>
-      ) : (
-        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-1">
-          <MapPin className="w-6 h-6 text-slate-400 mx-auto" />
-          <p className="text-xs font-bold text-slate-700">No Location Selected Yet</p>
-          <p className="text-[11px] text-slate-500">
-            Choose your area in Rivers State or use your current location to discover certified technicians nearby.
-          </p>
-        </div>
-      )}
+      ) : null}
 
-      {/* INTERACTIVE GOOGLE MAP WITH DRAGGABLE ADVANCED MARKER PIN */}
-      <InteractiveLocationMap
-        location={
-          location && (location.lat !== 0 || location.lng !== 0)
-            ? location
-            : {
+      {/* 4. SUGGESTED AREAS (Rivers State Initial Ecosystem) */}
+      <div className="space-y-2">
+        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+          Suggested Areas in Port Harcourt
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {popularHubs.map((hub, idx) => {
+            const isSelected =
+              location != null &&
+              ((location.lat === hub.lat && location.lng === hub.lng) ||
+                location.area === hub.name);
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleSelectArea(hub)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  isSelected
+                    ? 'bg-emerald-700 text-white shadow-2xs'
+                    : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/80'
+                }`}
+              >
+                {hub.name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 5. MANUAL ADDRESS ENTRY TOGGLE */}
+      <div className="pt-1 border-t border-slate-100">
+        <button
+          type="button"
+          onClick={() => setIsManualInput(!isManualInput)}
+          className="text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 cursor-pointer bg-transparent border-none py-1"
+        >
+          <span>{isManualInput ? 'Hide manual address form' : 'Enter address manually'}</span>
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isManualInput ? 'rotate-180' : ''}`} />
+        </button>
+
+        {isManualInput && (
+          <div className="mt-2.5 p-4 rounded-2xl bg-white border border-slate-200/90 space-y-3 shadow-2xs animate-fadeIn">
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                Street Address / Building
+              </label>
+              <input
+                type="text"
+                value={location?.address || ''}
+                onChange={(e) => updateManualField({ address: e.target.value })}
+                placeholder="e.g. 14 Aba Road"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  City / Town
+                </label>
+                <input
+                  type="text"
+                  value={location?.city || ''}
+                  onChange={(e) => updateManualField({ city: e.target.value })}
+                  placeholder="e.g. Port Harcourt"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  State
+                </label>
+                <input
+                  type="text"
+                  value={location?.state || ''}
+                  onChange={(e) => updateManualField({ state: e.target.value })}
+                  placeholder="e.g. Rivers State"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                Nearest Landmark (optional)
+              </label>
+              <input
+                type="text"
+                value={location?.landmark || ''}
+                onChange={(e) => updateManualField({ landmark: e.target.value })}
+                placeholder="e.g. Near Garrison Junction"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 6. DEV ENVIRONMENT ONLY: TEST LOCATION TRIGGER */}
+      {isDev && (
+        <div id="state-dev-panel" className="pt-2">
+          <button
+            type="button"
+            id="dev-fallback-action"
+            onClick={() => {
+              onChange({
                 lat: 4.8156,
-                lng: 7.0498,
-                address: 'Port Harcourt, Rivers State',
+                lng: 7.0128,
+                address: 'Plot 14 Aba Road, Garrison',
+                landmark: 'Garrison Junction',
                 area: 'Garrison',
                 city: 'Port Harcourt',
                 state: 'Rivers State',
                 country: 'Nigeria',
-                source: 'MANUAL',
-              }
-        }
-        onChangeLocation={onChange}
-      />
-
-      {/* OPTION A: USE CURRENT LOCATION BUTTON */}
-      <div className="space-y-2">
-        <button
-          type="button"
-          id="btn-use-current-location"
-          onClick={handleUseCurrentLocation}
-          disabled={isLocating}
-          className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-md cursor-pointer disabled:opacity-50"
-        >
-          <Navigation className={`w-4 h-4 text-emerald-400 ${isLocating ? 'animate-spin' : ''}`} />
-          <span>{isLocating ? 'Detecting your coordinates...' : 'Use my current location'}</span>
-        </button>
-
-        {/* STATE C: GPS BLOCKED BY BROWSER / IFRAME */}
-        {iframeBlocked && (
-          <div
-            id="state-gps-blocked"
-            className="p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-3 animate-fadeIn"
+                source: 'DEVELOPMENT_FALLBACK',
+                accuracyMeters: 25,
+                timestamp: new Date().toISOString(),
+                capturedAt: new Date().toISOString(),
+              });
+              setLocationError(null);
+              setIframeBlocked(false);
+              setUnresolvedGpsPrompt(false);
+            }}
+            className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold rounded-xl border border-dashed border-slate-300 transition-colors cursor-pointer"
           >
-            <div className="flex items-start gap-2.5">
-              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-              <div className="space-y-1 text-xs">
-                <p className="font-extrabold text-amber-950">
-                  Live location is unavailable in this preview.
-                </p>
-                <p className="text-[11px] text-amber-800 leading-relaxed">
-                  Embedded preview iframes restrict access to device GPS. To use live device location, open Fixhub directly in a dedicated tab or select your location manually below.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-              <button
-                type="button"
-                id="btn-open-new-tab"
-                onClick={handleOpenInNewTab}
-                className="flex items-center justify-center gap-1.5 py-2 px-3 bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold rounded-xl border border-slate-300 shadow-2xs transition-all cursor-pointer"
-              >
-                <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
-                <span>Open in New Tab</span>
-              </button>
-
-              <button
-                type="button"
-                id="btn-select-manually"
-                onClick={() => {
-                  setIsManualInput(true);
-                  const searchInput = document.getElementById('location-search-input');
-                  if (searchInput) searchInput.focus();
-                }}
-                className="flex items-center justify-center gap-1.5 py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-2xs transition-all cursor-pointer"
-              >
-                <MapPin className="w-3.5 h-3.5" />
-                <span>Select Location Manually</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Development Fallback Panel (DEV ENVIRONMENT ONLY) */}
-        {isDev && (
-          <div
-            id="state-dev-panel"
-            className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl space-y-2"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-900">
-                Development Test Location (Rivers State)
-              </span>
-              <span className="text-[9px] bg-blue-200 text-blue-900 font-bold px-1.5 py-0.5 rounded">
-                DEV ONLY
-              </span>
-            </div>
-            <p className="text-[11px] text-blue-900 leading-snug">
-              Simulate testing in Port Harcourt, Rivers State. Rejected in production environments.
-            </p>
-            <button
-              type="button"
-              id="dev-fallback-action"
-              onClick={() => {
-                onChange({
-                  lat: 4.8156,
-                  lng: 7.0498,
-                  address: 'Aba Road, Garrison, Port Harcourt',
-                  landmark: 'Garrison Junction',
-                  area: 'Garrison',
-                  city: 'Port Harcourt',
-                  state: 'Rivers State',
-                  country: 'Nigeria',
-                  source: 'DEVELOPMENT_FALLBACK',
-                  accuracyMeters: 25,
-                  timestamp: new Date().toISOString(),
-                  capturedAt: new Date().toISOString(),
-                });
-                setLocationError(null);
-                setIframeBlocked(false);
-              }}
-              className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-2xs transition-all cursor-pointer"
-            >
-              Set Development Test Location (Port Harcourt)
-            </button>
-          </div>
-        )}
-      </div>
-
-      <div className="relative flex items-center justify-center">
-        <div className="border-t border-slate-200 w-full" />
-        <span className="bg-slate-50 px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0">
-          Or select your area
-        </span>
-      </div>
-
-      {/* OPTION B: SEARCH RIVERS STATE HUBS & AREAS */}
-      <div className="space-y-3">
-        {/* Google Places Search (New Places API) */}
-        {hasKey && (
-          <div className="space-y-1.5 p-3 rounded-2xl bg-emerald-50/50 border border-emerald-200">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-extrabold text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
-                <Globe className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Google Places Live Search</span>
-              </span>
-              <span className="text-[9px] bg-emerald-200 text-emerald-900 font-bold px-1.5 py-0.5 rounded">
-                NIGERIA-WIDE
-              </span>
-            </div>
-            <GooglePlaceAutocomplete onPlaceSelected={onChange} />
-          </div>
-        )}
-
-        <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-          <input
-            id="location-search-input"
-            type="text"
-            placeholder="Search Port Harcourt area (e.g. Garrison, Mile 1, Aba Road, Rumuola)..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 shadow-xs"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer bg-transparent border-none"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-
-        {/* Rivers State Seeded Repair Hubs */}
-        <div className="space-y-1.5">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            Rivers State Pre-Seeded Repair Hubs
-          </span>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-1">
-            {searchResults.map((area, idx) => {
-              const isSelected =
-                location != null &&
-                ((location.lat === area.lat && location.lng === area.lng) ||
-                  (location.area === area.name && location.city === area.city));
-              return (
-                <div
-                  key={idx}
-                  onClick={() => handleSelectArea(area)}
-                  className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between text-left ${
-                    isSelected
-                      ? 'border-emerald-600 bg-emerald-50 ring-1 ring-emerald-600/30'
-                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="min-w-0 pr-2">
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-xs font-bold text-slate-900 truncate">
-                        {area.name}
-                      </p>
-                      {area.isTechHub && (
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 font-bold shrink-0">
-                          Tech Hub
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-slate-500 truncate">
-                      {area.city}, {area.state}
-                    </p>
-                  </div>
-                  {isSelected && <Check className="w-4 h-4 text-emerald-600 shrink-0" />}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Toggle Manual Form Input */}
-        <div className="pt-1">
-          <button
-            type="button"
-            onClick={() => setIsManualInput(!isManualInput)}
-            className="text-xs font-bold text-blue-600 hover:text-blue-700 underline cursor-pointer bg-transparent border-none"
-          >
-            {isManualInput ? 'Hide manual address fields' : 'Enter custom street / landmark'}
+            [Dev Only] Quick Fill: Garrison, Port Harcourt
           </button>
-
-          {isManualInput && (
-            <div className="mt-3 p-4 rounded-2xl bg-white border border-slate-200 space-y-3 shadow-xs animate-fadeIn">
-              <div>
-                <label className="text-[11px] font-bold text-slate-700">Street Address</label>
-                <input
-                  type="text"
-                  value={location?.address || ''}
-                  onChange={(e) => updateManualField({ address: e.target.value })}
-                  placeholder="e.g. 14 Aba Road"
-                  className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700">City / LGA</label>
-                  <input
-                    type="text"
-                    value={location?.city || ''}
-                    onChange={(e) => updateManualField({ city: e.target.value })}
-                    placeholder="e.g. Port Harcourt"
-                    className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700">State</label>
-                  <input
-                    type="text"
-                    value={location?.state || ''}
-                    onChange={(e) => updateManualField({ state: e.target.value })}
-                    placeholder="e.g. Rivers State"
-                    className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-700">Nearest Landmark (optional)</label>
-                <input
-                  type="text"
-                  value={location?.landmark || ''}
-                  onChange={(e) => updateManualField({ landmark: e.target.value })}
-                  placeholder="e.g. Near Garrison Junction"
-                  className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                />
-              </div>
-            </div>
-          )}
         </div>
-      </div>
+      )}
     </div>
   );
 };

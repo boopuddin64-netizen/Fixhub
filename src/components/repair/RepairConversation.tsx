@@ -258,6 +258,18 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
     }
   };
 
+  // Support swipe-right gesture navigation across wizard stages
+  useEffect(() => {
+    const handleGestureBack = (e: Event) => {
+      if (stage !== 'device' && stage !== 'submitted' && stage !== 'submitting') {
+        e.preventDefault();
+        handleBack();
+      }
+    };
+    window.addEventListener('fixhub:navigate-back', handleGestureBack);
+    return () => window.removeEventListener('fixhub:navigate-back', handleGestureBack);
+  }, [stage, handleBack]);
+
   const isStagePast = (checkStage: RepairStage): boolean => {
     const stages: RepairStage[] = [
       'device',

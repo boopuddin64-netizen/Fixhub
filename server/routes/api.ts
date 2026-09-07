@@ -565,12 +565,12 @@ apiRouter.get('/maps/geocode/reverse', async (req: Request, res: Response) => {
           resolved: true,
           location: {
             address: top.formatted_address,
-            street,
+            street: street || undefined,
             landmark: neighborhood || undefined,
-            area: neighborhood || city,
-            city: city || 'Port Harcourt',
-            state: state || 'Rivers State',
-            country,
+            area: neighborhood || city || undefined,
+            city: city || undefined,
+            state: state || undefined,
+            country: country || 'Nigeria',
           },
           source: 'GOOGLE_MAPS',
         });
@@ -580,29 +580,7 @@ apiRouter.get('/maps/geocode/reverse', async (req: Request, res: Response) => {
     }
   }
 
-  // Fallback to local Rivers State catalog lookup
-  const locMatch = POPULAR_NIGERIAN_LOCATIONS.find((loc) => {
-    const dLat = Math.abs(loc.lat - lat);
-    const dLng = Math.abs(loc.lng - lng);
-    return dLat < 0.08 && dLng < 0.08;
-  });
-
-  if (locMatch) {
-    return res.json({
-      resolved: true,
-      location: {
-        address: locMatch.landmark ? `${locMatch.name} (near ${locMatch.landmark})` : locMatch.name,
-        street: locMatch.name,
-        landmark: locMatch.landmark,
-        area: locMatch.name,
-        city: locMatch.city,
-        state: locMatch.state,
-        country: 'Nigeria',
-      },
-      source: 'LOCAL_CATALOG',
-    });
-  }
-
+  // Do not substitute with nearest catalog hub - coordinates must remain authentic
   return res.json({ resolved: false });
 });
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { ApiClient } from '../../api/client';
+import { FixhubLogo } from './FixhubLogo';
 import {
   Wrench,
   User as UserIcon,
@@ -12,15 +13,25 @@ import {
   LogOut,
   AlertCircle,
   Building2,
-  ChevronDown
+  ChevronDown,
+  HelpCircle,
+  Sparkles,
+  Play
 } from 'lucide-react';
 
 interface HeaderProps {
   onOpenNotifications: () => void;
   unreadNotifsCount: number;
+  onOpenIntro?: () => void;
+  onReplayIntro?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenNotifications, unreadNotifsCount }) => {
+export const Header: React.FC<HeaderProps> = ({
+  onOpenNotifications,
+  unreadNotifsCount,
+  onOpenIntro,
+  onReplayIntro,
+}) => {
   const { user, role, logout, isBorrowedDevice } = useAuth();
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -69,22 +80,27 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNotifications, unreadNotif
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
           {/* Logo & Tagline */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-blue-500 to-cyan-400 flex items-center justify-center shadow-md shadow-blue-500/20">
-              <Wrench className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-lg tracking-tight text-white">FIX HUB</span>
-                <span className="hidden sm:inline-block text-[11px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-500/20 text-cyan-300 font-semibold border border-blue-400/30">
-                  {role === 'technician' ? 'Technician Portal' : 'Customer Marketplace'}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 -mt-0.5 tracking-wide">Find. Fix. Done.</p>
-            </div>
+            <FixhubLogo size="md" theme="dark" variant="full" />
+            <span className="hidden md:inline-block text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-500/20 text-cyan-300 font-semibold border border-blue-400/30">
+              {role === 'technician' ? 'Technician Portal' : 'Customer Marketplace'}
+            </span>
           </div>
 
           {/* Right Action Controls */}
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* How Fixhub Works / Guide Quick Button */}
+            {onOpenIntro && (
+              <button
+                id="header-intro-guide-btn"
+                onClick={onOpenIntro}
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium border border-slate-700 transition-all cursor-pointer"
+                title="How Fixhub Works"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-emerald-400" />
+                <span>How it works</span>
+              </button>
+            )}
+
             {/* User Account & Switcher Menu Button */}
             <button
               id="open-account-menu-btn"
@@ -165,6 +181,34 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNotifications, unreadNotif
 
             {/* Action Buttons */}
             <div className="space-y-2 pt-2 border-t border-slate-800">
+              {onOpenIntro && (
+                <button
+                  id="menu-how-it-works-btn"
+                  onClick={() => {
+                    setShowAccountMenu(false);
+                    onOpenIntro();
+                  }}
+                  className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 font-semibold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all"
+                >
+                  <HelpCircle className="w-4 h-4 text-emerald-400" />
+                  <span>How Fixhub Works (Guide)</span>
+                </button>
+              )}
+
+              {onReplayIntro && (
+                <button
+                  id="menu-replay-loading-intro-btn"
+                  onClick={() => {
+                    setShowAccountMenu(false);
+                    onReplayIntro();
+                  }}
+                  className="w-full py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/80 font-medium text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all"
+                >
+                  <Play className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Replay Loading Screen Animation</span>
+                </button>
+              )}
+
               <button
                 id="switch-account-logout-btn"
                 onClick={() => {

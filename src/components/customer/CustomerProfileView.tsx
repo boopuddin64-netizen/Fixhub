@@ -100,7 +100,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
             </div>
             <div>
               <p className="text-sm font-bold text-slate-900">Default Service Location</p>
-              <p className="text-xs text-slate-500">Allen Avenue, Ikeja, Lagos State</p>
+              <p className="text-xs text-slate-500">Aba Road, Garrison, Port Harcourt, Rivers State</p>
             </div>
           </div>
         </div>

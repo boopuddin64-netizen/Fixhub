@@ -170,7 +170,7 @@ export const CustomerHomeView: React.FC<CustomerHomeViewProps> = ({
             Hi, {user?.name?.split(' ')[0] || 'Friend'} 👋
           </h2>
           <p className="text-xs text-slate-500 font-medium">
-            Get reliable, escrow-protected device repairs in Lagos
+            Get reliable, escrow-protected device repairs in Port Harcourt & Rivers State
           </p>
         </div>
         <button

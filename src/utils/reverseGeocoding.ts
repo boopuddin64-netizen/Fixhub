@@ -35,16 +35,20 @@ export function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lo
 /**
  * Resolves GPS coordinates to real geographical address, street, landmark, area, city, state, country.
  * 
- * 1. Checks proximity to pre-seeded Rivers State hubs / locations (< 12 km).
- * 2. If available & online, attempts live reverse geocode via OpenStreetMap Nominatim.
- * 3. If geocoding fails, returns resolved: false WITHOUT fabricating or inventing fake cities/states.
+ * Layer 1: Query Fixhub's Google Maps geocoding proxy (/api/maps/geocode/reverse).
+ * Layer 2: Client/Browser OpenStreetMap Nominatim reverse geocoder.
+ * Layer 3: Unresolved Geocode Handler (returns resolved: false, NEVER inventing fake city/state).
  */
 export async function reverseGeocode(lat: number, lng: number): Promise<ReverseGeocodeResult> {
-  // 1. If in browser/client or fetch available, query Fixhub's Google Maps geocoding proxy
+  if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
+    return { resolved: false };
+  }
+
+  // 1. Layer 1: Query Fixhub's Google Maps geocoding proxy
   if (typeof fetch !== 'undefined') {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
       const res = await fetch(`/api/maps/geocode/reverse?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`, {
         headers: { Accept: 'application/json' },
         signal: controller.signal,
@@ -60,48 +64,21 @@ export async function reverseGeocode(lat: number, lng: number): Promise<ReverseG
         }
       }
     } catch {
-      // Proxy unavailable or offline: continue to catalog/Nominatim
+      // Proxy unavailable, offline, or non-200: continue to Layer 2
     }
   }
 
-  // 2. Check known locations in catalog (e.g. Rivers State hubs)
-  let nearest: NigerianArea | null = null;
-  let minDistanceKm = Infinity;
-
-  for (const loc of POPULAR_NIGERIAN_LOCATIONS) {
-    const dist = haversineDistanceKm(lat, lng, loc.lat, loc.lng);
-    if (dist < minDistanceKm) {
-      minDistanceKm = dist;
-      nearest = loc;
-    }
-  }
-
-  // If within 12km of a known hub, resolve using the authoritative hub metadata
-  if (nearest && minDistanceKm <= 12) {
-    return {
-      resolved: true,
-      location: {
-        address: nearest.landmark ? `${nearest.name} (near ${nearest.landmark})` : nearest.name,
-        street: nearest.name,
-        landmark: nearest.landmark,
-        area: nearest.name,
-        city: nearest.city,
-        state: nearest.state,
-        country: 'Nigeria',
-      },
-    };
-  }
-
-  // 2. Attempt live reverse geocode via Nominatim if fetch is available
+  // 2. Layer 2: OpenStreetMap Nominatim live reverse geocoding
   if (typeof fetch !== 'undefined') {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
       const res = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&zoom=18&addressdetails=1`,
         {
           headers: {
             Accept: 'application/json',
+            'User-Agent': 'FixHub-Location-Engine/1.0',
           },
           signal: controller.signal,
         }
@@ -112,22 +89,30 @@ export async function reverseGeocode(lat: number, lng: number): Promise<ReverseG
         const data = await res.json();
         if (data && data.address) {
           const a = data.address;
-          const city = a.city || a.town || a.suburb || a.village || a.county || '';
-          const state = a.state || '';
+          let rawCity = a.city || a.town || a.suburb || a.village || a.county || '';
+          let rawState = a.state || '';
           const street = a.road || a.pedestrian || a.suburb || '';
           const landmark = a.neighbourhood || a.suburb || '';
-          const area = a.suburb || a.neighbourhood || a.city_district || city;
+          const area = a.suburb || a.neighbourhood || a.city_district || rawCity;
 
-          if (city || state) {
+          // Normalize city name (e.g. 'Port-Harcourt' -> 'Port Harcourt')
+          let city = rawCity.replace(/-/g, ' ').trim();
+          // Normalize Nigerian state name (e.g. 'Rivers' -> 'Rivers State')
+          let state = rawState.trim();
+          if (state && !state.toLowerCase().includes('state') && !state.toLowerCase().includes('fct')) {
+            state = `${state} State`;
+          }
+
+          if (city || state || street || data.display_name) {
             return {
               resolved: true,
               location: {
                 address: data.display_name || `${street}, ${city}, ${state}`.trim(),
-                street,
-                landmark,
-                area,
-                city,
-                state,
+                street: street || undefined,
+                landmark: landmark || undefined,
+                area: area || city || undefined,
+                city: city || undefined,
+                state: state || undefined,
                 country: a.country || 'Nigeria',
               },
             };
@@ -139,7 +124,8 @@ export async function reverseGeocode(lat: number, lng: number): Promise<ReverseG
     }
   }
 
-  // 3. Crucial requirement: NEVER fabricate or invent city/state if unresolved!
+  // 3. Layer 3: Unresolved Geocode Handler
+  // REAL GPS coordinates remain source of truth! NEVER fabricate or invent city/state if unresolved!
   return {
     resolved: false,
   };
