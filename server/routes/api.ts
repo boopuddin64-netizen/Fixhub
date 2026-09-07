@@ -25,6 +25,57 @@ import {
   sanitizeCustomerLocationForTechnician,
   sanitizeRepairRequestForTechnician,
 } from '../utils/validation';
+import { POPULAR_NIGERIAN_LOCATIONS } from '../../src/data/nigerianLocations';
+
+export function geocodeCustomerLocation(customerLocation: any) {
+  if (!customerLocation) return;
+  
+  // If coordinates are already valid, we are good!
+  if (isValidCoordinates(customerLocation.lat, customerLocation.lng)) {
+    if (customerLocation.lat === 4.8156 && customerLocation.lng === 7.0498) {
+      customerLocation.source = 'DEVELOPMENT_FALLBACK';
+    } else if (!customerLocation.source) {
+      customerLocation.source = 'GPS';
+    }
+    return;
+  }
+
+  // Coords are missing or invalid. Try geocoding based on text!
+  const textToSearch = [
+    customerLocation.landmark,
+    customerLocation.address,
+    customerLocation.area,
+    customerLocation.city,
+    customerLocation.state
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  // Look for a match in POPULAR_NIGERIAN_LOCATIONS
+  let bestMatch = null;
+  for (const loc of POPULAR_NIGERIAN_LOCATIONS) {
+    if (
+      (loc.name && textToSearch.includes(loc.name.toLowerCase())) ||
+      (loc.city && textToSearch.includes(loc.city.toLowerCase())) ||
+      (loc.landmark && textToSearch.includes(loc.landmark.toLowerCase()))
+    ) {
+      bestMatch = loc;
+      break;
+    }
+  }
+
+  if (bestMatch) {
+    customerLocation.lat = bestMatch.lat;
+    customerLocation.lng = bestMatch.lng;
+    customerLocation.source = 'GEOCODED';
+    if (!customerLocation.city) customerLocation.city = bestMatch.city;
+    if (!customerLocation.state) customerLocation.state = bestMatch.state;
+  } else {
+    // Geocoding failed: do not fabricate coordinates!
+    // Retain the textual location and set coordinates to 0, clearly marking source as MANUAL
+    customerLocation.lat = 0;
+    customerLocation.lng = 0;
+    customerLocation.source = 'MANUAL';
+  }
+}
 
 export const apiRouter = Router();
 
@@ -412,14 +463,11 @@ apiRouter.get('/technicians/:id', (req: Request, res: Response) => {
 
 apiRouter.post('/technicians/match', (req: Request, res: Response) => {
   const { customerLocation, deviceBrand, deviceModel, issues, maxDistanceKm } = req.body;
-  if (!customerLocation || !isValidCoordinates(customerLocation.lat, customerLocation.lng)) {
-    if (customerLocation && (customerLocation.address || customerLocation.city || customerLocation.area)) {
-      customerLocation.lat = 6.5244;
-      customerLocation.lng = 3.3792;
-    } else {
-      return res.status(400).json({ error: 'Valid customer location GPS coordinates (lat, lng) are required.' });
-    }
+  if (!customerLocation) {
+    return res.status(400).json({ error: 'Customer location is required.' });
   }
+
+  geocodeCustomerLocation(customerLocation);
 
   const results = TechnicianMatchingService.matchTechnicians({
     customerLocation: {
@@ -429,6 +477,9 @@ apiRouter.post('/technicians/match', (req: Request, res: Response) => {
       area: sanitizeString(customerLocation.area, 80),
       city: sanitizeString(customerLocation.city, 80) || customerLocation.area || '',
       state: sanitizeString(customerLocation.state, 80) || '',
+      source: customerLocation.source,
+      accuracyMeters: customerLocation.accuracyMeters,
+      timestamp: customerLocation.timestamp,
     },
     deviceBrand: sanitizeString(deviceBrand, 80) || 'Other',
     deviceModel: sanitizeString(deviceModel, 80),
@@ -697,14 +748,11 @@ apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req
     voiceNoteDurationSeconds,
   } = req.body;
 
-  if (!customerLocation || !isValidCoordinates(customerLocation.lat, customerLocation.lng)) {
-    if (customerLocation && (customerLocation.address || customerLocation.city || customerLocation.area)) {
-      customerLocation.lat = 6.5244;
-      customerLocation.lng = 3.3792;
-    } else {
-      return res.status(400).json({ error: 'Valid customer location coordinates are required.' });
-    }
+  if (!customerLocation) {
+    return res.status(400).json({ error: 'Customer location is required.' });
   }
+
+  geocodeCustomerLocation(customerLocation);
 
   if (!isNonEmptyString(deviceBrand) || !isNonEmptyString(deviceModel)) {
     return res.status(400).json({ error: 'Device brand and model are required.' });
@@ -739,6 +787,11 @@ apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req
     area: sanitizeString(customerLocation.area, 80),
     city: sanitizeString(customerLocation.city, 80) || customerLocation.area || '',
     state: sanitizeString(customerLocation.state, 80) || '',
+    accuracyMeters: customerLocation.accuracyMeters ? Number(customerLocation.accuracyMeters) : undefined,
+    timestamp: customerLocation.timestamp,
+    capturedAt: customerLocation.capturedAt,
+    country: customerLocation.country || 'Nigeria',
+    source: customerLocation.source,
   };
 
   const safePhotos = Array.isArray(photos)
@@ -870,7 +923,13 @@ apiRouter.get('/repairs/requests/:id', requireAuth, (req: AuthenticatedRequest, 
     }
 
     const quotes = db.repairQuotes.filter((q) => q.requestId === request.id);
-    return res.json({ request, quotes });
+    const matchedTechnicians = TechnicianMatchingService.matchTechnicians({
+      customerLocation: request.customerLocation,
+      deviceBrand: request.deviceBrand,
+      deviceModel: request.deviceModel,
+      issues: request.issues,
+    });
+    return res.json({ request, quotes, matchedTechnicians });
   } else if (req.user!.role === 'technician') {
     const tech = db.technicianProfiles.find((t) => t.userId === req.user!.id);
     if (!tech) {

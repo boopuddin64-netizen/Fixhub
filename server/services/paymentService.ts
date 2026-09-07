@@ -122,6 +122,12 @@ export class PaymentService {
       note: 'Repair job booked. Awaiting physical device check-in at shop.',
     });
 
+    const request = db.repairRequests.find((r) => r.id === job.requestId);
+    if (request) {
+      request.status = 'BOOKED';
+      request.updatedAt = payment.paidAt;
+    }
+
       // Notify technician
       NotificationService.send({
         userId: job.technicianId,

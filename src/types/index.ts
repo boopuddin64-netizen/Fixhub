@@ -42,6 +42,12 @@ export type TrustLevel =
   | 'HIGHLY_TRUSTED'
   | 'UNDER_REVIEW';
 
+export type LocationSource =
+  | 'GPS'
+  | 'GEOCODED'
+  | 'MANUAL'
+  | 'DEVELOPMENT_FALLBACK';
+
 export interface LocationCoordinates {
   lat: number;
   lng: number;
@@ -50,6 +56,11 @@ export interface LocationCoordinates {
   area?: string;
   city: string;
   state: string;
+  accuracyMeters?: number;
+  timestamp?: string;
+  capturedAt?: string;
+  country?: string;
+  source?: LocationSource;
 }
 
 export interface VerificationStatus {

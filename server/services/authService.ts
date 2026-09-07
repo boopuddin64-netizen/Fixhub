@@ -114,23 +114,27 @@ export class AuthService {
       savedLocations: data.address
         ? [
             {
-              lat: 6.5244,
-              lng: 3.3792,
+              lat: 4.8156,
+              lng: 7.0498,
               address: data.address,
               landmark: data.landmark || '',
-              city: data.city || 'Lagos',
-              state: data.state || 'Lagos State',
+              city: data.city || 'Port Harcourt',
+              state: data.state || 'Rivers State',
+              country: 'Nigeria',
+              source: 'DEVELOPMENT_FALLBACK',
             },
           ]
         : [],
       defaultLocation: data.address
         ? {
-            lat: 6.5244,
-            lng: 3.3792,
+            lat: 4.8156,
+            lng: 7.0498,
             address: data.address,
             landmark: data.landmark || '',
-            city: data.city || 'Lagos',
-            state: data.state || 'Lagos State',
+            city: data.city || 'Port Harcourt',
+            state: data.state || 'Rivers State',
+            country: 'Nigeria',
+            source: 'DEVELOPMENT_FALLBACK',
           }
         : undefined,
       totalRepairsCount: 0,

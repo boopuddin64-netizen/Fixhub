@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { LocationCoordinates } from '../../../types';
-import { searchNigerianLocations, NigerianArea } from '../../../data/nigerianLocations';
-import { MapPin, Navigation, Search, Check, AlertCircle } from 'lucide-react';
+import { searchNigerianLocations, NigerianArea, POPULAR_NIGERIAN_LOCATIONS } from '../../../data/nigerianLocations';
+import { MapPin, Navigation, Search, Check, AlertCircle, RefreshCw } from 'lucide-react';
 
 interface LocationSelectorProps {
   location?: LocationCoordinates | null;
@@ -31,22 +31,47 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setIsLocating(false);
+        
+        // Find nearest predefined area in POPULAR_NIGERIAN_LOCATIONS for mock reverse-geocoding
+        let nearestArea: NigerianArea | null = null;
+        let minDistance = Infinity;
+        for (const loc of POPULAR_NIGERIAN_LOCATIONS) {
+          const d = Math.sqrt(Math.pow(loc.lat - pos.coords.latitude, 2) + Math.pow(loc.lng - pos.coords.longitude, 2));
+          if (d < minDistance) {
+            minDistance = d;
+            nearestArea = loc;
+          }
+        }
+
+        // Resolve city and state from coordinates or fall back to generic
+        const reversedAddress = nearestArea && minDistance < 0.3
+          ? `${nearestArea.name}, ${nearestArea.city}`
+          : 'Detected GPS Location';
+        const reversedArea = nearestArea && minDistance < 0.3 ? nearestArea.name : 'Current Location';
+        const reversedCity = nearestArea && minDistance < 0.3 ? nearestArea.city : 'Port Harcourt';
+        const reversedState = nearestArea && minDistance < 0.3 ? nearestArea.state : 'Rivers State';
+
         onChange({
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
-          address: location?.address || 'Current GPS Location',
-          landmark: location?.landmark || 'Detected GPS Location',
-          area: location?.area || 'Current Location',
-          city: location?.city || '',
-          state: location?.state || '',
+          address: reversedAddress,
+          landmark: nearestArea?.landmark || 'GPS Coordinates',
+          area: reversedArea,
+          city: reversedCity,
+          state: reversedState,
+          accuracyMeters: pos.coords.accuracy,
+          timestamp: new Date(pos.timestamp).toISOString(),
+          capturedAt: new Date(pos.timestamp).toISOString(),
+          country: 'Nigeria',
+          source: 'GPS',
         });
       },
       (err) => {
         setIsLocating(false);
         console.warn('Geolocation error:', err);
-        setLocationError('Could not access current GPS location. Please select your area below.');
+        setLocationError('Unable to access your current location. You can enter your location manually.');
       },
-      { timeout: 8000, enableHighAccuracy: false }
+      { timeout: 8000, enableHighAccuracy: true }
     );
   };
 
@@ -59,30 +84,35 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
       area: area.name,
       city: area.city,
       state: area.state,
+      country: 'Nigeria',
+      source: 'GEOCODED',
     });
     setSearchQuery('');
   };
 
   const updateManualField = (fields: Partial<LocationCoordinates>) => {
     const updated: LocationCoordinates = {
-      lat: location?.lat,
-      lng: location?.lng,
+      lat: location?.lat ?? 4.8156, // Keep existing, default to PH fallback if completely un-geocoded
+      lng: location?.lng ?? 7.0498,
       address: location?.address || '',
       area: location?.area || '',
       city: location?.city || '',
       state: location?.state || '',
       landmark: location?.landmark,
+      country: 'Nigeria',
+      source: 'MANUAL',
       ...fields,
     };
 
-    // If lat/lng are missing, check if updated city/area matches a known Nigerian location
-    if (updated.lat === undefined || updated.lng === undefined) {
-      const matchedArea = searchNigerianLocations(updated.city || updated.area || updated.state)[0];
-      if (matchedArea) {
-        updated.lat = matchedArea.lat;
-        updated.lng = matchedArea.lng;
-        if (!updated.state) updated.state = matchedArea.state;
-      }
+    // Attempt simple geocoding based on city/area name match in our database
+    const matchedArea = searchNigerianLocations(updated.city || updated.area || updated.state)[0];
+    if (matchedArea) {
+      updated.lat = matchedArea.lat;
+      updated.lng = matchedArea.lng;
+      updated.source = 'GEOCODED';
+      if (!updated.state) updated.state = matchedArea.state;
+    } else {
+      updated.source = 'MANUAL';
     }
 
     onChange(updated);
@@ -91,7 +121,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
   const hasLocation = Boolean(
     location &&
       (location.address || location.area || location.city) &&
-      (location.lat !== undefined || location.area || location.city)
+      location.lat !== undefined
   );
 
   return (
@@ -104,22 +134,59 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
               <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5">
                 <MapPin className="w-4 h-4" />
               </div>
-              <div>
-                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
-                  Selected Location for Matching
+              <div className="space-y-1">
+                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">
+                  {location.source === 'GPS' ? (
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                      Live GPS Location Detected
+                    </span>
+                  ) : location.source === 'DEVELOPMENT_FALLBACK' ? (
+                    <span className="text-amber-700 font-extrabold text-[10px]">
+                      ⚠️ DEVELOPMENT FALLBACK ONLY
+                    </span>
+                  ) : location.source === 'GEOCODED' ? (
+                    <span className="text-blue-700">Geocoded Location Match</span>
+                  ) : (
+                    <span className="text-slate-700">Manual Location Entered</span>
+                  )}
                 </span>
                 <p className="text-sm font-black text-slate-900 leading-snug">
                   {location.address || location.area || `${location.city}, ${location.state}`}
                 </p>
-                <p className="text-xs text-slate-600 mt-0.5">
+                <p className="text-xs text-slate-600">
                   {[location.city, location.state].filter(Boolean).join(', ')}{' '}
                   {location.landmark ? `(near ${location.landmark})` : ''}
                 </p>
+                {location.source === 'GPS' && location.accuracyMeters && (
+                  <p className="text-[10px] font-bold text-emerald-800 bg-emerald-100/50 px-2 py-0.5 rounded-md inline-block">
+                    Accuracy: ±{Math.round(location.accuracyMeters)} m
+                  </p>
+                )}
+                {location.source === 'DEVELOPMENT_FALLBACK' && (
+                  <p className="text-[10px] text-amber-800 bg-amber-100/50 px-2 py-0.5 rounded-md inline-block font-medium">
+                    Test Coordinates (Port Harcourt, Rivers State)
+                  </p>
+                )}
               </div>
             </div>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-200/80 text-emerald-900 text-[10px] font-bold shrink-0">
-              Selected
-            </span>
+            <button
+              type="button"
+              onClick={() => {
+                onChange({
+                  lat: 0,
+                  lng: 0,
+                  address: '',
+                  city: '',
+                  state: '',
+                  source: undefined,
+                });
+                setLocationError(null);
+              }}
+              className="text-[10px] font-bold text-slate-500 hover:text-slate-800 px-2.5 py-1 rounded bg-slate-100 border border-slate-200 cursor-pointer shrink-0"
+            >
+              Change Location
+            </button>
           </div>
         </div>
       ) : (
@@ -133,21 +200,49 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
       )}
 
       {/* Option A: Use Current Location */}
-      <div>
+      <div className="space-y-2">
         <button
           type="button"
           onClick={handleUseCurrentLocation}
           disabled={isLocating}
-          className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+          className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-md cursor-pointer disabled:opacity-50"
         >
           <Navigation className={`w-4 h-4 text-emerald-400 ${isLocating ? 'animate-spin' : ''}`} />
           <span>{isLocating ? 'Detecting your coordinates...' : 'Use my current location'}</span>
         </button>
 
         {locationError && (
-          <div className="mt-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>{locationError}</span>
+          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
+            <div className="text-amber-900 text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Unable to access your current location.</p>
+                <p className="text-[11px] text-amber-800 mt-0.5">Please enter your address manually or select an area below.</p>
+              </div>
+            </div>
+            
+            {/* Quick Button for Rivers State Development Fallback */}
+            <button
+              type="button"
+              onClick={() => {
+                onChange({
+                  lat: 4.8156,
+                  lng: 7.0498,
+                  address: 'Aba Road, Garrison, Port Harcourt',
+                  landmark: 'Garrison Junction (DEVELOPMENT FALLBACK ONLY)',
+                  area: 'Garrison',
+                  city: 'Port Harcourt',
+                  state: 'Rivers State',
+                  country: 'Nigeria',
+                  source: 'DEVELOPMENT_FALLBACK',
+                  accuracyMeters: 50,
+                });
+                setLocationError(null);
+              }}
+              className="w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-900 text-[11px] font-bold rounded-lg border border-dashed border-blue-300 transition-all cursor-pointer"
+            >
+              Use Rivers State Fallback (Port Harcourt) [DEMO ONLY]
+            </button>
           </div>
         )}
       </div>
@@ -174,7 +269,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer"
+              className="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer bg-transparent border-none"
             >
               Clear
             </button>
@@ -186,7 +281,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
             Popular Repair Hubs & Markets
           </span>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[200px] overflow-y-auto pr-1">
             {searchResults.map((area, idx) => {
               const isSelected =
                 location != null &&
@@ -229,7 +324,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
           <button
             type="button"
             onClick={() => setIsManualInput(!isManualInput)}
-            className="text-xs font-bold text-blue-600 hover:text-blue-700 underline cursor-pointer"
+            className="text-xs font-bold text-blue-600 hover:text-blue-700 underline cursor-pointer bg-transparent border-none"
           >
             {isManualInput ? 'Hide manual address fields' : 'Enter custom street / landmark'}
           </button>
@@ -243,7 +338,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                   value={location?.address || ''}
                   onChange={(e) => updateManualField({ address: e.target.value })}
                   placeholder="e.g. 14 Aba Road"
-                  className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900"
+                  className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
               </div>
 
@@ -255,7 +350,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                     value={location?.city || ''}
                     onChange={(e) => updateManualField({ city: e.target.value })}
                     placeholder="e.g. Port Harcourt"
-                    className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900"
+                    className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   />
                 </div>
                 <div>
@@ -265,7 +360,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                     value={location?.state || ''}
                     onChange={(e) => updateManualField({ state: e.target.value })}
                     placeholder="e.g. Rivers State"
-                    className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900"
+                    className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   />
                 </div>
               </div>
@@ -277,7 +372,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                   value={location?.landmark || ''}
                   onChange={(e) => updateManualField({ landmark: e.target.value })}
                   placeholder="e.g. Near Garrison Junction"
-                  className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900"
+                  className="w-full mt-1 p-2 rounded-lg border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
               </div>
             </div>

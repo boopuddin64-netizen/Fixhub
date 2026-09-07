@@ -42,14 +42,7 @@ export const QuoteComparisonView: React.FC<QuoteComparisonViewProps> = ({
       try {
         const reqData = await ApiClient.getRepairRequest(request.id);
         setQuotes(reqData.quotes || []);
-
-        const matches = await ApiClient.matchTechnicians({
-          customerLocation: request.customerLocation,
-          deviceBrand: request.deviceBrand,
-          deviceModel: request.deviceModel,
-          issues: request.issues,
-        });
-        setMatchedTechs(matches);
+        setMatchedTechs(reqData.matchedTechnicians || []);
       } catch (err) {
         console.error(err);
       } finally {

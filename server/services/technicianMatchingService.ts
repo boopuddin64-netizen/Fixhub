@@ -45,30 +45,54 @@ export class TechnicianMatchingService {
 
     const results: MatchScoreResult[] = [];
 
-    if (!customerLocation || typeof customerLocation.lat !== 'number' || typeof customerLocation.lng !== 'number') {
-      return results;
-    }
+    const hasCoords = customerLocation && 
+                      typeof customerLocation.lat === 'number' && 
+                      typeof customerLocation.lng === 'number' && 
+                      customerLocation.lat !== 0 && 
+                      customerLocation.lng !== 0;
 
     for (const tech of technicians) {
-      if (!tech.shopLocation || typeof tech.shopLocation.lat !== 'number' || typeof tech.shopLocation.lng !== 'number') {
+      if (!tech.shopLocation) {
         continue;
       }
 
-      // 1. Calculate Distance
-      const distanceKm = calculateDistanceKm(
-        customerLocation.lat,
-        customerLocation.lng,
-        tech.shopLocation.lat,
-        tech.shopLocation.lng
-      );
+      const techHasCoords = typeof tech.shopLocation.lat === 'number' && 
+                            typeof tech.shopLocation.lng === 'number' && 
+                            tech.shopLocation.lat !== 0 && 
+                            tech.shopLocation.lng !== 0;
 
-      // Filter out technicians outside their service radius or max search distance
-      if (distanceKm > (tech.serviceRadiusKm || maxDistanceKm)) {
-        continue;
+      let distanceKm = 999;
+      let distanceScore = 0;
+
+      if (hasCoords && techHasCoords) {
+        // 1. Calculate Distance
+        distanceKm = calculateDistanceKm(
+          customerLocation.lat,
+          customerLocation.lng,
+          tech.shopLocation.lat,
+          tech.shopLocation.lng
+        );
+
+        // Filter out technicians outside their service radius or max search distance
+        if (distanceKm > (tech.serviceRadiusKm || maxDistanceKm)) {
+          continue;
+        }
+
+        // 1. Distance Score (Max 25 pts): 0 km = 25 pts, decaying linearly down to 0 at 25km
+        distanceScore = Math.max(0, Math.round((1 - Math.min(distanceKm, 25) / 25) * 25));
+      } else {
+        // Fallback matching when coordinates are unavailable: Match by state and city text!
+        const sameState = customerLocation && customerLocation.state && tech.shopLocation.state && 
+                          customerLocation.state.toLowerCase() === tech.shopLocation.state.toLowerCase();
+        if (!sameState) {
+          continue; // Filter out if not in the same state
+        }
+        const sameCity = customerLocation && customerLocation.city && tech.shopLocation.city && 
+                         customerLocation.city.toLowerCase() === tech.shopLocation.city.toLowerCase();
+        
+        distanceKm = sameCity ? 5.0 : 15.0; // Assign fallback virtual distance
+        distanceScore = sameCity ? 20 : 10; // Assign fallback score
       }
-
-      // 1. Distance Score (Max 25 pts): 0 km = 25 pts, decaying linearly down to 0 at 25km
-      const distanceScore = Math.max(0, Math.round((1 - Math.min(distanceKm, 25) / 25) * 25));
 
       // 2. Brand & Model Expertise (Max 20 pts)
       let expertiseScore = 5;
@@ -216,9 +240,13 @@ export class TechnicianMatchingService {
       request.customerLocation &&
       typeof request.customerLocation.lat === 'number' &&
       typeof request.customerLocation.lng === 'number' &&
+      request.customerLocation.lat !== 0 &&
+      request.customerLocation.lng !== 0 &&
       tech.shopLocation &&
       typeof tech.shopLocation.lat === 'number' &&
-      typeof tech.shopLocation.lng === 'number'
+      typeof tech.shopLocation.lng === 'number' &&
+      tech.shopLocation.lat !== 0 &&
+      tech.shopLocation.lng !== 0
     ) {
       const distanceKm = calculateDistanceKm(
         request.customerLocation.lat,
@@ -239,7 +267,23 @@ export class TechnicianMatchingService {
       return { eligible: true, distanceKm };
     }
 
-    // Default to eligible if locations are not coordinate-based
+    // Default to matching by state if coordinates are unavailable/zero
+    if (request.customerLocation && tech.shopLocation) {
+      const sameState = request.customerLocation.state && tech.shopLocation.state &&
+                        request.customerLocation.state.toLowerCase() === tech.shopLocation.state.toLowerCase();
+      if (!sameState) {
+        return {
+          eligible: false,
+          reason: `Customer is in ${request.customerLocation.state || 'another state'} which does not match technician shop state (${tech.shopLocation.state || 'Unknown'}).`,
+          distanceKm: 999,
+        };
+      }
+      const sameCity = request.customerLocation.city && tech.shopLocation.city &&
+                       request.customerLocation.city.toLowerCase() === tech.shopLocation.city.toLowerCase();
+      return { eligible: true, distanceKm: sameCity ? 5.0 : 15.0 };
+    }
+
+    // Default to eligible if locations are not available
     return { eligible: true, distanceKm: 5.0 };
   }
 }

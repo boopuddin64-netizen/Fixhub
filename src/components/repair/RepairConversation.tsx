@@ -315,7 +315,7 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 pb-28" ref={scrollRef}>
         <div className="max-w-lg mx-auto space-y-4">
           {/* Progressive Completed Answer Thread */}
-          {isStagePast('device') && deviceBrand && deviceModel && (
+          {stage !== 'review' && isStagePast('device') && deviceBrand && deviceModel && (
             <RepairMessage
               title="Selected Device"
               summaryText={`${deviceBrand} ${deviceModel}`}
@@ -323,7 +323,7 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
             />
           )}
 
-          {isStagePast('issues') && selectedIssueIds.length > 0 && (
+          {stage !== 'review' && isStagePast('issues') && selectedIssueIds.length > 0 && (
             <RepairMessage
               title="Reported Problems"
               summaryText={`${selectedIssueIds.length} issue${selectedIssueIds.length > 1 ? 's' : ''} selected`}
@@ -332,7 +332,7 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
             />
           )}
 
-          {isStagePast('description') && (description || otherDescription) && (
+          {stage !== 'review' && isStagePast('description') && (description || otherDescription) && (
             <RepairMessage
               title="Problem Description"
               summaryText={description || otherDescription || 'Details added'}
@@ -340,7 +340,7 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
             />
           )}
 
-          {isStagePast('evidence') && (photos.length > 0 || voiceNoteUrl) && (
+          {stage !== 'review' && isStagePast('evidence') && (photos.length > 0 || voiceNoteUrl) && (
             <RepairMessage
               title="Evidence Attached"
               summaryText={`${photos.length} photo${photos.length !== 1 ? 's' : ''}${voiceNoteUrl ? ' • 1 Voice Note' : ''}`}
@@ -348,7 +348,7 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
             />
           )}
 
-          {isStagePast('location') && location && (
+          {stage !== 'review' && isStagePast('location') && location && (
             <RepairMessage
               title="Repair Location"
               summaryText={location.address || location.area || location.city || 'Location confirmed'}
