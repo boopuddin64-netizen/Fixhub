@@ -962,6 +962,51 @@ apiRouter.get('/repairs/requests/:id', requireAuth, (req: AuthenticatedRequest, 
   return res.status(403).json({ error: 'Forbidden.' });
 });
 
+apiRouter.patch('/repairs/requests/:id/location', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
+  const request = db.repairRequests.find((r) => r.id === req.params.id);
+  if (!request) {
+    return res.status(404).json({ error: 'Repair request not found.' });
+  }
+
+  if (request.customerId !== req.user!.id) {
+    return res.status(403).json({ error: 'Forbidden.' });
+  }
+
+  const { customerLocation } = req.body;
+  if (!customerLocation) {
+    return res.status(400).json({ error: 'Location is required.' });
+  }
+
+  geocodeCustomerLocation(customerLocation);
+
+  request.customerLocation = {
+    lat: customerLocation.lat ?? 0,
+    lng: customerLocation.lng ?? 0,
+    address: sanitizeString(customerLocation.address, 200) || '',
+    landmark: sanitizeString(customerLocation.landmark, 100),
+    area: sanitizeString(customerLocation.area, 80) || '',
+    city: sanitizeString(customerLocation.city, 80) || customerLocation.area || '',
+    state: sanitizeString(customerLocation.state, 80) || '',
+    accuracyMeters: customerLocation.accuracyMeters ? Number(customerLocation.accuracyMeters) : undefined,
+    timestamp: customerLocation.timestamp,
+    capturedAt: customerLocation.capturedAt,
+    country: customerLocation.country || 'Nigeria',
+    source: customerLocation.source || 'MANUAL',
+  };
+
+  request.updatedAt = new Date().toISOString();
+
+  // Re-match technicians
+  const matchedTechnicians = TechnicianMatchingService.matchTechnicians({
+    customerLocation: request.customerLocation,
+    deviceBrand: request.deviceBrand,
+    deviceModel: request.deviceModel,
+    issues: request.issues,
+  });
+
+  return res.json({ success: true, request, matchedTechnicians });
+});
+
 /* -------------------------------------------------------------
  * 5. TECHNICIAN QUOTES (Strict Validation & Anti-Tampering)
  * ----------------------------------------------------------- */

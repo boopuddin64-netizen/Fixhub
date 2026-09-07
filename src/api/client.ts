@@ -216,6 +216,13 @@ export class ApiClient {
     });
   }
 
+  public static updateRepairRequestLocation(id: string, customerLocation: any) {
+    return this.request<any>(`/repairs/requests/${id}/location`, {
+      method: 'PATCH',
+      body: JSON.stringify({ customerLocation }),
+    });
+  }
+
   // Repair Drafts
   public static getRepairDraft() {
     return this.request<RepairRequestDraft | null>('/repairs/draft');

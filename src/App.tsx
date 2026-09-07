@@ -203,7 +203,7 @@ function MainAppContent() {
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center">
-                        {activeJobTech?.businessName.charAt(0) || 'T'}
+                        {activeJobTech?.businessName?.charAt(0) || 'T'}
                       </div>
                       <div>
                         <h4 className="font-bold text-sm text-slate-900">

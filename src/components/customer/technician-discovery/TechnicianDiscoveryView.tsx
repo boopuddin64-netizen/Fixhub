@@ -6,6 +6,7 @@ import { TechnicianDiscoveryCard } from './TechnicianDiscoveryCard';
 import { TechnicianFilterBar } from './TechnicianFilterBar';
 import { TechnicianDetailsView } from './TechnicianDetailsView';
 import { TechnicianEmptyState } from './TechnicianEmptyState';
+import { LocationSelector } from '../repair-flow/LocationSelector';
 
 interface TechnicianDiscoveryViewProps {
   requestId: string;
@@ -28,6 +29,12 @@ export const TechnicianDiscoveryView: React.FC<TechnicianDiscoveryViewProps> = (
 
   // Selected technician for detailed view
   const [selectedMatch, setSelectedMatch] = useState<TechnicianMatchResult | null>(null);
+
+  // Dynamic Location Editor
+  const [isEditingLocation, setIsEditingLocation] = useState<boolean>(false);
+  const [updatingLocation, setUpdatingLocation] = useState<boolean>(false);
+  const [tempLocation, setTempLocation] = useState<any>(null);
+  const [locationUpdateError, setLocationUpdateError] = useState<string | null>(null);
 
   const hasFetchedRef = useRef(false);
 
@@ -67,6 +74,37 @@ export const TechnicianDiscoveryView: React.FC<TechnicianDiscoveryViewProps> = (
       setError(err.message || 'Could not load nearby technicians. Please check your connection.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSaveLocation = async () => {
+    if (!tempLocation) {
+      setIsEditingLocation(false);
+      return;
+    }
+    setUpdatingLocation(true);
+    setLocationUpdateError(null);
+    try {
+      const res = await ApiClient.updateRepairRequestLocation(requestId, tempLocation);
+      if (res.success) {
+        if (res.request) {
+          setRequest(res.request);
+        }
+        if (Array.isArray(res.matchedTechnicians)) {
+          setMatches(res.matchedTechnicians);
+        } else {
+          await fetchDiscovery(maxDistance);
+        }
+        setIsEditingLocation(false);
+        setTempLocation(null);
+      } else {
+        throw new Error(res.error || 'Failed to update location.');
+      }
+    } catch (err: any) {
+      console.error('Error updating location:', err);
+      setLocationUpdateError(err.message || 'Could not update location. Please try again.');
+    } finally {
+      setUpdatingLocation(false);
     }
   };
 
@@ -155,9 +193,21 @@ export const TechnicianDiscoveryView: React.FC<TechnicianDiscoveryViewProps> = (
               <h3 className="text-sm sm:text-base font-extrabold text-white">
                 {request.deviceBrand} {request.deviceModel}
               </h3>
-              <p className="text-xs text-slate-300 flex items-center gap-1.5 mt-0.5">
+              <p className="text-xs text-slate-300 flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <MapPin className="w-3.5 h-3.5 text-emerald-400" />
                 <span>{request.customerLocation?.area || request.customerLocation?.city || 'Selected Location'}</span>
+                {!isEditingLocation && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTempLocation(request.customerLocation);
+                      setIsEditingLocation(true);
+                    }}
+                    className="ml-1.5 text-[10px] font-bold text-cyan-400 hover:text-cyan-300 hover:underline cursor-pointer"
+                  >
+                    (Change)
+                  </button>
+                )}
               </p>
             </div>
           </div>
@@ -171,8 +221,62 @@ export const TechnicianDiscoveryView: React.FC<TechnicianDiscoveryViewProps> = (
         </div>
       )}
 
+      {/* Inline Location Editor */}
+      {isEditingLocation && (
+        <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200 shadow-md space-y-4 animate-fadeIn max-w-lg mx-auto">
+          <div>
+            <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-blue-600" />
+              <span>Change Repair Location</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Select or search a new location to see compatible technicians in your new area.
+            </p>
+          </div>
+
+          <LocationSelector
+            location={tempLocation || request?.customerLocation || null}
+            onChange={(loc) => setTempLocation(loc)}
+          />
+
+          {locationUpdateError && (
+            <p className="text-xs text-rose-600 font-medium">{locationUpdateError}</p>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              disabled={updatingLocation}
+              onClick={() => {
+                setIsEditingLocation(false);
+                setTempLocation(null);
+                setLocationUpdateError(null);
+              }}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={updatingLocation || !tempLocation}
+              onClick={handleSaveLocation}
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+            >
+              {updatingLocation ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Updating...</span>
+                </>
+              ) : (
+                <span>Update Location & Match</span>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Filters & Sorting */}
-      {!isLoading && !error && matches.length > 0 && (
+      {!isLoading && !error && matches.length > 0 && !isEditingLocation && (
         <TechnicianFilterBar
           maxDistance={maxDistance}
           onChangeMaxDistance={handleDistanceChange}
@@ -218,15 +322,18 @@ export const TechnicianDiscoveryView: React.FC<TechnicianDiscoveryViewProps> = (
       )}
 
       {/* Empty State */}
-      {!isLoading && !error && sortedMatches.length === 0 && (
+      {!isLoading && !error && sortedMatches.length === 0 && !isEditingLocation && (
         <TechnicianEmptyState
           onExpandSearch={() => handleDistanceChange(50)}
-          onChangeLocation={onBack}
+          onChangeLocation={() => {
+            setTempLocation(request?.customerLocation || null);
+            setIsEditingLocation(true);
+          }}
         />
       )}
 
       {/* Results List */}
-      {!isLoading && !error && sortedMatches.length > 0 && (
+      {!isLoading && !error && sortedMatches.length > 0 && !isEditingLocation && (
         <div className="space-y-4">
           {sortedMatches.map((match) => (
             <TechnicianDiscoveryCard
