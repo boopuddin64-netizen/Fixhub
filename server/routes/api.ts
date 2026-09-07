@@ -30,14 +30,40 @@ import { POPULAR_NIGERIAN_LOCATIONS } from '../../src/data/nigerianLocations';
 export function geocodeCustomerLocation(customerLocation: any) {
   if (!customerLocation) return;
   
+  const isProd = process.env.NODE_ENV === "production";
+
   // If coordinates are already valid, we are good!
   if (isValidCoordinates(customerLocation.lat, customerLocation.lng)) {
-    if (customerLocation.lat === 4.8156 && customerLocation.lng === 7.0498) {
-      customerLocation.source = 'DEVELOPMENT_FALLBACK';
-    } else if (!customerLocation.source) {
-      customerLocation.source = 'GPS';
+    const isFallbackCoords = 
+      (Number(customerLocation.lat) === 4.8156 && Number(customerLocation.lng) === 7.0498) ||
+      (Number(customerLocation.lat) === 4.8156 && Number(customerLocation.lng) === 7.0128 && customerLocation.source === 'DEVELOPMENT_FALLBACK');
+    
+    if (isFallbackCoords) {
+      if (isProd) {
+        // In production, we cannot accept DEVELOPMENT_FALLBACK coordinates!
+        customerLocation.lat = 0;
+        customerLocation.lng = 0;
+        customerLocation.source = 'MANUAL';
+      } else {
+        customerLocation.source = 'DEVELOPMENT_FALLBACK';
+        return;
+      }
+    } else {
+      if (!customerLocation.source) {
+        customerLocation.source = 'GPS';
+      }
+      return;
     }
-    return;
+  }
+
+  if (customerLocation.source === 'DEVELOPMENT_FALLBACK') {
+    if (isProd) {
+      customerLocation.source = 'MANUAL';
+    } else {
+      customerLocation.lat = 4.8156;
+      customerLocation.lng = 7.0498;
+      return;
+    }
   }
 
   // Coords are missing or invalid. Try geocoding based on text!
@@ -754,6 +780,26 @@ apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req
 
   geocodeCustomerLocation(customerLocation);
 
+  const isProduction = process.env.NODE_ENV === 'production';
+  const hasCoordinates = isValidCoordinates(customerLocation.lat, customerLocation.lng) && 
+                         Number(customerLocation.lat) !== 0 && 
+                         Number(customerLocation.lng) !== 0;
+
+  const hasManualText = isNonEmptyString(customerLocation.address) || 
+                        isNonEmptyString(customerLocation.area) || 
+                        isNonEmptyString(customerLocation.city) || 
+                        isNonEmptyString(customerLocation.state);
+
+  if (!hasCoordinates && !hasManualText) {
+    return res.status(400).json({ error: 'Please enable GPS location or manually enter/select a valid location.' });
+  }
+
+  if (isProduction && (customerLocation.source === 'DEVELOPMENT_FALLBACK' || 
+      (Number(customerLocation.lat) === 4.8156 && Number(customerLocation.lng) === 7.0498) ||
+      (Number(customerLocation.lat) === 4.8156 && Number(customerLocation.lng) === 7.0128))) {
+    return res.status(400).json({ error: 'Development fallback locations are not allowed in production. Please select or enter a real location.' });
+  }
+
   if (!isNonEmptyString(deviceBrand) || !isNonEmptyString(deviceModel)) {
     return res.status(400).json({ error: 'Device brand and model are required.' });
   }
@@ -978,6 +1024,26 @@ apiRouter.patch('/repairs/requests/:id/location', requireAuth, requireRole(['cus
   }
 
   geocodeCustomerLocation(customerLocation);
+
+  const isProduction = process.env.NODE_ENV === 'production';
+  const hasCoordinates = isValidCoordinates(customerLocation.lat, customerLocation.lng) && 
+                         Number(customerLocation.lat) !== 0 && 
+                         Number(customerLocation.lng) !== 0;
+
+  const hasManualText = isNonEmptyString(customerLocation.address) || 
+                        isNonEmptyString(customerLocation.area) || 
+                        isNonEmptyString(customerLocation.city) || 
+                        isNonEmptyString(customerLocation.state);
+
+  if (!hasCoordinates && !hasManualText) {
+    return res.status(400).json({ error: 'Please enable GPS location or manually enter/select a valid location.' });
+  }
+
+  if (isProduction && (customerLocation.source === 'DEVELOPMENT_FALLBACK' || 
+      (Number(customerLocation.lat) === 4.8156 && Number(customerLocation.lng) === 7.0498) ||
+      (Number(customerLocation.lat) === 4.8156 && Number(customerLocation.lng) === 7.0128))) {
+    return res.status(400).json({ error: 'Development fallback locations are not allowed in production. Please select or enter a real location.' });
+  }
 
   request.customerLocation = {
     lat: customerLocation.lat ?? 0,

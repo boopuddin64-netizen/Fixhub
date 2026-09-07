@@ -5,6 +5,7 @@ import { PaymentService } from '../../server/services/paymentService';
 import { RepairWorkflowService } from '../../server/services/repairWorkflowService';
 import { QuoteAccuracyService } from '../../server/services/quoteAccuracyService';
 import { AuditService } from '../../server/services/auditService';
+import { runPhase3CertificationSuite } from './phase3_certification';
 import {
   validateNumber,
   isValidCoordinates,
@@ -749,8 +750,13 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   const cappedPhotos = photoOverlimit.slice(0, 3);
   assert(cappedPhotos.length === 3, 'Photos array correctly capped to 3 max for low bandwidth optimization');
 
+  // Run the new comprehensive Phase 3 Hardening & E2E Certification tests
+  const certResults = await runPhase3CertificationSuite();
+  passed += certResults.passed;
+  failed += certResults.failed;
+
   console.log('\n===============================================================');
-  console.log(`   TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);
+  console.log(`   GLOBAL TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);
   console.log('===============================================================\n');
 
   if (failed > 0 && (!process.env.BUN_TEST && !process.env.NODE_TEST)) {

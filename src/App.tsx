@@ -150,7 +150,7 @@ function MainAppContent() {
                   setShowWizard(false);
                   setWizardPrefill(null);
                   setSelectedRequestId(reqId);
-                  setCurrentTab('discovery');
+                  setCurrentTab('quotes');
                   loadData();
                 }}
                 preselectedDevice={wizardPrefill?.device}

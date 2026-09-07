@@ -43,19 +43,26 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
           }
         }
 
-        // Resolve city and state from coordinates or fall back to generic
-        const reversedAddress = nearestArea && minDistance < 0.3
+        // Reverse geocoding succeeds if we are close to a known hub (within 0.15 degrees)
+        const geocodeSuccess = nearestArea != null && minDistance < 0.15;
+
+        const reversedAddress = geocodeSuccess
           ? `${nearestArea.name}, ${nearestArea.city}`
-          : 'Detected GPS Location';
-        const reversedArea = nearestArea && minDistance < 0.3 ? nearestArea.name : 'Current Location';
-        const reversedCity = nearestArea && minDistance < 0.3 ? nearestArea.city : 'Port Harcourt';
-        const reversedState = nearestArea && minDistance < 0.3 ? nearestArea.state : 'Rivers State';
+          : 'GPS Coordinates (Address Unresolved)';
+        const reversedArea = geocodeSuccess ? nearestArea.name : '';
+        const reversedCity = geocodeSuccess ? nearestArea.city : '';
+        const reversedState = geocodeSuccess ? nearestArea.state : '';
+
+        // Auto-open manual fields for user enrichment if geocoding failed
+        if (!geocodeSuccess) {
+          setIsManualInput(true);
+        }
 
         onChange({
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
           address: reversedAddress,
-          landmark: nearestArea?.landmark || 'GPS Coordinates',
+          landmark: geocodeSuccess ? nearestArea.landmark : 'GPS Coordinates',
           area: reversedArea,
           city: reversedCity,
           state: reversedState,
@@ -92,27 +99,29 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
 
   const updateManualField = (fields: Partial<LocationCoordinates>) => {
     const updated: LocationCoordinates = {
-      lat: location?.lat ?? 4.8156, // Keep existing, default to PH fallback if completely un-geocoded
-      lng: location?.lng ?? 7.0498,
+      lat: location?.lat ?? 0,
+      lng: location?.lng ?? 0,
       address: location?.address || '',
       area: location?.area || '',
       city: location?.city || '',
       state: location?.state || '',
       landmark: location?.landmark,
       country: 'Nigeria',
-      source: 'MANUAL',
+      source: location?.source === 'GPS' ? 'GPS' : 'MANUAL',
       ...fields,
     };
 
-    // Attempt simple geocoding based on city/area name match in our database
-    const matchedArea = searchNigerianLocations(updated.city || updated.area || updated.state)[0];
-    if (matchedArea) {
-      updated.lat = matchedArea.lat;
-      updated.lng = matchedArea.lng;
-      updated.source = 'GEOCODED';
-      if (!updated.state) updated.state = matchedArea.state;
-    } else {
-      updated.source = 'MANUAL';
+    // If there were no coordinates, attempt simple geocoding based on city/area name match in our database
+    if (updated.lat === 0 && updated.lng === 0) {
+      const matchedArea = searchNigerianLocations(updated.city || updated.area || updated.state)[0];
+      if (matchedArea) {
+        updated.lat = matchedArea.lat;
+        updated.lng = matchedArea.lng;
+        updated.source = 'GEOCODED';
+        if (!updated.state) updated.state = matchedArea.state;
+      } else {
+        updated.source = 'MANUAL';
+      }
     }
 
     onChange(updated);
@@ -163,6 +172,17 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                     Accuracy: ±{Math.round(location.accuracyMeters)} m
                   </p>
                 )}
+                {location.source === 'GPS' && !location.city && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800 space-y-1 mt-2 font-medium">
+                    <p className="font-extrabold flex items-center gap-1 text-amber-950">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Address Unresolved</span>
+                    </p>
+                    <p>
+                      We detected your GPS coordinates, but could not resolve a city/state address. Please enter your street address, city, and state in the manual fields below to complete matches.
+                    </p>
+                  </div>
+                )}
                 {location.source === 'DEVELOPMENT_FALLBACK' && (
                   <p className="text-[10px] text-amber-800 bg-amber-100/50 px-2 py-0.5 rounded-md inline-block font-medium">
                     Test Coordinates (Port Harcourt, Rivers State)
@@ -212,12 +232,22 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
         </button>
 
         {locationError && (
-          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
+          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-3">
             <div className="text-amber-900 text-xs flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold">Unable to access your current location.</p>
-                <p className="text-[11px] text-amber-800 mt-0.5">Please enter your address manually or select an area below.</p>
+              <AlertCircle className="w-4.5 h-4.5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-extrabold text-amber-950">GPS Access Blocked or Restricted</p>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  Your browser restricts live GPS detection when running inside an <strong>embedded iframe preview</strong>. 
+                </p>
+                <div className="p-2.5 bg-white/70 border border-amber-100 rounded-lg text-[10px] text-slate-700 leading-relaxed space-y-1">
+                  <p className="font-bold text-slate-800">To resolve this and use Live Geolocation:</p>
+                  <p>1. Click the <strong>"Open in New Tab"</strong> button in the top right header of the preview window.</p>
+                  <p>2. Grant location access when prompted by your browser.</p>
+                </div>
+                <p className="text-[11px] text-amber-800 pt-1">
+                  Alternatively, you can select one of our popular pre-seeded <strong>Repair Hubs & Markets</strong> below with 1 click to test certified technician matching instantly!
+                </p>
               </div>
             </div>
             
