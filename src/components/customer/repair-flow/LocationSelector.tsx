@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { LocationCoordinates } from '../../../types';
 import { searchNigerianLocations, NigerianArea, POPULAR_NIGERIAN_LOCATIONS } from '../../../data/nigerianLocations';
 import { reverseGeocode } from '../../../utils/reverseGeocoding';
-import { MapPin, Navigation, Search, Check, AlertCircle, ExternalLink, Loader2, X, ChevronDown } from 'lucide-react';
+import { MapPin, Navigation, Search, AlertCircle, ExternalLink, Loader2, X, Check } from 'lucide-react';
 import { useGoogleMaps } from '../../maps/GoogleMapsProvider';
 import { GooglePlaceAutocomplete } from '../../maps/GooglePlaceAutocomplete';
 import { InteractiveLocationMap } from '../../maps/InteractiveLocationMap';
@@ -21,7 +21,6 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
   const [searchFocused, setSearchFocused] = useState<boolean>(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [iframeBlocked, setIframeBlocked] = useState<boolean>(false);
-  const [isManualInput, setIsManualInput] = useState<boolean>(false);
   const [unresolvedGpsPrompt, setUnresolvedGpsPrompt] = useState<boolean>(false);
   const [customStreetInput, setCustomStreetInput] = useState<string>('');
 
@@ -32,14 +31,16 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
   const isDev = !isProduction && Boolean((import.meta as any).env?.DEV);
 
   const filteredAreas = searchQuery.trim() ? searchNigerianLocations(searchQuery) : [];
-  const popularHubs = POPULAR_NIGERIAN_LOCATIONS.slice(0, 8);
+  const popularHubs = POPULAR_NIGERIAN_LOCATIONS.slice(0, 10);
 
-  const hasLocation = Boolean(
+  const hasValidLocation = Boolean(
     location &&
-      (location.lat !== 0 || location.lng !== 0 || location.address || location.city)
+      typeof location.lat === 'number' &&
+      typeof location.lng === 'number' &&
+      (location.lat !== 0 || location.lng !== 0)
   );
 
-  // 1. Uber/Bolt: Use current location (GPS)
+  // Path B: Use my current location (GPS)
   const handleUseCurrentLocation = () => {
     setLocationError(null);
     setIframeBlocked(false);
@@ -47,7 +48,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
 
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       setIframeBlocked(true);
-      setLocationError('Live location is unavailable in this preview.');
+      setLocationError('Live location isn’t available in this preview. Search for your location instead.');
       return;
     }
 
@@ -56,13 +57,13 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
       async (pos) => {
         setIsLocating(false);
 
-        // Authoritative real GPS coordinates from device
+        // Exact device GPS coordinates
         const rawLat = pos.coords.latitude;
         const rawLng = pos.coords.longitude;
         const accuracy = pos.coords.accuracy;
         const timestampIso = new Date(pos.timestamp).toISOString();
 
-        // Reverse geocoding attempt (Layer 1 Google Proxy -> Layer 2 Nominatim)
+        // Reverse geocoding attempt (for display enrichment only; NEVER replaces GPS coordinates)
         const geocodeResult = await reverseGeocode(rawLat, rawLng);
 
         if (geocodeResult.resolved && geocodeResult.location) {
@@ -71,7 +72,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
           onChange({
             lat: rawLat,
             lng: rawLng,
-            address: loc.address || `${loc.street || ''} ${loc.city || ''}`.trim(),
+            address: loc.address || `${loc.street || ''} ${loc.city || ''}`.trim() || 'Current Location',
             landmark: loc.landmark,
             area: loc.area || loc.city || '',
             city: loc.city || '',
@@ -83,13 +84,13 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
             source: 'GPS',
           });
         } else {
-          // State 2: GPS Succeeded, but Reverse Geocoding Unresolved
-          // REAL GPS coordinates remain source of truth! NEVER fabricate city/state or substitute hub!
+          // GPS succeeded, but address reverse geocoding unresolved
+          // REAL GPS coordinates remain authoritative. Do NOT fabricate city/state or substitute hub.
           setUnresolvedGpsPrompt(true);
           onChange({
             lat: rawLat,
             lng: rawLng,
-            address: '',
+            address: 'Location detected',
             landmark: undefined,
             area: '',
             city: '',
@@ -106,9 +107,9 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
         setIsLocating(false);
         console.warn('Geolocation unavailable or restricted:', err);
         setIframeBlocked(true);
-        setLocationError('Live location is unavailable in this preview.');
+        setLocationError('Live location isn’t available in this preview. Search for your location instead.');
       },
-      { timeout: 8000, enableHighAccuracy: true }
+      { timeout: 10000, enableHighAccuracy: true }
     );
   };
 
@@ -118,6 +119,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
     }
   };
 
+  // Path A: Select genuine place/area from catalogue
   const handleSelectArea = (area: NigerianArea) => {
     onChange({
       lat: area.lat,
@@ -128,7 +130,9 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
       city: area.city,
       state: area.state,
       country: 'Nigeria',
-      source: 'MANUAL',
+      source: 'GEOCODED',
+      timestamp: new Date().toISOString(),
+      capturedAt: new Date().toISOString(),
     });
     setSearchQuery('');
     setSearchFocused(false);
@@ -142,48 +146,18 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
     if (!location) return;
     onChange({
       ...location,
-      address: customStreetInput.trim() || location.address,
+      address: customStreetInput.trim() || location.address || 'Location detected',
       area: customStreetInput.trim() || location.area,
-      source: 'GPS', // GPS coordinates remain authoritative!
+      source: 'GPS', // GPS coordinates remain strictly authoritative!
     });
     setUnresolvedGpsPrompt(false);
   };
 
-  const updateManualField = (fields: Partial<LocationCoordinates>) => {
-    const isPreservingGps = location?.source === 'GPS';
-    const updated: LocationCoordinates = {
-      lat: location?.lat ?? 0,
-      lng: location?.lng ?? 0,
-      address: location?.address || '',
-      area: location?.area || '',
-      city: location?.city || '',
-      state: location?.state || '',
-      landmark: location?.landmark,
-      country: 'Nigeria',
-      accuracyMeters: location?.accuracyMeters,
-      timestamp: location?.timestamp,
-      capturedAt: location?.capturedAt,
-      source: isPreservingGps ? 'GPS' : 'MANUAL',
-      ...fields,
-    };
-
-    if (!isPreservingGps && updated.lat === 0 && updated.lng === 0) {
-      const matched = searchNigerianLocations(updated.city || updated.area || updated.state)[0];
-      if (matched) {
-        updated.lat = matched.lat;
-        updated.lng = matched.lng;
-        if (!updated.state) updated.state = matched.state;
-      }
-    }
-
-    onChange(updated);
-  };
-
   return (
     <div id="repair-location-selector" className="space-y-4">
-      {/* 1. UBER/BOLT SEARCH & GPS BAR */}
+      {/* 1. SEARCH & GPS ACTIONS */}
       <div className="space-y-2.5">
-        {/* Unified Search Input */}
+        {/* Search Bar */}
         <div className="relative">
           {hasKey ? (
             <GooglePlaceAutocomplete
@@ -193,7 +167,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                 setIframeBlocked(false);
                 setUnresolvedGpsPrompt(false);
               }}
-              placeholder="Where are you located? (Search address, area, or landmark)..."
+              placeholder="Search for your area, street or landmark..."
               initialValue={location?.address || ''}
             />
           ) : (
@@ -203,7 +177,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                 ref={searchInputRef}
                 id="location-search-input"
                 type="text"
-                placeholder="Where are you located? (e.g. Garrison, Aba Road, Rumuola)..."
+                placeholder="Search for your area, street or landmark..."
                 value={searchQuery}
                 onFocus={() => setSearchFocused(true)}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -224,7 +198,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
             </div>
           )}
 
-          {/* Autocomplete Suggestions Dropdown (for catalog search when Google Places is not configured) */}
+          {/* Autocomplete Suggestions Dropdown (catalog search) */}
           {!hasKey && searchFocused && (
             <div className="absolute top-full left-0 right-0 mt-1.5 z-30 bg-white rounded-2xl border border-slate-200 shadow-lg max-h-60 overflow-y-auto divide-y divide-slate-100">
               {filteredAreas.length > 0 ? (
@@ -254,27 +228,11 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
               ) : searchQuery.trim() ? (
                 <div className="p-4 text-center">
                   <p className="text-xs text-slate-600 font-medium">
-                    No predefined area found for "{searchQuery}".
+                    No matching area found for "{searchQuery}".
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onChange({
-                        lat: location?.lat || 4.8156,
-                        lng: location?.lng || 7.0128,
-                        address: searchQuery.trim(),
-                        area: searchQuery.trim(),
-                        city: 'Port Harcourt',
-                        state: 'Rivers State',
-                        country: 'Nigeria',
-                        source: 'MANUAL',
-                      });
-                      setSearchFocused(false);
-                    }}
-                    className="mt-2 text-xs text-emerald-700 font-bold hover:underline cursor-pointer"
-                  >
-                    Set "{searchQuery}" as my location
-                  </button>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Please select a valid result from the suggested areas or use your current location.
+                  </p>
                 </div>
               ) : (
                 <div className="p-3">
@@ -300,7 +258,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
           )}
         </div>
 
-        {/* Use Current Location Button */}
+        {/* GPS Action Button */}
         <button
           type="button"
           id="btn-use-current-location"
@@ -316,13 +274,13 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
           ) : (
             <>
               <Navigation className="w-4 h-4 text-emerald-200" />
-              <span>Use current location</span>
+              <span>Use my current location</span>
             </>
           )}
         </button>
       </div>
 
-      {/* STATE 3: GPS BLOCKED BY BROWSER / IFRAME */}
+      {/* GPS UNAVAILABLE / PREVIEW RESTRICTION */}
       {iframeBlocked && (
         <div
           id="state-gps-blocked"
@@ -332,10 +290,10 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
             <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="space-y-1 text-xs">
               <p className="font-extrabold text-amber-950">
-                Live location is unavailable in this preview.
+                Live location isn’t available in this preview.
               </p>
               <p className="text-[11px] text-amber-800 leading-relaxed">
-                Embedded browser iframes restrict device GPS access. You can search your area below or open Fixhub in a new browser tab.
+                Search for your location instead or select one of the popular areas below.
               </p>
             </div>
           </div>
@@ -368,7 +326,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
         </div>
       )}
 
-      {/* STATE 2: GPS FOUND BUT UNRESOLVED STREET ADDRESS */}
+      {/* GPS FOUND BUT UNRESOLVED STREET ADDRESS */}
       {unresolvedGpsPrompt && location?.source === 'GPS' && (
         <form
           onSubmit={handleSaveUnresolvedStreet}
@@ -378,10 +336,10 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
             <MapPin className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
             <div className="space-y-1">
               <p className="text-xs font-extrabold text-blue-950">
-                We found your coordinates, but could not resolve your street address.
+                Location coordinates captured
               </p>
               <p className="text-[11px] text-blue-800">
-                Please enter your street name or nearest landmark so technicians can find you.
+                Optional: Enter your street name or nearest landmark to help technicians identify your area.
               </p>
             </div>
           </div>
@@ -390,7 +348,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
               type="text"
               value={customStreetInput}
               onChange={(e) => setCustomStreetInput(e.target.value)}
-              placeholder="e.g. 15 Aba Road, near Garrison Junction"
+              placeholder="e.g. Near Garrison Junction, Aba Road"
               className="flex-1 px-3 py-2 rounded-xl border border-blue-200 bg-white text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
             />
             <button
@@ -403,37 +361,36 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
         </form>
       )}
 
-      {/* 2. INTERACTIVE MAP (Uber/Bolt style) */}
-      <InteractiveLocationMap
-        location={
-          location && (location.lat !== 0 || location.lng !== 0)
-            ? location
-            : {
-                lat: 4.8156,
-                lng: 7.0128,
-                address: 'Port Harcourt, Rivers State',
-                area: 'Garrison',
-                city: 'Port Harcourt',
-                state: 'Rivers State',
-                country: 'Nigeria',
-                source: 'MANUAL',
-              }
-        }
-        onChangeLocation={(newLoc) => {
-          onChange(newLoc);
-          setUnresolvedGpsPrompt(false);
-          setLocationError(null);
-        }}
-      />
+      {/* 2. MAP CONFIRMATION */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-bold text-slate-700">
+            Confirm your location
+          </p>
+          {hasValidLocation && (
+            <span className="text-[11px] text-slate-400 font-medium">
+              Drag pin to adjust
+            </span>
+          )}
+        </div>
+        <InteractiveLocationMap
+          location={hasValidLocation ? location : null}
+          onChangeLocation={(newLoc) => {
+            onChange(newLoc);
+            setUnresolvedGpsPrompt(false);
+            setLocationError(null);
+          }}
+        />
+      </div>
 
-      {/* 3. ACTIVE SELECTED LOCATION CARD */}
-      {hasLocation && location ? (
+      {/* 3. ACTIVE CONFIRMED LOCATION CARD */}
+      {hasValidLocation && location && (
         <div
           id="active-location-card"
-          className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1.5"
+          className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1.5 animate-fadeIn"
         >
           <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
+            <div className="flex items-start gap-3 min-w-0">
               <div
                 className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
                   location.source === 'GPS'
@@ -443,17 +400,24 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
               >
                 <MapPin className="w-5 h-5" />
               </div>
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-black text-slate-900 leading-snug">
-                    {location.address || location.area || `${location.city}, ${location.state}`}
+              <div className="space-y-0.5 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-black text-slate-900 leading-snug truncate">
+                    {location.address || location.area || `${location.city || 'Location selected'}, ${location.state || 'Rivers State'}`}
                   </p>
                   {location.source === 'GPS' && (
                     <span
                       id="state-gps-detected"
                       className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200/60 rounded-full text-[10px] font-bold shrink-0"
                     >
-                      GPS Confirmed
+                      GPS
+                    </span>
+                  )}
+                  {location.source === 'GEOCODED' && (
+                    <span
+                      className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200/60 rounded-full text-[10px] font-bold shrink-0"
+                    >
+                      Selected Area
                     </span>
                   )}
                   {location.source === 'DEVELOPMENT_FALLBACK' && (
@@ -465,8 +429,8 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-slate-500">
-                  {[location.city, location.state].filter(Boolean).join(', ') || 'Nigeria'}
+                <p className="text-xs text-slate-500 truncate">
+                  {[location.city, location.state].filter(Boolean).join(', ') || 'Rivers State, Nigeria'}
                   {location.landmark ? ` • near ${location.landmark}` : ''}
                 </p>
               </div>
@@ -494,9 +458,9 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
             </button>
           </div>
         </div>
-      ) : null}
+      )}
 
-      {/* 4. SUGGESTED AREAS (Rivers State Initial Ecosystem) */}
+      {/* 4. SUGGESTED AREAS (Rivers State) */}
       <div className="space-y-2">
         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
           Suggested Areas in Port Harcourt
@@ -504,9 +468,10 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
         <div className="flex flex-wrap gap-1.5">
           {popularHubs.map((hub, idx) => {
             const isSelected =
-              location != null &&
-              ((location.lat === hub.lat && location.lng === hub.lng) ||
-                location.area === hub.name);
+              Boolean(hasValidLocation &&
+              location &&
+              location.lat === hub.lat &&
+              location.lng === hub.lng);
             return (
               <button
                 key={idx}
@@ -518,83 +483,14 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                     : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/80'
                 }`}
               >
-                {hub.name}
+                {hub.name.split('/')[0].trim()}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* 5. MANUAL ADDRESS ENTRY TOGGLE */}
-      <div className="pt-1 border-t border-slate-100">
-        <button
-          type="button"
-          onClick={() => setIsManualInput(!isManualInput)}
-          className="text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 cursor-pointer bg-transparent border-none py-1"
-        >
-          <span>{isManualInput ? 'Hide manual address form' : 'Enter address manually'}</span>
-          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isManualInput ? 'rotate-180' : ''}`} />
-        </button>
-
-        {isManualInput && (
-          <div className="mt-2.5 p-4 rounded-2xl bg-white border border-slate-200/90 space-y-3 shadow-2xs animate-fadeIn">
-            <div>
-              <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                Street Address / Building
-              </label>
-              <input
-                type="text"
-                value={location?.address || ''}
-                onChange={(e) => updateManualField({ address: e.target.value })}
-                placeholder="e.g. 14 Aba Road"
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  City / Town
-                </label>
-                <input
-                  type="text"
-                  value={location?.city || ''}
-                  onChange={(e) => updateManualField({ city: e.target.value })}
-                  placeholder="e.g. Port Harcourt"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  State
-                </label>
-                <input
-                  type="text"
-                  value={location?.state || ''}
-                  onChange={(e) => updateManualField({ state: e.target.value })}
-                  placeholder="e.g. Rivers State"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                Nearest Landmark (optional)
-              </label>
-              <input
-                type="text"
-                value={location?.landmark || ''}
-                onChange={(e) => updateManualField({ landmark: e.target.value })}
-                placeholder="e.g. Near Garrison Junction"
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 6. DEV ENVIRONMENT ONLY: TEST LOCATION TRIGGER */}
+      {/* 5. DEV ENVIRONMENT ONLY: TEST LOCATION TRIGGER */}
       {isDev && (
         <div id="state-dev-panel" className="pt-2">
           <button

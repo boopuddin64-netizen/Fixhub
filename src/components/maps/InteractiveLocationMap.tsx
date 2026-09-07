@@ -6,7 +6,7 @@ import { useGoogleMaps } from './GoogleMapsProvider';
 import { reverseGeocode } from '../../utils/reverseGeocoding';
 
 interface InteractiveLocationMapProps {
-  location: LocationCoordinates;
+  location?: LocationCoordinates | null;
   onChangeLocation: (newLoc: LocationCoordinates) => void;
   className?: string;
 }
@@ -30,9 +30,16 @@ export const InteractiveLocationMap: React.FC<InteractiveLocationMapProps> = ({
   const { hasKey } = useGoogleMaps();
   const [isReverseGeocoding, setIsReverseGeocoding] = useState<boolean>(false);
 
-  // Default coordinate center (Port Harcourt Garrison: 4.8156, 7.0128 if 0,0)
-  const currentLat = location.lat && location.lat !== 0 ? location.lat : 4.8156;
-  const currentLng = location.lng && location.lng !== 0 ? location.lng : 7.0128;
+  const hasValidLocation = Boolean(
+    location &&
+      typeof location.lat === 'number' &&
+      typeof location.lng === 'number' &&
+      (location.lat !== 0 || location.lng !== 0)
+  );
+
+  // Map visual center default: Port Harcourt (visual center only; never submitted or stored as user location)
+  const centerLat = hasValidLocation && location?.lat ? location.lat : 4.8156;
+  const centerLng = hasValidLocation && location?.lng ? location.lng : 7.0128;
 
   const handleCoordinateUpdate = useCallback(
     async (lat: number, lng: number) => {
@@ -43,16 +50,16 @@ export const InteractiveLocationMap: React.FC<InteractiveLocationMapProps> = ({
       if (geocodeResult.resolved && geocodeResult.location) {
         const loc = geocodeResult.location;
         onChangeLocation({
-          ...location,
+          ...(location || {}),
           lat,
           lng,
-          address: loc.address || `${loc.street || ''} ${loc.city || ''}`.trim() || location.address,
-          street: loc.street || location.street,
-          landmark: loc.landmark || location.landmark,
-          area: loc.area || location.area,
-          city: loc.city || location.city,
-          state: loc.state || location.state,
-          country: loc.country || location.country || 'Nigeria',
+          address: loc.address || `${loc.street || ''} ${loc.city || ''}`.trim() || location?.address || 'Selected Map Location',
+          street: loc.street || location?.street,
+          landmark: loc.landmark || location?.landmark,
+          area: loc.area || location?.area,
+          city: loc.city || location?.city || 'Port Harcourt',
+          state: loc.state || location?.state || 'Rivers State',
+          country: loc.country || location?.country || 'Nigeria',
           source: 'GEOCODED',
           accuracyMeters: 5,
           timestamp: new Date().toISOString(),
@@ -60,9 +67,14 @@ export const InteractiveLocationMap: React.FC<InteractiveLocationMapProps> = ({
         });
       } else {
         onChangeLocation({
-          ...location,
+          ...(location || {}),
           lat,
           lng,
+          address: location?.address || 'Selected Map Location',
+          area: location?.area,
+          city: location?.city,
+          state: location?.state,
+          country: location?.country || 'Nigeria',
           source: 'GEOCODED',
           timestamp: new Date().toISOString(),
           capturedAt: new Date().toISOString(),
@@ -79,8 +91,8 @@ export const InteractiveLocationMap: React.FC<InteractiveLocationMapProps> = ({
           <Map
             mapId="DEMO_MAP_ID"
             internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-            defaultCenter={{ lat: currentLat, lng: currentLng }}
-            defaultZoom={15}
+            defaultCenter={{ lat: centerLat, lng: centerLng }}
+            defaultZoom={hasValidLocation ? 15 : 12}
             gestureHandling="greedy"
             disableDefaultUI={false}
             style={{ width: '100%', height: '100%' }}
@@ -90,26 +102,28 @@ export const InteractiveLocationMap: React.FC<InteractiveLocationMapProps> = ({
               }
             }}
           >
-            <MapController center={{ lat: currentLat, lng: currentLng }} />
+            <MapController center={{ lat: centerLat, lng: centerLng }} />
 
-            {/* Customer Location Draggable Pin */}
-            <AdvancedMarker
-              position={{ lat: currentLat, lng: currentLng }}
-              draggable={true}
-              onDragEnd={(e) => {
-                if (e.latLng) {
-                  handleCoordinateUpdate(e.latLng.lat, e.latLng.lng);
-                }
-              }}
-              title="Drag pin to your exact building or doorstep"
-            >
-              <Pin
-                background="#059669"
-                borderColor="#047857"
-                glyphColor="#ffffff"
-                scale={1.2}
-              />
-            </AdvancedMarker>
+            {/* Customer Location Draggable Pin - ONLY rendered when genuine location exists */}
+            {hasValidLocation && location?.lat && location?.lng && (
+              <AdvancedMarker
+                position={{ lat: location.lat, lng: location.lng }}
+                draggable={true}
+                onDragEnd={(e) => {
+                  if (e.latLng) {
+                    handleCoordinateUpdate(e.latLng.lat, e.latLng.lng);
+                  }
+                }}
+                title="Drag pin to your exact building or doorstep"
+              >
+                <Pin
+                  background="#059669"
+                  borderColor="#047857"
+                  glyphColor="#ffffff"
+                  scale={1.2}
+                />
+              </AdvancedMarker>
+            )}
           </Map>
 
           {/* Draggable Guide Badge / Loading State */}
@@ -119,10 +133,15 @@ export const InteractiveLocationMap: React.FC<InteractiveLocationMapProps> = ({
                 <Loader2 className="w-3.5 h-3.5 text-emerald-400 animate-spin shrink-0" />
                 <span>Updating address...</span>
               </>
-            ) : (
+            ) : hasValidLocation ? (
               <>
                 <Crosshair className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>Drag pin or tap map to set exact spot</span>
+                <span>Drag pin or tap map to adjust location</span>
+              </>
+            ) : (
+              <>
+                <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>Tap map or search above to choose location</span>
               </>
             )}
           </div>
@@ -140,15 +159,32 @@ export const InteractiveLocationMap: React.FC<InteractiveLocationMapProps> = ({
             }}
           />
           <div className="relative z-10 flex flex-col items-center space-y-2">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shadow-2xs">
+            <div
+              className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-2xs ${
+                hasValidLocation
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-slate-100 text-slate-400'
+              }`}
+            >
               <MapPin className="w-5 h-5" />
             </div>
-            <p className="text-xs font-bold text-slate-800">
-              {location.address || location.area || 'Location Pinned'}
-            </p>
-            <p className="text-[11px] text-slate-500 max-w-xs leading-relaxed">
-              Interactive satellite map preview requires Maps API key. You can use GPS or search any area below.
-            </p>
+            {hasValidLocation && location ? (
+              <>
+                <p className="text-xs font-bold text-slate-800">
+                  {location.address || location.area || 'Location Selected'}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  {[location.city, location.state].filter(Boolean).join(', ') || 'Nigeria'}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-xs font-bold text-slate-700">No location selected yet</p>
+                <p className="text-[11px] text-slate-400 max-w-xs leading-relaxed">
+                  Search for your area, street or landmark, or use your current location.
+                </p>
+              </>
+            )}
           </div>
         </div>
       )}

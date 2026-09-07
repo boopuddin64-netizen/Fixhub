@@ -77,10 +77,10 @@ function MainAppContent() {
         ApiClient.getNotifications().catch(() => []),
         ApiClient.getTechnicians().catch(() => []),
       ]);
-      setJobs(jobList);
-      setRequests(reqList);
-      setNotifications(notifList);
-      setTechnicians(techList);
+      setJobs(Array.isArray(jobList) ? jobList : []);
+      setRequests(Array.isArray(reqList) ? reqList : []);
+      setNotifications(Array.isArray(notifList) ? notifList : []);
+      setTechnicians(Array.isArray(techList) ? techList : []);
     } catch (err) {
       console.error('Failed to load application state:', err);
     }
@@ -215,10 +215,15 @@ function MainAppContent() {
     );
   }
 
-  const activeJobs = jobs.filter((j) => j.status !== 'COMPLETED' && j.status !== 'CANCELLED');
-  const activeJob = jobs.find((j) => j.id === selectedJobId) || activeJobs[0] || jobs[0];
-  const activeRequest = requests.find((r) => r.id === selectedRequestId) || requests[0];
-  const activeJobTech = activeJob ? technicians.find((t) => t.userId === activeJob.technicianId) : null;
+  const safeJobs = Array.isArray(jobs) ? jobs : [];
+  const safeRequests = Array.isArray(requests) ? requests : [];
+  const safeTechnicians = Array.isArray(technicians) ? technicians : [];
+  const safeNotifications = Array.isArray(notifications) ? notifications : [];
+
+  const activeJobs = safeJobs.filter((j) => j.status !== 'COMPLETED' && j.status !== 'CANCELLED');
+  const activeJob = safeJobs.find((j) => j.id === selectedJobId) || activeJobs[0] || safeJobs[0];
+  const activeRequest = safeRequests.find((r) => r.id === selectedRequestId) || safeRequests[0];
+  const activeJobTech = activeJob ? safeTechnicians.find((t) => t.userId === activeJob.technicianId) : null;
 
   return (
     <GestureContainer onBack={handleBack} onRefresh={loadData} canGoBack={canGoBack}>
@@ -226,7 +231,7 @@ function MainAppContent() {
         {/* Top Main App Header */}
         <Header
           onOpenNotifications={() => setIsNotifsOpen(true)}
-          unreadNotifsCount={notifications.filter((n) => !n.read).length}
+          unreadNotifsCount={safeNotifications.filter((n) => !n.read).length}
           onOpenIntro={() => setShowIntroGuide(true)}
           onReplayIntro={() => setIsLoadingIntro(true)}
         />

@@ -44,7 +44,8 @@ export const TechnicianDiscoveryView: React.FC<TechnicianDiscoveryViewProps> = (
     try {
       // First fetch request details if not loaded
       const reqs = await ApiClient.getRepairRequests();
-      const currentReq = reqs.find((r: RepairRequest) => r.id === requestId);
+      const safeReqs = Array.isArray(reqs) ? reqs : [];
+      const currentReq = safeReqs.find((r: RepairRequest) => r.id === requestId);
       if (currentReq) {
         setRequest(currentReq);
       }

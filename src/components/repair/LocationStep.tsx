@@ -15,10 +15,10 @@ export const LocationStep: React.FC<LocationStepProps> = ({
 }) => {
   const isLocationValid = Boolean(
     location &&
-      (location.address ||
-        location.area ||
-        location.city ||
-        (location.lat !== 0 && location.lng !== 0))
+      typeof location.lat === 'number' &&
+      typeof location.lng === 'number' &&
+      (location.lat !== 0 || location.lng !== 0) &&
+      (location.address || location.area || location.city || location.source === 'GPS' || location.source === 'GEOCODED')
   );
 
   return (
@@ -41,9 +41,9 @@ export const LocationStep: React.FC<LocationStepProps> = ({
           type="button"
           disabled={!isLocationValid}
           onClick={onContinue}
-          className="px-6 py-3 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white font-bold text-xs sm:text-sm rounded-2xl transition-all shadow-md cursor-pointer disabled:cursor-not-allowed"
+          className="px-6 py-3 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-40 text-white font-bold text-xs sm:text-sm rounded-2xl transition-all shadow-md cursor-pointer disabled:cursor-not-allowed"
         >
-          Review Request →
+          Confirm location →
         </button>
       </div>
     </div>

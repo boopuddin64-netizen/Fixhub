@@ -67,25 +67,26 @@ export function geocodeCustomerLocation(customerLocation: any) {
     }
   }
 
-  // Coords are missing or invalid. Try geocoding based on text!
+  // Coords are missing or invalid. Try geocoding based on specific area or landmark text!
   const textToSearch = [
     customerLocation.landmark,
     customerLocation.address,
     customerLocation.area,
-    customerLocation.city,
-    customerLocation.state
   ].filter(Boolean).join(' ').toLowerCase();
 
-  // Look for a match in POPULAR_NIGERIAN_LOCATIONS
+  // Look for a specific match in POPULAR_NIGERIAN_LOCATIONS (do not match generic "Port Harcourt")
   let bestMatch = null;
-  for (const loc of POPULAR_NIGERIAN_LOCATIONS) {
-    if (
-      (loc.name && textToSearch.includes(loc.name.toLowerCase())) ||
-      (loc.city && textToSearch.includes(loc.city.toLowerCase())) ||
-      (loc.landmark && textToSearch.includes(loc.landmark.toLowerCase()))
-    ) {
-      bestMatch = loc;
-      break;
+  if (textToSearch.trim().length > 0) {
+    for (const loc of POPULAR_NIGERIAN_LOCATIONS) {
+      const areaPrimary = loc.name.toLowerCase().split('/')[0].trim();
+      if (
+        (loc.landmark && textToSearch.includes(loc.landmark.toLowerCase())) ||
+        (loc.name && textToSearch.includes(loc.name.toLowerCase())) ||
+        (areaPrimary.length > 3 && textToSearch.includes(areaPrimary))
+      ) {
+        bestMatch = loc;
+        break;
+      }
     }
   }
 
@@ -97,7 +98,6 @@ export function geocodeCustomerLocation(customerLocation: any) {
     if (!customerLocation.state) customerLocation.state = bestMatch.state;
   } else {
     // Geocoding failed: do not fabricate coordinates!
-    // Retain the textual location and set coordinates to 0, clearly marking source as MANUAL
     customerLocation.lat = 0;
     customerLocation.lng = 0;
     customerLocation.source = 'MANUAL';
@@ -694,28 +694,72 @@ apiRouter.post('/repairs/attachments/upload', requireAuth, requireRole(['custome
 
   try {
     const attachId = `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const attachExt = type === 'IMAGE' ? 'jpg' : 'webm';
-    const filename = `${attachId}.${attachExt}`;
-    
     const attachmentsDir = path.resolve(process.cwd(), './data/attachments');
     if (!fs.existsSync(attachmentsDir)) {
       fs.mkdirSync(attachmentsDir, { recursive: true });
     }
 
-    // Extract base64 part
-    const matches = fileData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-    if (!matches || matches.length !== 3) {
+    let base64Payload = fileData.trim();
+    let detectedMime = mimeType ? sanitizeString(mimeType, 100) : '';
+
+    // Robustly extract base64 from Data URLs of any MIME type (e.g. data:audio/webm;codecs=opus;base64,...)
+    if (base64Payload.startsWith('data:')) {
+      const commaIndex = base64Payload.indexOf(',');
+      if (commaIndex !== -1) {
+        const header = base64Payload.substring(5, commaIndex);
+        const base64MarkerIndex = header.indexOf(';base64');
+        if (base64MarkerIndex !== -1) {
+          const headerMime = header.substring(0, base64MarkerIndex).trim();
+          if (headerMime && !detectedMime) {
+            detectedMime = sanitizeString(headerMime, 100);
+          }
+        }
+        base64Payload = base64Payload.substring(commaIndex + 1);
+      }
+    }
+
+    // Strip any whitespace, linebreaks, or carriage returns from base64 payload
+    base64Payload = base64Payload.replace(/\s+/g, '');
+
+    // Validate base64 characters (supports standard and URL-safe base64: A-Z, a-z, 0-9, +, /, -, _, =)
+    if (!base64Payload || !/^[A-Za-z0-9+/=_-]+$/.test(base64Payload)) {
       return res.status(400).json({ error: 'Invalid base64 format.' });
     }
-    const buffer = Buffer.from(matches[2], 'base64');
+
+    // Normalize URL-safe base64 to standard base64
+    const normalizedBase64 = base64Payload.replace(/-/g, '+').replace(/_/g, '/');
+    const buffer = Buffer.from(normalizedBase64, 'base64');
+
+    if (!buffer || buffer.length === 0) {
+      return res.status(400).json({ error: 'Invalid base64 format.' });
+    }
+
+    // Determine extension based on type and detected MIME
+    let attachExt = type === 'IMAGE' ? 'jpg' : 'webm';
+    const lowerMime = (detectedMime || '').toLowerCase();
+    if (type === 'IMAGE') {
+      if (lowerMime.includes('png')) attachExt = 'png';
+      else if (lowerMime.includes('webp')) attachExt = 'webp';
+      else if (lowerMime.includes('gif')) attachExt = 'gif';
+      else if (lowerMime.includes('svg')) attachExt = 'svg';
+      else attachExt = 'jpg';
+    } else if (type === 'AUDIO') {
+      if (lowerMime.includes('mp4') || lowerMime.includes('m4a') || lowerMime.includes('aac')) attachExt = 'm4a';
+      else if (lowerMime.includes('ogg') || lowerMime.includes('opus')) attachExt = 'ogg';
+      else if (lowerMime.includes('wav')) attachExt = 'wav';
+      else if (lowerMime.includes('3gp')) attachExt = '3gp';
+      else attachExt = 'webm';
+    }
+
+    const filename = `${attachId}.${attachExt}`;
     fs.writeFileSync(path.join(attachmentsDir, filename), buffer);
 
     const attachment = {
       id: attachId,
       type: type as 'IMAGE' | 'AUDIO',
       url: `/api/repairs/attachments/${filename}`,
-      mimeType: sanitizeString(mimeType, 100) || matches[1] || (type === 'IMAGE' ? 'image/jpeg' : 'audio/webm'),
-      size: buffer.length || Number(size) || Math.round(fileData.length * 0.75),
+      mimeType: detectedMime || (type === 'IMAGE' ? 'image/jpeg' : 'audio/webm'),
+      size: buffer.length || Number(size) || Math.round(base64Payload.length * 0.75),
       createdAt: new Date().toISOString(),
       durationSeconds: durationSeconds ? Number(durationSeconds) : undefined,
       ownerId: req.user!.id,

@@ -32,16 +32,20 @@ export const CustomerRepairsView: React.FC<CustomerRepairsViewProps> = ({
 }) => {
   const [filterTab, setFilterTab] = useState<'active' | 'history'>('active');
 
-  const activeJobs = jobs.filter((j) => j.status !== 'COMPLETED' && j.status !== 'CANCELLED');
-  const historyJobs = jobs.filter((j) => j.status === 'COMPLETED' || j.status === 'CANCELLED');
+  const safeJobs = Array.isArray(jobs) ? jobs : [];
+  const safeRequests = Array.isArray(requests) ? requests : [];
+  const safeTechnicians = Array.isArray(technicians) ? technicians : [];
 
-  const activeRequests = requests.filter(
+  const activeJobs = safeJobs.filter((j) => j.status !== 'COMPLETED' && j.status !== 'CANCELLED');
+  const historyJobs = safeJobs.filter((j) => j.status === 'COMPLETED' || j.status === 'CANCELLED');
+
+  const activeRequests = safeRequests.filter(
     (r) => r.status !== 'COMPLETED' && r.status !== 'CANCELLED'
   );
 
-  const selectedJob = jobs.find((j) => j.id === selectedJobId) || activeJobs[0];
+  const selectedJob = safeJobs.find((j) => j.id === selectedJobId) || activeJobs[0];
   const selectedJobTech = selectedJob
-    ? technicians.find((t) => t.userId === selectedJob.technicianId)
+    ? safeTechnicians.find((t) => t.userId === selectedJob.technicianId)
     : null;
 
   // If a specific job is selected for deep tracking

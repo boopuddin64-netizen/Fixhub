@@ -78,9 +78,16 @@ export const CustomerHomeView: React.FC<CustomerHomeViewProps> = ({
         ApiClient.getIssues().catch(() => []),
       ]);
 
-      setActiveJobs(jobs.filter((j) => j.status !== 'COMPLETED' && j.status !== 'CANCELLED'));
+      const safeJobs = Array.isArray(jobs) ? jobs : [];
+      const safeReqs = Array.isArray(reqs) ? reqs : [];
+      const safeDevs = Array.isArray(devs) ? devs : [];
+      const safeTechs = Array.isArray(techs) ? techs : [];
+      const safeBrands = Array.isArray(brandList) ? brandList : [];
+      const safeIssues = Array.isArray(issues) ? issues : [];
+
+      setActiveJobs(safeJobs.filter((j) => j.status !== 'COMPLETED' && j.status !== 'CANCELLED'));
       setPendingRequests(
-        reqs.filter(
+        safeReqs.filter(
           (r) =>
             r.status === 'REQUESTED' ||
             r.status === 'QUOTING' ||
@@ -88,10 +95,10 @@ export const CustomerHomeView: React.FC<CustomerHomeViewProps> = ({
             r.status === 'MATCHING'
         )
       );
-      setSavedDevices(devs);
-      setTopTechs(techs.slice(0, 3));
-      setBrands(brandList);
-      setIssuesList(issues);
+      setSavedDevices(safeDevs);
+      setTopTechs(safeTechs.slice(0, 3));
+      setBrands(safeBrands);
+      setIssuesList(safeIssues);
     } catch (err) {
       console.error('CustomerHomeView load error:', err);
     } finally {

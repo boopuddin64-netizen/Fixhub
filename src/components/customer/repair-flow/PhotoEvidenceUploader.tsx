@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Camera, X, Loader2, Sparkles } from 'lucide-react';
+import { Camera, X, Loader2, Sparkles, AlertCircle } from 'lucide-react';
 import { ApiClient } from '../../../api/client';
 
 interface PhotoEvidenceUploaderProps {
@@ -15,6 +15,7 @@ export const PhotoEvidenceUploader: React.FC<PhotoEvidenceUploaderProps> = ({
 }) => {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Compress image client-side to ensure lightweight bandwidth consumption on Nigerian mobile networks
@@ -57,8 +58,12 @@ export const PhotoEvidenceUploader: React.FC<PhotoEvidenceUploaderProps> = ({
   };
 
   const handleFiles = async (files: FileList | File[]) => {
+    setErrorMessage(null);
     const fileArray = Array.from(files).filter((f) => f.type.startsWith('image/'));
-    if (fileArray.length === 0) return;
+    if (fileArray.length === 0) {
+      setErrorMessage('Please select valid image files (JPG, PNG, WebP).');
+      return;
+    }
 
     const remainingSlots = maxPhotos - photos.length;
     if (remainingSlots <= 0) return;
@@ -80,8 +85,9 @@ export const PhotoEvidenceUploader: React.FC<PhotoEvidenceUploaderProps> = ({
       }
       
       onChange([...photos, ...uploadedUrls].slice(0, maxPhotos));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error processing photos:', err);
+      setErrorMessage(err?.message || 'Failed to upload photo. Please try again.');
     } finally {
       setIsProcessing(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -125,6 +131,14 @@ export const PhotoEvidenceUploader: React.FC<PhotoEvidenceUploaderProps> = ({
           </p>
         </div>
       </div>
+
+      {/* Error Message */}
+      {errorMessage && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
 
       {/* Photo Grid & Upload Slot */}
       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">

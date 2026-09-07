@@ -212,34 +212,27 @@ export function validateCustomerLocationPayload(
     return { valid: false, error: 'Valid device GPS coordinates (latitude and longitude) are required when source is GPS.' };
   }
 
-  // 6. Location Consistency:
-  // Must have either valid coordinates OR non-empty textual location (address, area, city, or state)
-  const hasTextualLocation =
-    isNonEmptyString(address) ||
-    isNonEmptyString(area) ||
-    isNonEmptyString(city) ||
-    isNonEmptyString(state);
-
-  if (!validCoords && !hasTextualLocation) {
+  // 6. Real Coordinates Requirement (No fabricated coordinates, no un-geocoded text submissions)
+  if (!validCoords) {
     return {
       valid: false,
-      error: 'Please enable GPS location or manually enter/select a valid location.',
+      error: 'Valid location coordinates are required. Please search and select a valid area, or use your current location.',
     };
   }
 
   const sanitized: LocationCoordinates = {
     lat: parsedLat,
     lng: parsedLng,
-    address: sanitizeString(address, 200),
+    address: sanitizeString(address, 200) || 'Selected Location',
     landmark: landmark ? sanitizeString(landmark, 100) : undefined,
     area: sanitizeString(area, 80) || undefined,
-    city: sanitizeString(city, 80) || sanitizeString(area, 80) || '',
-    state: sanitizeString(state, 80) || '',
+    city: sanitizeString(city, 80) || sanitizeString(area, 80) || 'Port Harcourt',
+    state: sanitizeString(state, 80) || 'Rivers State',
     country: sanitizeString(country, 60) || 'Nigeria',
     accuracyMeters: parsedAccuracy,
     timestamp: timestamp ? String(timestamp) : undefined,
     capturedAt: capturedAt ? String(capturedAt) : undefined,
-    source: (source as any) || (validCoords ? 'GPS' : 'MANUAL'),
+    source: (source as any) || 'GEOCODED',
   };
 
   return {

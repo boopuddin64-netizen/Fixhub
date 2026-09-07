@@ -93,53 +93,91 @@ export class ApiClient {
   }
 
   // Devices & Catalog
-  public static getBrands(deviceType?: DeviceType) {
-    return this.request<DeviceBrand[]>(`/devices/brands${deviceType ? `?deviceType=${deviceType}` : ''}`);
+  public static async getBrands(deviceType?: DeviceType): Promise<DeviceBrand[]> {
+    try {
+      const res = await this.request<any>(`/devices/brands${deviceType ? `?deviceType=${deviceType}` : ''}`);
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
   }
 
-  public static getFamilies(brandId?: string, deviceType?: DeviceType) {
-    const params = new URLSearchParams();
-    if (brandId) params.append('brandId', brandId);
-    if (deviceType) params.append('deviceType', deviceType);
-    const qs = params.toString();
-    return this.request<DeviceFamily[]>(`/devices/families${qs ? `?${qs}` : ''}`);
+  public static async getFamilies(brandId?: string, deviceType?: DeviceType): Promise<DeviceFamily[]> {
+    try {
+      const params = new URLSearchParams();
+      if (brandId) params.append('brandId', brandId);
+      if (deviceType) params.append('deviceType', deviceType);
+      const qs = params.toString();
+      const res = await this.request<any>(`/devices/families${qs ? `?${qs}` : ''}`);
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
   }
 
-  public static getModels(params?: {
+  public static async getModels(params?: {
     brandId?: string;
     familyId?: string;
     deviceType?: DeviceType;
     search?: string;
     popular?: boolean;
-  }) {
-    const query = new URLSearchParams();
-    if (params?.brandId) query.append('brandId', params.brandId);
-    if (params?.familyId) query.append('familyId', params.familyId);
-    if (params?.deviceType) query.append('deviceType', params.deviceType);
-    if (params?.search) query.append('search', params.search);
-    if (params?.popular) query.append('popular', 'true');
-    const qs = query.toString();
-    return this.request<DeviceModel[]>(`/devices/models${qs ? `?${qs}` : ''}`);
+  }): Promise<DeviceModel[]> {
+    try {
+      const query = new URLSearchParams();
+      if (params?.brandId) query.append('brandId', params.brandId);
+      if (params?.familyId) query.append('familyId', params.familyId);
+      if (params?.deviceType) query.append('deviceType', params.deviceType);
+      if (params?.search) query.append('search', params.search);
+      if (params?.popular) query.append('popular', 'true');
+      const qs = query.toString();
+      const res = await this.request<any>(`/devices/models${qs ? `?${qs}` : ''}`);
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
   }
 
-  public static searchDevices(q: string, deviceType?: DeviceType) {
-    const params = new URLSearchParams({ q });
-    if (deviceType) params.append('deviceType', deviceType);
-    return this.request<{ brands: DeviceBrand[]; models: DeviceModel[] }>(`/devices/search?${params.toString()}`);
+  public static async searchDevices(q: string, deviceType?: DeviceType): Promise<{ brands: DeviceBrand[]; models: DeviceModel[] }> {
+    try {
+      const params = new URLSearchParams({ q });
+      if (deviceType) params.append('deviceType', deviceType);
+      const res = await this.request<any>(`/devices/search?${params.toString()}`);
+      return {
+        brands: Array.isArray(res?.brands) ? res.brands : [],
+        models: Array.isArray(res?.models) ? res.models : [],
+      };
+    } catch {
+      return { brands: [], models: [] };
+    }
   }
 
-  public static getIssues() {
-    return this.request<RepairIssueOption[]>('/devices/issues');
+  public static async getIssues(): Promise<RepairIssueOption[]> {
+    try {
+      const res = await this.request<any>('/devices/issues');
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
   }
 
-  public static getIssuesCatalog(category?: string) {
-    const qs = category ? `?category=${encodeURIComponent(category)}` : '';
-    return this.request<RepairIssue[]>(`/repairs/issues${qs}`);
+  public static async getIssuesCatalog(category?: string): Promise<RepairIssue[]> {
+    try {
+      const qs = category ? `?category=${encodeURIComponent(category)}` : '';
+      const res = await this.request<any>(`/repairs/issues${qs}`);
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
   }
 
   // Customer Saved Devices
-  public static getCustomerDevices() {
-    return this.request<CustomerDevice[]>('/customer/devices');
+  public static async getCustomerDevices(): Promise<CustomerDevice[]> {
+    try {
+      const res = await this.request<any>('/customer/devices');
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
   }
 
   public static addCustomerDevice(data: {
@@ -187,19 +225,29 @@ export class ApiClient {
   }
 
   // Technicians
-  public static getTechnicians() {
-    return this.request<any[]>('/technicians');
+  public static async getTechnicians(): Promise<any[]> {
+    try {
+      const res = await this.request<any>('/technicians');
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
   }
 
   public static getTechnician(id: string) {
     return this.request<any>(`/technicians/${id}`);
   }
 
-  public static matchTechnicians(data: any) {
-    return this.request<any[]>('/technicians/match', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  public static async matchTechnicians(data: any): Promise<any[]> {
+    try {
+      const res = await this.request<any>('/technicians/match', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
   }
 
   public static setTechnicianAvailability(status: string) {
@@ -262,8 +310,16 @@ export class ApiClient {
     });
   }
 
-  public static getRepairRequests() {
-    return this.request<any[]>('/repairs/requests');
+  public static async getRepairRequests(): Promise<any[]> {
+    try {
+      const res = await this.request<any>('/repairs/requests');
+      if (Array.isArray(res)) return res;
+      if (res && Array.isArray(res.requests)) return res.requests;
+      if (res && Array.isArray(res.data)) return res.data;
+      return [];
+    } catch {
+      return [];
+    }
   }
 
   public static getRepairRequest(id: string) {
@@ -301,8 +357,16 @@ export class ApiClient {
   }
 
   // Jobs
-  public static getJobs() {
-    return this.request<any[]>('/jobs');
+  public static async getJobs(): Promise<any[]> {
+    try {
+      const res = await this.request<any>('/jobs');
+      if (Array.isArray(res)) return res;
+      if (res && Array.isArray(res.jobs)) return res.jobs;
+      if (res && Array.isArray(res.data)) return res.data;
+      return [];
+    } catch {
+      return [];
+    }
   }
 
   public static getJob(id: string) {
@@ -351,13 +415,23 @@ export class ApiClient {
     });
   }
 
-  public static getTechnicianReviews(techId: string) {
-    return this.request<any[]>(`/reviews/technician/${techId}`);
+  public static async getTechnicianReviews(techId: string): Promise<any[]> {
+    try {
+      const res = await this.request<any>(`/reviews/technician/${techId}`);
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
   }
 
   // Parts
-  public static getTechnicianParts(techId: string) {
-    return this.request<any[]>(`/parts/technician/${techId}`);
+  public static async getTechnicianParts(techId: string): Promise<any[]> {
+    try {
+      const res = await this.request<any>(`/parts/technician/${techId}`);
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
   }
 
   public static addTechnicianPart(data: any) {
@@ -368,13 +442,26 @@ export class ApiClient {
   }
 
   // Warranties
-  public static getMyWarranties() {
-    return this.request<any[]>('/warranties/my-warranties');
+  public static async getMyWarranties(): Promise<any[]> {
+    try {
+      const res = await this.request<any>('/warranties/my-warranties');
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
   }
 
   // Notifications
-  public static getNotifications() {
-    return this.request<any[]>('/notifications');
+  public static async getNotifications(): Promise<any[]> {
+    try {
+      const res = await this.request<any>('/notifications');
+      if (Array.isArray(res)) return res;
+      if (res && Array.isArray(res.notifications)) return res.notifications;
+      if (res && Array.isArray(res.data)) return res.data;
+      return [];
+    } catch {
+      return [];
+    }
   }
 
   public static markNotificationRead(id: string) {
@@ -386,8 +473,13 @@ export class ApiClient {
   }
 
   // Messages
-  public static getMessages(repairId: string) {
-    return this.request<any[]>(`/messages/${repairId}`);
+  public static async getMessages(repairId: string): Promise<any[]> {
+    try {
+      const res = await this.request<any>(`/messages/${repairId}`);
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
   }
 
   public static sendMessage(repairId: string, text: string, attachmentUrl?: string) {

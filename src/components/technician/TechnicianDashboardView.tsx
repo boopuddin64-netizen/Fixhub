@@ -42,8 +42,8 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
         ApiClient.getRepairRequests().catch(() => []),
         ApiClient.getJobs().catch(() => []),
       ]);
-      setRequests(reqList);
-      setJobs(jobList);
+      setRequests(Array.isArray(reqList) ? reqList : []);
+      setJobs(Array.isArray(jobList) ? jobList : []);
     } catch (err) {
       console.error(err);
     }
@@ -65,8 +65,10 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
   };
 
   // Metrics
-  const activeJobs = jobs.filter((j) => j.status !== 'COMPLETED' && j.status !== 'CANCELLED');
-  const readyPickupCount = jobs.filter((j) => j.status === 'READY_FOR_PICKUP').length;
+  const safeJobs = Array.isArray(jobs) ? jobs : [];
+  const safeRequests = Array.isArray(requests) ? requests : [];
+  const activeJobs = safeJobs.filter((j) => j.status !== 'COMPLETED' && j.status !== 'CANCELLED');
+  const readyPickupCount = safeJobs.filter((j) => j.status === 'READY_FOR_PICKUP').length;
   const pendingEscrowNaira = activeJobs.reduce((sum, j) => sum + (j.finalAmount || j.originalQuoteAmount || 0), 0);
   const clearedEarningsNaira = technicianProfile?.totalEarningsNaira || 1240000;
 
