@@ -1,7 +1,7 @@
 import { db } from '../../server/db';
 import { PaymentService } from '../../server/services/paymentService';
 import { PaystackClient } from '../../server/services/paystackClient';
-import { AuthService } from '../../server/services/authService';
+import { RepairWorkflowService } from '../../server/services/repairWorkflowService';
 
 let passed = 0;
 let failed = 0;
@@ -18,12 +18,12 @@ function assert(condition: boolean, testName: string, detail?: string) {
 
 export async function runPhase5PaymentTests(): Promise<{ passed: number; failed: number }> {
   console.log('\n===============================================================');
-  console.log('   FIX HUB PHASE 5 — REAL PAYMENT & FINANCIAL SYSTEM SUITE');
+  console.log('   FIX HUB PHASE 5.1 — FINANCIAL INTEGRATION & E2E GATE SUITE');
   console.log('===============================================================\n');
 
   db.resetToSeed();
 
-  // Test 1: Authoritative Amount Calculation
+  // Test 1: Authoritative Amount Calculation & 8.5% Commission Integer Arithmetic
   console.log('1. Authoritative Amount Calculation & Fee Deduction');
   const job = db.repairJobs[0];
   const originalAmount = job.finalAmount || job.originalQuoteAmount;
@@ -31,7 +31,7 @@ export async function runPhase5PaymentTests(): Promise<{ passed: number; failed:
 
   const calc = PaymentService.calculatePlatformDeduction(originalAmount);
   assert(calc.grossAmountNaira === originalAmount, 'Gross amount matches job amount');
-  assert(calc.platformFeeNaira === Math.round(originalAmount * 0.085), 'Platform fee is exactly 8.5% rounded');
+  assert(calc.platformFeeNaira === Math.round(originalAmount * 0.085), 'Platform fee is exactly 8.5% rounded integer');
   assert(calc.netEarningsNaira === originalAmount - calc.platformFeeNaira, 'Net earnings equals gross minus fee');
 
   // Test 2: Payment Initialization & Idempotency
@@ -49,11 +49,11 @@ export async function runPhase5PaymentTests(): Promise<{ passed: number; failed:
 
   assert(init1.success === true, 'Payment initialization succeeds');
   if (!init1.success) return { passed, failed };
-  assert(Boolean(init1.reference), 'Transaction reference generated');
-  assert(init1.payment.amountNaira === originalAmount, 'Payment record uses authoritative amount');
+  assert(Boolean(init1.reference), 'Authoritative transaction reference generated');
+  assert(init1.payment.amountNaira === originalAmount, 'Payment record uses authoritative amount from server quote');
   assert(init1.isExisting === false, 'First call is not marked as existing');
 
-  // Duplicate call with same idempotency key
+  // Duplicate call with same idempotency key returns identical record
   const init2 = await PaymentService.initializePayment({
     repairJobId: job.id,
     customerId,
@@ -76,12 +76,12 @@ export async function runPhase5PaymentTests(): Promise<{ passed: number; failed:
   });
 
   assert(verifyRes.success === true, 'Payment verification succeeds');
-  assert(verifyRes.payment.status === 'SUCCESS' || verifyRes.payment.status === 'ESCROW_HELD', 'Payment status updated to SUCCESS');
+  assert(verifyRes.payment?.status === 'SUCCESS', 'Payment status updated to SUCCESS');
 
   // Check ledger entry
   const earnings = db.technicianEarnings.find((e) => e.repairId === job.id);
-  assert(Boolean(earnings), 'Technician earnings entry created');
-  assert(earnings?.status === 'HELD', 'Earnings status is initially HELD pending completion');
+  assert(Boolean(earnings), 'Technician earnings entry created in ledger');
+  assert(earnings?.status === 'HELD', 'Earnings status is initially HELD pending repair completion');
   assert(earnings?.grossAmountNaira === originalAmount, 'Earnings gross amount matches authoritative payment');
   assert(earnings?.netEarningsNaira === calc.netEarningsNaira, 'Earnings net amount matches calculation');
 
@@ -93,10 +93,20 @@ export async function runPhase5PaymentTests(): Promise<{ passed: number; failed:
   });
   assert(verifyAgain.success === true && verifyAgain.alreadyVerified === true, 'Re-verification is safely idempotent');
 
-  // Test 4: Held Funds Protection Against Premature Withdrawal
-  console.log('\n4. Held Funds Protection (Cannot withdraw held repair earnings)');
+  // Test 4: Financial Security & IDOR Verification
+  console.log('\n4. Security Boundaries (IDOR & Tampering Guard)');
+  const foreignCustomerId = 'usr_customer_2';
+  const unauthVerify = await PaymentService.verifyPayment({
+    reference: init1.reference,
+    actorId: foreignCustomerId,
+    actorRole: 'customer',
+  });
+  assert(unauthVerify.success === false, 'IDOR: Unauthorized customer cannot verify another customer’s payment');
+
+  // Test 5: Held Funds Protection Against Premature Withdrawal
+  console.log('\n5. Held Funds Protection (Cannot withdraw held repair earnings)');
   const techId = earnings!.technicianId;
-  const prematurePayout = PaymentService.requestPayout({
+  const prematurePayout = await PaymentService.requestPayout({
     technicianId: techId,
     amountNaira: earnings!.netEarningsNaira,
     actorId: techId,
@@ -105,20 +115,20 @@ export async function runPhase5PaymentTests(): Promise<{ passed: number; failed:
   assert(prematurePayout.success === false, 'Premature payout of held funds is strictly rejected');
   assert(prematurePayout.eligibleBalanceNaira === 0, 'Eligible balance remains 0 while job is in progress');
 
-  // Test 5: Release of Funds upon Repair Completion
-  console.log('\n5. Release of Funds upon Completion & Payout Eligibility');
-  const releaseRes = PaymentService.releaseTechnicianFunds(job.id, 'admin_system');
+  // Test 6: Release of Funds upon Repair Completion
+  console.log('\n6. Release of Funds upon Completion & Payout Eligibility');
+  const releaseRes = PaymentService.releaseFundsOnCompletion(job.id, 'admin_system');
   assert(releaseRes.success === true, 'Technician funds successfully released on job completion');
 
   const updatedEarnings = db.technicianEarnings.find((e) => e.repairId === job.id);
   assert(updatedEarnings?.status === 'ELIGIBLE_FOR_PAYOUT', 'Earnings status transitioned to ELIGIBLE_FOR_PAYOUT');
 
   // Now payout request should succeed
-  const validPayout = PaymentService.requestPayout({
+  const validPayout = await PaymentService.requestPayout({
     technicianId: techId,
     amountNaira: Math.floor(updatedEarnings!.netEarningsNaira / 2),
     destinationAccount: {
-      bankName: 'GTBank',
+      bankName: 'Guaranty Trust Bank',
       accountNumber: '0123456789',
       bankCode: '058',
       accountName: 'Authorized Tech',
@@ -129,16 +139,33 @@ export async function runPhase5PaymentTests(): Promise<{ passed: number; failed:
   assert(validPayout.success === true, 'Payout request succeeds when funds are eligible');
   assert(validPayout.payout?.amountNaira === Math.floor(updatedEarnings!.netEarningsNaira / 2), 'Payout amount matches request');
 
-  // Verify remaining balance
-  const excessivePayout = PaymentService.requestPayout({
+  // Verify remaining balance enforcement
+  const excessivePayout = await PaymentService.requestPayout({
     technicianId: techId,
     amountNaira: updatedEarnings!.netEarningsNaira, // exceeds remaining balance
     actorId: techId,
   });
   assert(excessivePayout.success === false, 'Cannot request payout exceeding remaining balance after pending payout');
 
-  // Test 6: Webhook Processing & Cryptographic Verification
-  console.log('\n6. Webhook Processing & Signature Validation');
+  // Test 7: Payout Security & Zero/Negative Protection
+  console.log('\n7. Payout Security & Validation Guards');
+  const foreignTechId = 'usr_tech_2';
+  const unauthPayout = await PaymentService.requestPayout({
+    technicianId: techId,
+    amountNaira: 5000,
+    actorId: foreignTechId,
+  });
+  assert(unauthPayout.success === false, 'Security: Technician cannot request payout for another technician’s balance');
+
+  const zeroPayout = await PaymentService.requestPayout({
+    technicianId: techId,
+    amountNaira: 0,
+    actorId: techId,
+  });
+  assert(zeroPayout.success === false, 'Validation: Zero payout request is rejected');
+
+  // Test 8: Webhook Processing & Cryptographic Verification
+  console.log('\n8. Webhook Processing & Signature Validation');
   const nowStr = new Date().toISOString();
   const testQuoteId = `quote_wh_${Date.now()}`;
   const testJobId = `job_wh_${Date.now()}`;
@@ -185,7 +212,7 @@ export async function runPhase5PaymentTests(): Promise<{ passed: number; failed:
     partsUsed: [],
     createdAt: nowStr,
     statusHistory: [
-      { status: 'PAYMENT_PENDING' as const, timestamp: nowStr, actorRole: 'customer' as const, note: 'Awaiting escrow payment' }
+      { status: 'PAYMENT_PENDING' as const, timestamp: nowStr, actorRole: 'customer' as const, note: 'Awaiting payment' }
     ],
   };
   db.repairJobs.push(testJob);
@@ -219,20 +246,53 @@ export async function runPhase5PaymentTests(): Promise<{ passed: number; failed:
   const rawBody = JSON.stringify(mockWebhookPayload);
   const validSignature = PaystackClient.generateHmacSignature(rawBody);
 
+  // Invalid signature rejection
+  const badSigRes = await PaymentService.processWebhook({
+    rawBody,
+    signatureHeader: 'invalid_fake_signature_hex',
+    eventPayload: mockWebhookPayload,
+  });
+  assert(badSigRes.statusCode === 401, 'Webhook with forged/invalid HMAC signature is rejected (401)');
+
+  // Valid signature acceptance
   const webhookRes = await PaymentService.processWebhook({
     rawBody,
     signatureHeader: validSignature,
     eventPayload: mockWebhookPayload,
   });
 
-  assert(webhookRes.statusCode === 200, 'Webhook processing returns 200 OK');
+  assert(webhookRes.statusCode === 200, 'Webhook with valid HMAC signature returns 200 OK');
   assert(webhookRes.success === true, 'Webhook acknowledged as received and processed');
 
   // Verify webhook recorded in audit log
   const recordedWebhook = db.webhookEvents.find((w) => w.providerReference === whInit.reference);
   assert(Boolean(recordedWebhook), 'Webhook event recorded in database audit ledger');
 
-  console.log(`\nPhase 5 Payment Suite Results: ${passed} passed, ${failed} failed.`);
+  // Webhook duplicate idempotency
+  const duplicateWebhookRes = await PaymentService.processWebhook({
+    rawBody,
+    signatureHeader: validSignature,
+    eventPayload: mockWebhookPayload,
+  });
+  assert(duplicateWebhookRes.statusCode === 200, 'Duplicate webhook delivery returns 200 OK idempotently');
+
+  // Test 9: Refund Integration Flow
+  console.log('\n9. Refund Workflow via Paystack');
+  const refundRes = await PaymentService.recordRefund({
+    paymentId: whInit.payment.id,
+    reason: 'Customer cancelled before device check-in',
+    actorId: 'admin_1',
+    actorRole: 'admin',
+  });
+
+  assert(refundRes.success === true, 'Refund successfully recorded and processed via Paystack');
+  const refundedPayment = db.payments.find((p) => p.id === whInit.payment.id);
+  assert(refundedPayment?.status === 'REFUNDED', 'Payment status updated to REFUNDED');
+
+  const refundedJob = db.repairJobs.find((j) => j.id === testJob.id);
+  assert(refundedJob?.status === 'REFUNDED' || refundedJob?.status === 'CANCELLED', 'Job status updated to REFUNDED upon refund');
+
+  console.log(`\nPhase 5.1 Payment Suite Results: ${passed} passed, ${failed} failed.`);
   return { passed, failed };
 }
 
@@ -248,3 +308,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       process.exit(1);
     });
 }
+

@@ -184,14 +184,14 @@ export const QuoteComparisonView: React.FC<QuoteComparisonViewProps> = ({
           </div>
         </div>
 
-        {/* Informative Security/Escrow notice */}
+        {/* Informative Security/Payment notice */}
         <div className="p-4 bg-blue-50 border border-blue-200 text-blue-900 rounded-xl space-y-1">
           <div className="flex items-center gap-1.5 font-bold text-blue-800 text-xs">
             <AlertCircle className="w-4 h-4" />
-            <span>Escrow Payment Pending:</span>
+            <span>Payment Protected via Paystack:</span>
           </div>
           <p className="text-[11px] text-blue-800 leading-relaxed">
-            Fund your repair through Fix Hub's secure escrow. Your funds are held securely and only released to the shop after your repair is tested and you confirm satisfaction upon pickup.
+            Pay securely for your repair with Paystack. Your payment is held pending physical device handover, bench diagnosis, and customer pickup confirmation.
           </p>
         </div>
 
@@ -203,7 +203,7 @@ export const QuoteComparisonView: React.FC<QuoteComparisonViewProps> = ({
             className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-blue-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <ShieldCheck className="w-4 h-4" />
-            <span>Proceed to Secure Escrow Payment</span>
+            <span>Proceed to Paystack Checkout</span>
           </button>
           
           <button

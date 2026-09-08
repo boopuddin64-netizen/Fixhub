@@ -123,6 +123,7 @@ export interface TechnicianProfile {
   // Banking / Payout
   bankDetails?: {
     bankName: string;
+    bankCode?: string;
     accountNumber: string;
     accountName: string;
     verified: boolean;
@@ -461,6 +462,7 @@ export interface PaymentTransaction {
   failedAt?: string;
   releasedAt?: string;
   refundedAt?: string;
+  refundedAmountNaira?: number;
   failureReason?: string;
   metadata?: Record<string, unknown>;
   createdAt?: string;

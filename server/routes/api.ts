@@ -1525,13 +1525,13 @@ apiRouter.post('/payments/webhook', async (req: Request, res: Response) => {
   return res.status(result.statusCode).json(result);
 });
 
-apiRouter.post('/payments/refund', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/payments/refund', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   const { paymentId, amountNaira, reason } = req.body;
   if (!paymentId || !reason) {
     return res.status(400).json({ error: 'Payment ID and Refund Reason are required.' });
   }
 
-  const result = PaymentService.recordRefund({
+  const result = await PaymentService.recordRefund({
     paymentId: String(paymentId),
     amountNaira: amountNaira ? Number(amountNaira) : undefined,
     reason: sanitizeString(reason, 300),
@@ -1582,13 +1582,13 @@ apiRouter.get('/technicians/earnings', requireAuth, requireRole(['technician']),
   });
 });
 
-apiRouter.post('/technicians/payouts/request', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/technicians/payouts/request', requireAuth, requireRole(['technician']), async (req: AuthenticatedRequest, res: Response) => {
   const { amountNaira, destinationAccount } = req.body;
   if (!amountNaira || Number(amountNaira) <= 0) {
     return res.status(400).json({ error: 'Valid payout amount in Naira is required.' });
   }
 
-  const result = PaymentService.requestPayout({
+  const result = await PaymentService.requestPayout({
     technicianId: req.user!.id,
     amountNaira: Math.round(Number(amountNaira)),
     destinationAccount,
@@ -1597,49 +1597,6 @@ apiRouter.post('/technicians/payouts/request', requireAuth, requireRole(['techni
 
   if (!result.success) {
     return res.status(400).json({ error: result.error, eligibleBalanceNaira: result.eligibleBalanceNaira });
-  }
-
-  return res.json(result);
-});
-
-apiRouter.post('/payments/create-intent', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
-  const { repairJobId, idempotencyKey, paymentMethod } = req.body;
-  if (!isNonEmptyString(repairJobId) || !isNonEmptyString(idempotencyKey)) {
-    return res.status(400).json({ error: 'Repair Job ID and Idempotency Key are required.' });
-  }
-
-  const allowedMethods = ['CARD', 'BANK_TRANSFER', 'USSD'] as const;
-  const resolvedMethod = allowedMethods.includes(paymentMethod) ? paymentMethod : 'CARD';
-
-  const result = PaymentService.createPaymentIntent({
-    repairJobId,
-    customerId: req.user!.id,
-    idempotencyKey: sanitizeString(idempotencyKey, 100),
-    paymentMethod: resolvedMethod,
-  });
-
-  if ('error' in result) {
-    return res.status(400).json({ error: result.error });
-  }
-
-  return res.json(result);
-});
-
-apiRouter.post('/payments/verify-mock', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
-  const { paymentId, transactionRef } = req.body;
-  if (!paymentId && !transactionRef) {
-    return res.status(400).json({ error: 'Payment ID or Transaction Reference required.' });
-  }
-
-  const result = PaymentService.verifyAndHoldInEscrow({
-    paymentId: paymentId ? String(paymentId) : '',
-    transactionRef: transactionRef ? String(transactionRef) : '',
-    actorId: req.user!.id,
-    actorRole: req.user!.role,
-  });
-
-  if (!result.success) {
-    return res.status(400).json({ error: result.error });
   }
 
   return res.json(result);

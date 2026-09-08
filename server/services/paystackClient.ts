@@ -9,6 +9,29 @@ export interface PaystackInitializeOptions {
   channels?: string[];
 }
 
+export interface PaystackTransferRecipientParams {
+  name: string;
+  accountNumber: string;
+  bankCode: string;
+  currency?: string;
+  description?: string;
+}
+
+export interface PaystackTransferParams {
+  amountKobo: number;
+  recipientCode: string;
+  reason?: string;
+  reference: string;
+  currency?: string;
+}
+
+export interface PaystackRefundParams {
+  transactionRefOrId: string;
+  amountKobo?: number;
+  merchantNote?: string;
+  customerNote?: string;
+}
+
 export interface PaystackVerifyResult {
   status: boolean;
   message: string;
@@ -75,6 +98,7 @@ export class PaystackClient {
     // Try real Paystack API if not a dummy test key
     if (!isDummyKey) {
       try {
+        const safeEmail = options.email && options.email.includes('@') ? options.email : 'customer@fixhub.ng';
         const response = await fetch('https://api.paystack.co/transaction/initialize', {
           method: 'POST',
           headers: {
@@ -82,7 +106,7 @@ export class PaystackClient {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            email: options.email,
+            email: safeEmail,
             amount: options.amountKobo,
             reference: options.reference,
             callback_url: options.callbackUrl,
@@ -261,5 +285,276 @@ export class PaystackClient {
       console.error('[PaystackClient] Signature verification error:', err);
       return false;
     }
+  }
+
+  /**
+   * Creates a Transfer Recipient on Paystack.
+   */
+  public static async createTransferRecipient(
+    params: PaystackTransferRecipientParams
+  ): Promise<{
+    success: boolean;
+    recipientCode?: string;
+    message?: string;
+    data?: any;
+  }> {
+    const secretKey = this.getSecretKey();
+    const isLive = this.isLiveMode();
+    const isDummyKey = this.isSimulatedTestKey(secretKey);
+
+    if (isLive && isDummyKey) {
+      return {
+        success: false,
+        message: 'Production Paystack secret key is required in LIVE mode for transfers.',
+      };
+    }
+
+    if (!isDummyKey) {
+      try {
+        const response = await fetch('https://api.paystack.co/transferrecipient', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${secretKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            type: 'nuban',
+            name: params.name,
+            account_number: params.accountNumber,
+            bank_code: params.bankCode,
+            currency: params.currency || 'NGN',
+            description: params.description || `Technician Payout for ${params.name}`,
+          }),
+        });
+
+        const data: any = await response.json();
+        if (response.ok && data?.status && data?.data?.recipient_code) {
+          return {
+            success: true,
+            recipientCode: data.data.recipient_code,
+            message: data.message || 'Transfer recipient created',
+            data: data.data,
+          };
+        } else {
+          if (isLive) {
+            return {
+              success: false,
+              message: data?.message || 'Failed to create transfer recipient at Paystack.',
+            };
+          }
+          console.warn('[PaystackClient] Real recipient creation failed, falling back to sandbox:', data?.message);
+        }
+      } catch (err: any) {
+        if (isLive) {
+          return {
+            success: false,
+            message: err.message || 'Network error creating Paystack transfer recipient.',
+          };
+        }
+        console.warn('[PaystackClient] Network exception during recipient creation, falling back to sandbox:', err.message);
+      }
+    }
+
+    // Sandbox simulation
+    const mockCode = `RCP_${params.accountNumber.slice(-4)}_${Math.random().toString(36).substring(2, 8)}`;
+    return {
+      success: true,
+      recipientCode: mockCode,
+      message: 'Simulated sandbox transfer recipient created',
+      data: {
+        recipient_code: mockCode,
+        name: params.name,
+        details: {
+          account_number: params.accountNumber,
+          bank_code: params.bankCode,
+        },
+      },
+    };
+  }
+
+  /**
+   * Initiates a Transfer on Paystack.
+   */
+  public static async initiateTransfer(
+    params: PaystackTransferParams
+  ): Promise<{
+    success: boolean;
+    transferCode?: string;
+    reference: string;
+    status?: string;
+    message?: string;
+    data?: any;
+  }> {
+    const secretKey = this.getSecretKey();
+    const isLive = this.isLiveMode();
+    const isDummyKey = this.isSimulatedTestKey(secretKey);
+
+    if (isLive && isDummyKey) {
+      return {
+        success: false,
+        reference: params.reference,
+        message: 'Production Paystack secret key is required in LIVE mode for transfers.',
+      };
+    }
+
+    if (!isDummyKey) {
+      try {
+        const response = await fetch('https://api.paystack.co/transfer', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${secretKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            source: 'balance',
+            amount: params.amountKobo,
+            recipient: params.recipientCode,
+            reason: params.reason || 'Technician Payout',
+            reference: params.reference,
+            currency: params.currency || 'NGN',
+          }),
+        });
+
+        const data: any = await response.json();
+        if (response.ok && data?.status && data?.data) {
+          return {
+            success: true,
+            transferCode: data.data.transfer_code,
+            reference: data.data.reference || params.reference,
+            status: data.data.status,
+            message: data.message || 'Transfer initiated successfully',
+            data: data.data,
+          };
+        } else {
+          if (isLive) {
+            return {
+              success: false,
+              reference: params.reference,
+              message: data?.message || 'Transfer initiation failed at Paystack.',
+            };
+          }
+          console.warn('[PaystackClient] Real transfer failed, falling back to sandbox:', data?.message);
+        }
+      } catch (err: any) {
+        if (isLive) {
+          return {
+            success: false,
+            reference: params.reference,
+            message: err.message || 'Network error initiating Paystack transfer.',
+          };
+        }
+        console.warn('[PaystackClient] Network exception during transfer, falling back to sandbox:', err.message);
+      }
+    }
+
+    // Sandbox simulation: successful transfer queue
+    const mockTransferCode = `TRF_${Math.random().toString(36).substring(2, 10)}`;
+    return {
+      success: true,
+      transferCode: mockTransferCode,
+      reference: params.reference,
+      status: 'success',
+      message: 'Simulated sandbox transfer queued successfully',
+      data: {
+        transfer_code: mockTransferCode,
+        reference: params.reference,
+        amount: params.amountKobo,
+        currency: 'NGN',
+        status: 'success',
+      },
+    };
+  }
+
+  /**
+   * Initiates a Refund on Paystack.
+   */
+  public static async createRefund(
+    params: PaystackRefundParams
+  ): Promise<{
+    success: boolean;
+    refundId?: number;
+    transactionReference?: string;
+    status?: string;
+    message?: string;
+    data?: any;
+  }> {
+    const secretKey = this.getSecretKey();
+    const isLive = this.isLiveMode();
+    const isDummyKey = this.isSimulatedTestKey(secretKey);
+
+    if (isLive && isDummyKey) {
+      return {
+        success: false,
+        message: 'Production Paystack secret key is required in LIVE mode for refunds.',
+      };
+    }
+
+    if (!isDummyKey) {
+      try {
+        const body: any = {
+          transaction: params.transactionRefOrId,
+          merchant_note: params.merchantNote || 'Fix Hub Customer Refund',
+        };
+        if (params.amountKobo && params.amountKobo > 0) {
+          body.amount = params.amountKobo;
+        }
+        if (params.customerNote) {
+          body.customer_note = params.customerNote;
+        }
+
+        const response = await fetch('https://api.paystack.co/refund', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${secretKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        });
+
+        const data: any = await response.json();
+        if (response.ok && data?.status && data?.data) {
+          return {
+            success: true,
+            refundId: data.data.id,
+            transactionReference: data.data.transaction_reference,
+            status: data.data.status,
+            message: data.message || 'Refund created successfully',
+            data: data.data,
+          };
+        } else {
+          if (isLive) {
+            return {
+              success: false,
+              message: data?.message || 'Refund creation failed at Paystack.',
+            };
+          }
+          console.warn('[PaystackClient] Real refund failed, falling back to sandbox:', data?.message);
+        }
+      } catch (err: any) {
+        if (isLive) {
+          return {
+            success: false,
+            message: err.message || 'Network error creating Paystack refund.',
+          };
+        }
+        console.warn('[PaystackClient] Network exception during refund, falling back to sandbox:', err.message);
+      }
+    }
+
+    // Sandbox simulation: completed/pending refund
+    const mockRefundId = Math.floor(1000000 + Math.random() * 9000000);
+    return {
+      success: true,
+      refundId: mockRefundId,
+      transactionReference: params.transactionRefOrId,
+      status: 'processed',
+      message: 'Simulated sandbox refund processed successfully',
+      data: {
+        id: mockRefundId,
+        transaction_reference: params.transactionRefOrId,
+        amount: params.amountKobo,
+        status: 'processed',
+      },
+    };
   }
 }

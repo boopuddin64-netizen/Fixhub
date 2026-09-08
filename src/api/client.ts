@@ -423,20 +423,6 @@ export class ApiClient {
     });
   }
 
-  public static createPaymentIntent(repairJobId: string, idempotencyKey: string, paymentMethod = 'CARD') {
-    return this.request<any>('/payments/create-intent', {
-      method: 'POST',
-      body: JSON.stringify({ repairJobId, idempotencyKey, paymentMethod }),
-    });
-  }
-
-  public static verifyMockPayment(paymentId: string, transactionRef: string) {
-    return this.request<any>('/payments/verify-mock', {
-      method: 'POST',
-      body: JSON.stringify({ paymentId, transactionRef }),
-    });
-  }
-
   // Jobs
   public static async getJobs(): Promise<any[]> {
     try {

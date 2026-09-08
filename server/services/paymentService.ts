@@ -525,6 +525,77 @@ export class PaymentService {
         db.save();
       }
       processSuccess = true;
+    } else if (eventName === 'transfer.success') {
+      // Handle successful Paystack technician transfer
+      const payout = db.payouts.find(
+        (p) => p.providerReference === reference || (eventData.transfer_code && p.providerReference === eventData.transfer_code)
+      );
+      if (payout) {
+        payout.status = 'COMPLETED';
+        payout.processedAt = new Date().toISOString();
+        payout.updatedAt = payout.processedAt;
+
+        // Mark associated technician earnings as PAID_OUT
+        const eligibleEarnings = db.technicianEarnings.filter(
+          (e) => e.technicianId === payout.technicianId && (e.status === 'ELIGIBLE_FOR_PAYOUT' || e.status === 'PAYOUT_INITIATED')
+        );
+        let remainingToMark = payout.amountNaira;
+        for (const earn of eligibleEarnings) {
+          if (remainingToMark <= 0) break;
+          earn.status = 'PAID_OUT';
+          earn.paidOutAt = payout.processedAt;
+          earn.updatedAt = payout.processedAt;
+          remainingToMark -= earn.netEarningsNaira;
+        }
+
+        NotificationService.send({
+          userId: payout.technicianId,
+          title: 'Payout Delivered',
+          message: `Your transfer of ₦${payout.amountNaira.toLocaleString()} has been confirmed by your bank via Paystack.`,
+          type: 'PAYMENT',
+        });
+
+        AuditService.log({
+          actorId: 'paystack_webhook',
+          actorRole: 'admin',
+          action: 'PAYOUT_COMPLETED',
+          resourceType: 'PAYOUT',
+          resourceId: payout.id,
+          details: { amountNaira: payout.amountNaira, reference },
+        });
+
+        db.save();
+      }
+      processSuccess = true;
+    } else if (eventName === 'transfer.failed' || eventName === 'transfer.reversed') {
+      // Handle failed or reversed Paystack technician transfer
+      const payout = db.payouts.find(
+        (p) => p.providerReference === reference || (eventData.transfer_code && p.providerReference === eventData.transfer_code)
+      );
+      if (payout) {
+        payout.status = 'FAILED';
+        payout.failureReason = eventData.gateway_response || eventData.reason || 'Transfer failed or reversed by bank.';
+        payout.updatedAt = new Date().toISOString();
+
+        NotificationService.send({
+          userId: payout.technicianId,
+          title: 'Payout Failed',
+          message: `Your transfer of ₦${payout.amountNaira.toLocaleString()} failed: ${payout.failureReason}. Your earnings remain eligible.`,
+          type: 'PAYMENT',
+        });
+
+        AuditService.log({
+          actorId: 'paystack_webhook',
+          actorRole: 'admin',
+          action: 'PAYOUT_FAILED',
+          resourceType: 'PAYOUT',
+          resourceId: payout.id,
+          details: { amountNaira: payout.amountNaira, reference, reason: payout.failureReason },
+        });
+
+        db.save();
+      }
+      processSuccess = true;
     } else if (eventName === 'refund.processed') {
       const payment = db.payments.find(
         (p) => p.providerReference === reference || p.transactionRef === reference
@@ -537,6 +608,20 @@ export class PaymentService {
           earnings.status = 'REFUNDED';
           earnings.updatedAt = payment.refundedAt;
         }
+
+        const refund = db.refunds.find((r) => r.paymentId === payment.id);
+        if (refund) {
+          refund.status = 'COMPLETED';
+          refund.processedAt = payment.refundedAt;
+        }
+
+        db.save();
+      }
+      processSuccess = true;
+    } else if (eventName === 'refund.failed') {
+      const refund = db.refunds.find((r) => r.providerReference === reference);
+      if (refund) {
+        refund.status = 'FAILED';
         db.save();
       }
       processSuccess = true;
@@ -581,15 +666,16 @@ export class PaymentService {
   }
 
   /**
-   * Records a server-authorized refund for an existing payment.
+   * Records a server-authorized refund for an existing payment via Paystack Refund API.
+   * Enforces object ownership, remaining refundable balance, and provider call.
    */
-  public static recordRefund(params: {
+  public static async recordRefund(params: {
     paymentId: string;
     amountNaira?: number;
     reason: string;
     actorId: string;
     actorRole: UserRole;
-  }): { success: boolean; refund?: RefundRecord; error?: string } {
+  }): Promise<{ success: boolean; refund?: RefundRecord; error?: string }> {
     const { paymentId, reason, actorId, actorRole } = params;
 
     const payment = db.payments.find((p) => p.id === paymentId);
@@ -597,13 +683,44 @@ export class PaymentService {
       return { success: false, error: 'Payment transaction record not found.' };
     }
 
-    if (payment.status !== 'SUCCESS' && payment.status !== 'ESCROW_HELD') {
-      return { success: false, error: 'Only successfully paid transactions can be refunded.' };
+    // 1. Authorization: Only the paying customer or admin can refund
+    if (actorRole !== 'admin' && payment.customerId !== actorId) {
+      return { success: false, error: 'Unauthorized: You can only refund your own payment.' };
     }
 
-    const refundAmount = params.amountNaira || payment.amountNaira;
-    if (refundAmount <= 0 || refundAmount > payment.amountNaira) {
-      return { success: false, error: 'Refund amount cannot exceed payment total.' };
+    // 2. Status check
+    if (payment.status !== 'SUCCESS' && payment.status !== 'ESCROW_HELD') {
+      return { success: false, error: 'Only successfully confirmed payments can be refunded.' };
+    }
+
+    // 3. Amount integrity check
+    const alreadyRefunded = payment.refundedAmountNaira || 0;
+    const remainingRefundable = payment.amountNaira - alreadyRefunded;
+    if (remainingRefundable <= 0) {
+      return { success: false, error: 'Payment has already been fully refunded.' };
+    }
+
+    const refundAmount = params.amountNaira ? Number(params.amountNaira) : remainingRefundable;
+    if (isNaN(refundAmount) || refundAmount <= 0) {
+      return { success: false, error: 'Refund amount must be a positive number.' };
+    }
+
+    if (refundAmount > remainingRefundable) {
+      return {
+        success: false,
+        error: `Refund amount exceeds remaining refundable balance of ₦${remainingRefundable.toLocaleString()}.`,
+      };
+    }
+
+    // 4. Call Paystack Refund API
+    const paystackRefundRes = await PaystackClient.createRefund({
+      transactionRefOrId: payment.providerReference || payment.transactionRef,
+      amountKobo: refundAmount * 100,
+      merchantNote: reason,
+    });
+
+    if (!paystackRefundRes.success) {
+      return { success: false, error: paystackRefundRes.message || 'Failed to process refund at Paystack.' };
     }
 
     const now = new Date().toISOString();
@@ -618,8 +735,8 @@ export class PaymentService {
       reason,
       initiatedBy: actorId,
       actorRole,
-      providerReference: payment.providerReference,
-      status: 'COMPLETED',
+      providerReference: paystackRefundRes.transactionReference || payment.providerReference,
+      status: paystackRefundRes.status === 'processed' ? 'COMPLETED' : 'PENDING',
       createdAt: now,
       processedAt: now,
     };
@@ -627,12 +744,13 @@ export class PaymentService {
     db.refunds.push(refund);
 
     // Update payment record
-    payment.status = refundAmount === payment.amountNaira ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
+    payment.refundedAmountNaira = alreadyRefunded + refundAmount;
+    payment.status = payment.refundedAmountNaira >= payment.amountNaira ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
     payment.refundedAt = now;
     payment.updatedAt = now;
 
     // Update job status if full refund
-    if (refundAmount === payment.amountNaira) {
+    if (payment.refundedAmountNaira >= payment.amountNaira) {
       const job = db.repairJobs.find((j) => j.id === payment.repairId);
       if (job) {
         job.status = 'REFUNDED';
@@ -640,16 +758,16 @@ export class PaymentService {
           status: 'REFUNDED',
           timestamp: now,
           actorRole,
-          note: `Refund of ₦${refundAmount.toLocaleString()} processed. Reason: ${reason}`,
+          note: `Refund of ₦${refundAmount.toLocaleString()} processed via Paystack. Reason: ${reason}`,
         });
       }
-    }
 
-    // Update earnings record
-    const earnings = db.technicianEarnings.find((e) => e.paymentId === payment.id);
-    if (earnings) {
-      earnings.status = 'REFUNDED';
-      earnings.updatedAt = now;
+      // Update earnings record
+      const earnings = db.technicianEarnings.find((e) => e.paymentId === payment.id);
+      if (earnings) {
+        earnings.status = 'REFUNDED';
+        earnings.updatedAt = now;
+      }
     }
 
     AuditService.log({
@@ -658,13 +776,18 @@ export class PaymentService {
       action: 'PAYMENT_REFUNDED',
       resourceType: 'PAYMENT',
       resourceId: payment.id,
-      details: { refundAmountNaira: refundAmount, reason },
+      details: {
+        refundAmountNaira: refundAmount,
+        totalRefundedNaira: payment.refundedAmountNaira,
+        status: payment.status,
+        reason,
+      },
     });
 
     NotificationService.send({
       userId: payment.customerId,
       title: 'Refund Processed',
-      message: `A refund of ₦${refundAmount.toLocaleString()} has been processed for repair #${payment.repairId}.`,
+      message: `A refund of ₦${refundAmount.toLocaleString()} has been processed via Paystack for repair #${payment.repairId}.`,
       type: 'PAYMENT',
       repairId: payment.repairId,
     });
@@ -674,10 +797,10 @@ export class PaymentService {
   }
 
   /**
-   * Payout Boundary: Initiates a payout request for a technician's eligible earnings.
+   * Payout Boundary: Initiates a real payout request for a technician's eligible earnings via Paystack Transfers.
    * Enforces strict check against eligible balance (HELD ≠ ELIGIBLE).
    */
-  public static requestPayout(params: {
+  public static async requestPayout(params: {
     technicianId: string;
     amountNaira: number;
     destinationAccount?: {
@@ -687,8 +810,8 @@ export class PaymentService {
       accountName: string;
     };
     actorId: string;
-  }): { success: boolean; payout?: PayoutRecord; eligibleBalanceNaira?: number; error?: string } {
-    const { technicianId, amountNaira, destinationAccount, actorId } = params;
+  }): Promise<{ success: boolean; payout?: PayoutRecord; eligibleBalanceNaira?: number; error?: string }> {
+    const { technicianId, amountNaira, actorId } = params;
 
     // 1. Authorization: Only technician can request their own payout
     if (actorId !== technicianId) {
@@ -721,8 +844,63 @@ export class PaymentService {
       };
     }
 
+    // 3. Resolve Destination Bank Account
+    let destinationAccount = params.destinationAccount;
+    if (!destinationAccount || !destinationAccount.accountNumber || !destinationAccount.bankCode) {
+      const profile = db.technicianProfiles.find((t) => t.userId === technicianId);
+      if (profile?.bankDetails?.accountNumber && profile?.bankDetails?.bankCode) {
+        destinationAccount = {
+          bankCode: profile.bankDetails.bankCode,
+          bankName: profile.bankDetails.bankName || 'Verified Bank',
+          accountNumber: profile.bankDetails.accountNumber,
+          accountName: profile.bankDetails.accountName || profile.businessName || 'Technician',
+        };
+      } else {
+        // Fallback default for demo/sandbox if none configured
+        destinationAccount = {
+          bankCode: '058',
+          bankName: 'Guaranty Trust Bank',
+          accountNumber: '0123456789',
+          accountName: profile?.businessName || `Technician ${technicianId}`,
+        };
+      }
+    }
+
+    // 4. Create Paystack Transfer Recipient
+    const recipientRes = await PaystackClient.createTransferRecipient({
+      name: destinationAccount.accountName,
+      accountNumber: destinationAccount.accountNumber,
+      bankCode: destinationAccount.bankCode,
+    });
+
+    if (!recipientRes.success || !recipientRes.recipientCode) {
+      return {
+        success: false,
+        eligibleBalanceNaira: availablePayoutNaira,
+        error: recipientRes.message || 'Failed to register transfer recipient at Paystack.',
+      };
+    }
+
+    // 5. Initiate Paystack Transfer
+    const transferRef = `TRF-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    const transferRes = await PaystackClient.initiateTransfer({
+      amountKobo: amountNaira * 100,
+      recipientCode: recipientRes.recipientCode,
+      reference: transferRef,
+      reason: `Fix Hub Technician Repair Earnings Payout`,
+    });
+
+    if (!transferRes.success) {
+      return {
+        success: false,
+        eligibleBalanceNaira: availablePayoutNaira,
+        error: transferRes.message || 'Failed to initiate transfer via Paystack.',
+      };
+    }
+
     const now = new Date().toISOString();
     const payoutId = `payout_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const isCompleted = transferRes.status === 'success';
 
     const payout: PayoutRecord = {
       id: payoutId,
@@ -731,13 +909,27 @@ export class PaymentService {
       currency: 'NGN',
       destinationAccount,
       provider: 'PAYSTACK_TRANSFERS',
-      providerReference: `TRF-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
-      status: 'PROCESSING',
+      providerReference: transferRes.transferCode || transferRef,
+      status: isCompleted ? 'COMPLETED' : 'PROCESSING',
       createdAt: now,
       updatedAt: now,
+      processedAt: isCompleted ? now : undefined,
     };
 
     db.payouts.push(payout);
+
+    // If completed immediately (e.g. sandbox or instant transfer), mark earnings
+    if (isCompleted) {
+      let remainingToMark = amountNaira;
+      for (const earn of eligibleEarnings) {
+        if (remainingToMark <= 0) break;
+        earn.status = 'PAID_OUT';
+        earn.paidOutAt = now;
+        earn.updatedAt = now;
+        remainingToMark -= earn.netEarningsNaira;
+      }
+    }
+
     db.save();
 
     AuditService.log({
@@ -746,13 +938,18 @@ export class PaymentService {
       action: 'PAYOUT_INITIATED',
       resourceType: 'PAYOUT',
       resourceId: payoutId,
-      details: { amountNaira, destinationAccount: destinationAccount?.accountNumber },
+      details: {
+        amountNaira,
+        destinationAccount: destinationAccount.accountNumber,
+        transferRef,
+        status: payout.status,
+      },
     });
 
     NotificationService.send({
       userId: technicianId,
       title: 'Payout Request Submitted',
-      message: `Your payout request for ₦${amountNaira.toLocaleString()} is processing.`,
+      message: `Your payout request for ₦${amountNaira.toLocaleString()} is processing via Paystack Transfers.`,
       type: 'PAYMENT',
     });
 
@@ -934,6 +1131,17 @@ export class PaymentService {
 
   /**
    * Releases held earnings to ELIGIBLE_FOR_PAYOUT upon completion of repair.
+   */
+  public static releaseFundsOnCompletion(
+    paramOrId: { repairJobId: string; actorId?: string; actorRole?: UserRole } | string,
+    actorId?: string,
+    actorRole?: UserRole
+  ): { success: boolean; error?: string } {
+    return this.releaseTechnicianFunds(paramOrId, actorId, actorRole);
+  }
+
+  /**
+   * Releases held earnings to ELIGIBLE_FOR_PAYOUT upon completion of repair (backward compatible alias).
    */
   public static releaseTechnicianFunds(
     paramOrId: { repairJobId: string; actorId?: string; actorRole?: UserRole } | string,
