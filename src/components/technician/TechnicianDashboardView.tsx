@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { RepairRequest, RepairJob, TechnicianProfile } from '../../types';
+import { RepairRequest, RepairJob, RepairQuote, TechnicianProfile } from '../../types';
 import { ApiClient } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { StatusBadge } from '../common/StatusBadge';
 import { QuoteBuilderModal } from './QuoteBuilderModal';
+import { RequestInspectionModal } from './RequestInspectionModal';
 import {
   LayoutDashboard,
   Wrench,
@@ -16,7 +17,11 @@ import {
   ChevronRight,
   Sparkles,
   ShieldCheck,
-  Power
+  Power,
+  Eye,
+  FileText,
+  Trash2,
+  Check,
 } from 'lucide-react';
 
 interface TechnicianDashboardViewProps {
@@ -31,19 +36,25 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
   const { user, technicianProfile, refreshUser } = useAuth();
   const [requests, setRequests] = useState<RepairRequest[]>([]);
   const [jobs, setJobs] = useState<RepairJob[]>([]);
+  const [myQuotes, setMyQuotes] = useState<any[]>([]);
+  const [inspectingRequest, setInspectingRequest] = useState<RepairRequest | null>(null);
   const [selectedRequestForQuote, setSelectedRequestForQuote] = useState<RepairRequest | null>(null);
   const [availability, setAvailability] = useState<string>(technicianProfile?.availabilityStatus || 'AVAILABLE');
   const [isUpdatingAvail, setIsUpdatingAvail] = useState(false);
+  const [activeTab, setActiveTab] = useState<'LEADS' | 'MY_QUOTES' | 'WORK_ORDERS'>('LEADS');
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   const fetchDashboardData = async () => {
     if (!user) return;
     try {
-      const [reqList, jobList] = await Promise.all([
+      const [reqList, jobList, quotesList] = await Promise.all([
         ApiClient.getRepairRequests().catch(() => []),
         ApiClient.getJobs().catch(() => []),
+        ApiClient.getMyQuotes().catch(() => []),
       ]);
       setRequests(Array.isArray(reqList) ? reqList : []);
       setJobs(Array.isArray(jobList) ? jobList : []);
+      setMyQuotes(Array.isArray(quotesList) ? quotesList : []);
     } catch (err) {
       console.error(err);
     }
@@ -64,12 +75,24 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
     }
   };
 
+  const handleWithdrawQuote = async (quoteId: string) => {
+    if (!confirm('Are you sure you want to withdraw this quote?')) return;
+    try {
+      await ApiClient.withdrawQuote(quoteId);
+      setActionMsg('Quote has been successfully withdrawn.');
+      setTimeout(() => setActionMsg(null), 3000);
+      fetchDashboardData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to withdraw quote.');
+    }
+  };
+
   // Metrics
   const safeJobs = Array.isArray(jobs) ? jobs : [];
   const safeRequests = Array.isArray(requests) ? requests : [];
   const activeJobs = safeJobs.filter((j) => j.status !== 'COMPLETED' && j.status !== 'CANCELLED');
   const readyPickupCount = safeJobs.filter((j) => j.status === 'READY_FOR_PICKUP').length;
-  const pendingEscrowNaira = activeJobs.reduce((sum, j) => sum + (j.finalAmount || j.originalQuoteAmount || 0), 0);
+  const pendingJobsNaira = activeJobs.reduce((sum, j) => sum + (j.finalAmount || j.originalQuoteAmount || 0), 0);
   const clearedEarningsNaira = technicianProfile?.totalEarningsNaira || 1240000;
 
   return (
@@ -87,7 +110,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
           </div>
           <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
             <MapPin className="w-3.5 h-3.5 text-slate-400" />
-            <span>{technicianProfile?.shopLocation?.address || 'Computer Village, Ikeja, Lagos'}</span>
+            <span>{technicianProfile?.shopLocation?.address || 'Port Harcourt Hub, Rivers State'}</span>
           </p>
         </div>
 
@@ -97,6 +120,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
           {['AVAILABLE', 'BUSY', 'OFFLINE'].map((st) => (
             <button
               key={st}
+              id={`tech-avail-btn-${st.toLowerCase()}`}
               onClick={() => handleToggleAvailability(st)}
               disabled={isUpdatingAvail}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
@@ -115,6 +139,13 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
         </div>
       </div>
 
+      {actionMsg && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2">
+          <Check className="w-4 h-4 text-emerald-600" />
+          <span>{actionMsg}</span>
+        </div>
+      )}
+
       {/* Metrics Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
@@ -124,129 +155,307 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
+          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Submitted Quotes</span>
+          <span className="text-2xl font-black text-cyan-600">{myQuotes.length}</span>
+          <span className="text-[11px] text-slate-500 block">
+            {myQuotes.filter((q) => q.status === 'ACCEPTED').length} accepted
+          </span>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Active in Shop</span>
           <span className="text-2xl font-black text-indigo-600">{activeJobs.length}</span>
           <span className="text-[11px] text-slate-500 block">{readyPickupCount} ready for pickup</span>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">In Escrow (Pending)</span>
-          <span className="text-xl font-black text-amber-600">₦{pendingEscrowNaira.toLocaleString()}</span>
-          <span className="text-[11px] text-slate-500 block">Releases upon pickup</span>
-        </div>
-
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Cleared Payout</span>
+          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Completed Payouts</span>
           <span className="text-xl font-black text-emerald-700">₦{clearedEarningsNaira.toLocaleString()}</span>
           <span className="text-[11px] text-emerald-600 font-medium block">✓ Bank settlement ready</span>
         </div>
       </div>
 
-      {/* Incoming Requests Queue */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-cyan-600" />
-            <span>Nearby Customer Repair Requests</span>
-          </h3>
-          <span className="text-xs text-blue-600 font-bold">{requests.length} Active Leads</span>
-        </div>
+      {/* Navigation Tabs for Technician */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-1">
+        <button
+          id="tab-leads-btn"
+          onClick={() => setActiveTab('LEADS')}
+          className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+            activeTab === 'LEADS'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 bg-slate-100'
+          }`}
+        >
+          Customer Leads ({requests.length})
+        </button>
+        <button
+          id="tab-my-quotes-btn"
+          onClick={() => setActiveTab('MY_QUOTES')}
+          className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+            activeTab === 'MY_QUOTES'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 bg-slate-100'
+          }`}
+        >
+          My Quotes ({myQuotes.length})
+        </button>
+        <button
+          id="tab-work-orders-btn"
+          onClick={() => setActiveTab('WORK_ORDERS')}
+          className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+            activeTab === 'WORK_ORDERS'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 bg-slate-100'
+          }`}
+        >
+          Active Work Orders ({activeJobs.length})
+        </button>
+      </div>
 
-        {requests.length === 0 ? (
-          <div className="p-8 rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-center text-xs text-slate-500">
-            No open repair requests in your area right now.
+      {/* TAB 1: Incoming Customer Leads */}
+      {activeTab === 'LEADS' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-cyan-600" />
+              <span>Nearby Customer Repair Requests</span>
+            </h3>
+            <span className="text-xs text-blue-600 font-bold">{requests.length} Active Leads</span>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {requests.map((req) => (
-              <div
-                key={req.id}
-                id={`request-lead-${req.id}`}
-                className="bg-white p-5 rounded-2xl border border-slate-200 hover:border-blue-400 transition-all shadow-xs space-y-3"
-              >
-                <div className="flex items-start justify-between gap-3">
+
+          {requests.length === 0 ? (
+            <div className="p-8 rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-center text-xs text-slate-500">
+              No open repair requests in your area right now.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {requests.map((req) => (
+                <div
+                  key={req.id}
+                  id={`request-lead-${req.id}`}
+                  className="bg-white p-5 rounded-2xl border border-slate-200 hover:border-blue-400 transition-all shadow-xs space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h4 className="font-extrabold text-base text-slate-900">
+                        {req.deviceBrand} {req.deviceModel}
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Customer in: <strong>{req.customerLocation?.address || req.customerLocation?.area || req.customerLocation?.city || 'Local Area'}</strong>
+                        {(req as any).estimatedDistanceKm !== undefined ? ` (~${(req as any).estimatedDistanceKm} km away)` : ''}
+                      </p>
+                    </div>
+                    <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">
+                      {req.quotes?.length ?? req.quotesCount ?? 0} Quote(s)
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {(req.issues || []).map((iss, i) => (
+                      <span key={i} className="text-[11px] bg-slate-100 text-slate-800 px-2 py-0.5 rounded font-medium">
+                        {(iss || '').replace(/_/g, ' ')}
+                      </span>
+                    ))}
+                  </div>
+
+                  {req.description && (
+                    <p className="text-xs text-slate-600 italic bg-slate-50 p-2.5 rounded-xl border border-slate-100 line-clamp-2">
+                      "{req.description}"
+                    </p>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      id={`inspect-btn-${req.id}`}
+                      onClick={() => setInspectingRequest(req)}
+                      className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Inspect Details</span>
+                    </button>
+                    <button
+                      id={`quote-btn-${req.id}`}
+                      onClick={() => setSelectedRequestForQuote(req)}
+                      className="py-2.5 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <DollarSign className="w-3.5 h-3.5" />
+                      <span>Prepare Quote</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 2: My Submitted Quotes */}
+      {activeTab === 'MY_QUOTES' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+              <FileText className="w-4 h-4 text-blue-600" />
+              <span>Quotes You Have Submitted</span>
+            </h3>
+            <span className="text-xs text-slate-500">{myQuotes.length} Total</span>
+          </div>
+
+          {myQuotes.length === 0 ? (
+            <div className="p-8 rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-center text-xs text-slate-500">
+              You haven't submitted any quotes yet. Browse Customer Leads to prepare and submit quotes.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {myQuotes.map((q) => {
+                const req = q.request;
+                const isPendingOrSubmitted = q.status === 'PENDING' || q.status === 'SUBMITTED' || q.status === 'VIEWED';
+                return (
+                  <div
+                    key={q.id}
+                    id={`my-quote-card-${q.id}`}
+                    className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h4 className="font-bold text-sm text-slate-900">
+                          {req ? `${req.deviceBrand} ${req.deviceModel}` : `Request ID: ${q.requestId}`}
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Submitted: {new Date(q.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                          q.status === 'ACCEPTED'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : q.status === 'REJECTED'
+                            ? 'bg-rose-100 text-rose-800'
+                            : q.status === 'WITHDRAWN'
+                            ? 'bg-slate-100 text-slate-600'
+                            : q.status === 'EXPIRED'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}
+                      >
+                        {q.status}
+                      </span>
+                    </div>
+
+                    {/* Breakdown */}
+                    <div className="p-3 bg-slate-50 rounded-xl space-y-1 text-xs text-slate-600">
+                      <div className="flex justify-between">
+                        <span>Parts ({q.partsQuality.replace(/_/g, ' ')}):</span>
+                        <span className="font-semibold text-slate-800">₦{(q.partsCost || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Labor & Diagnostics:</span>
+                        <span className="font-semibold text-slate-800">₦{(q.laborCost || 0).toLocaleString()}</span>
+                      </div>
+                      {q.diagnosticCost > 0 && (
+                        <div className="flex justify-between">
+                          <span>Diagnostic Fee:</span>
+                          <span className="font-semibold text-slate-800">₦{(q.diagnosticCost).toLocaleString()}</span>
+                        </div>
+                      )}
+                      <div className="pt-1 border-t border-slate-200 flex justify-between font-bold text-slate-900">
+                        <span>Total Quoted:</span>
+                        <span className="text-blue-700 text-sm">₦{q.totalAmount.toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>Warranty: {q.warrantyDays} days</span>
+                      <span>Turnaround: {q.estimatedTimeHours} hrs</span>
+                    </div>
+
+                    {/* Withdrawal button if still open */}
+                    {isPendingOrSubmitted && (
+                      <button
+                        id={`withdraw-quote-btn-${q.id}`}
+                        onClick={() => handleWithdrawQuote(q.id)}
+                        className="w-full py-2 px-3 border border-rose-200 text-rose-700 hover:bg-rose-50 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Withdraw Quote</span>
+                      </button>
+                    )}
+
+                    {q.status === 'ACCEPTED' && (
+                      <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs flex items-center justify-between">
+                        <span className="font-bold">Quote Accepted by Customer</span>
+                        <button
+                          onClick={() => setActiveTab('WORK_ORDERS')}
+                          className="text-[11px] font-bold text-emerald-900 underline cursor-pointer"
+                        >
+                          View Work Order
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 3: Active Work Orders In Shop */}
+      {activeTab === 'WORK_ORDERS' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+              <Wrench className="w-4 h-4 text-indigo-600" />
+              <span>Active Work Orders in Shop</span>
+            </h3>
+            <span className="text-xs text-slate-500">{activeJobs.length} In Progress</span>
+          </div>
+
+          {activeJobs.length === 0 ? (
+            <div className="p-8 rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-center text-xs text-slate-500">
+              No active work orders. When a customer accepts your quote and creates a booking, it will appear here.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {activeJobs.map((job) => (
+                <div
+                  key={job.id}
+                  id={`job-row-${job.id}`}
+                  onClick={() => onOpenJob(job.id)}
+                  className="bg-white p-5 rounded-2xl border border-slate-200 hover:border-indigo-400 transition-all shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 cursor-pointer"
+                >
                   <div>
-                    <h4 className="font-extrabold text-base text-slate-900">
-                      {req.deviceBrand} {req.deviceModel}
-                    </h4>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Customer in: <strong>{req.customerLocation.address}</strong> (~0.8 km away)
+                    <div className="flex items-center gap-2.5">
+                      <h4 className="font-bold text-base text-slate-900">{job.deviceBrand} {job.deviceModel}</h4>
+                      <StatusBadge status={job.status} size="sm" />
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Ref: <span className="font-mono text-slate-700 font-bold">{job.bookingRef || job.id}</span> • Amount: <strong className="text-emerald-700">₦{(job.finalAmount || job.originalQuoteAmount || 0).toLocaleString()}</strong>
                     </p>
                   </div>
-                  <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">
-                    {req.quotes?.length ?? req.quotesCount ?? 0} Quote(s)
-                  </span>
+
+                  <button className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer">
+                    <span>Open Job Workspace</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
                 </div>
-
-                <div className="flex flex-wrap gap-1.5">
-                  {(req.issues || []).map((iss, i) => (
-                    <span key={i} className="text-[11px] bg-slate-100 text-slate-800 px-2 py-0.5 rounded font-medium">
-                      {(iss || '').replace(/_/g, ' ')}
-                    </span>
-                  ))}
-                </div>
-
-                {req.description && (
-                  <p className="text-xs text-slate-600 italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                    "{req.description}"
-                  </p>
-                )}
-
-                <button
-                  id={`quote-btn-${req.id}`}
-                  onClick={() => setSelectedRequestForQuote(req)}
-                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <DollarSign className="w-4 h-4" />
-                  <span>Submit Transparent Quote</span>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Active Work Orders In Shop */}
-      <div className="space-y-3 pt-4 border-t border-slate-200">
-        <div className="flex items-center justify-between">
-          <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
-            <Wrench className="w-4 h-4 text-indigo-600" />
-            <span>Active Work Orders in Shop</span>
-          </h3>
-          <span className="text-xs text-slate-500">{activeJobs.length} In Progress</span>
+              ))}
+            </div>
+          )}
         </div>
+      )}
 
-        {activeJobs.length === 0 ? (
-          <div className="p-8 rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-center text-xs text-slate-500">
-            No active work orders. When a customer accepts your quote and locks escrow, it will appear here.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {activeJobs.map((job) => (
-              <div
-                key={job.id}
-                onClick={() => onOpenJob(job.id)}
-                className="bg-white p-5 rounded-2xl border border-slate-200 hover:border-indigo-400 transition-all shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 cursor-pointer"
-              >
-                <div>
-                  <div className="flex items-center gap-2.5">
-                    <h4 className="font-bold text-base text-slate-900">{job.deviceBrand} {job.deviceModel}</h4>
-                    <StatusBadge status={job.status} size="sm" />
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Job ID: <span className="font-mono text-slate-700">{job.id}</span> • Escrow: <strong className="text-emerald-700">₦{(job.finalAmount || job.originalQuoteAmount || 0).toLocaleString()}</strong>
-                  </p>
-                </div>
-
-                <button className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer">
-                  <span>Open Job Workspace</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Request Inspection Modal */}
+      {inspectingRequest && (
+        <RequestInspectionModal
+          request={inspectingRequest}
+          onClose={() => setInspectingRequest(null)}
+          onOpenQuoteBuilder={() => {
+            const r = inspectingRequest;
+            setInspectingRequest(null);
+            setSelectedRequestForQuote(r);
+          }}
+        />
+      )}
 
       {/* Quote Builder Modal */}
       {selectedRequestForQuote && (
@@ -256,6 +465,9 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
           onQuoteSubmitted={() => {
             setSelectedRequestForQuote(null);
             fetchDashboardData();
+            setActiveTab('MY_QUOTES');
+            setActionMsg('Your quote has been submitted successfully to the customer.');
+            setTimeout(() => setActionMsg(null), 4000);
             onRefresh();
           }}
         />
@@ -263,3 +475,4 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
     </div>
   );
 };
+

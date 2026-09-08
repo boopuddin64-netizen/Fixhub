@@ -29,14 +29,22 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
   if (!isOpen) return null;
 
   const handleMarkAllRead = async () => {
-    await ApiClient.markAllNotificationsRead();
-    onRefresh();
+    try {
+      await ApiClient.markAllNotificationsRead();
+      onRefresh();
+    } catch (err) {
+      console.warn('Could not mark all notifications as read:', err);
+    }
   };
 
   const handleNotificationClick = async (item: NotificationItem) => {
-    if (!item.read) {
-      await ApiClient.markNotificationRead(item.id);
-      onRefresh();
+    try {
+      if (!item.read) {
+        await ApiClient.markNotificationRead(item.id);
+        onRefresh();
+      }
+    } catch (err) {
+      console.warn('Could not mark notification as read:', err);
     }
     if (item.repairId && onSelectRepair) {
       onSelectRepair(item.repairId);

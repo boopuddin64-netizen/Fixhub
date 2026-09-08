@@ -3,9 +3,12 @@ export type UserRole = 'customer' | 'technician' | 'admin';
 export type AvailabilityStatus = 'AVAILABLE' | 'BUSY' | 'OFFLINE';
 
 export type PartsQuality =
+  | 'ORIGINAL_MANUFACTURER'
   | 'ORIGINAL_OEM'
+  | 'OEM'
   | 'PREMIUM_AFTERMARKET'
   | 'STANDARD_AFTERMARKET'
+  | 'USED_REFURBISHED'
   | 'REFURBISHED'
   | 'UNKNOWN';
 
@@ -267,6 +270,16 @@ export interface RepairRequest {
   updatedAt: string;
 }
 
+export type QuoteStatus =
+  | 'PENDING'
+  | 'DRAFT'
+  | 'SUBMITTED'
+  | 'VIEWED'
+  | 'ACCEPTED'
+  | 'REJECTED'
+  | 'EXPIRED'
+  | 'WITHDRAWN';
+
 export interface RepairQuote {
   id: string;
   requestId: string;
@@ -280,14 +293,19 @@ export interface RepairQuote {
   distanceKm: number;
   partsCost: number;
   laborCost: number;
+  diagnosticCost?: number;
   otherCost: number;
   totalAmount: number;
   estimatedTimeHours: number;
   warrantyDays: number;
   partsQuality: PartsQuality;
   notes: string;
-  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED';
+  limitationsOrConditions?: string;
+  expiresAt?: string;
+  status: QuoteStatus;
+  viewedAt?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface ConditionReport {

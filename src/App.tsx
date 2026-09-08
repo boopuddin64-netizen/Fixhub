@@ -92,6 +92,14 @@ function MainAppContent() {
     return () => clearInterval(timer);
   }, [loadData]);
 
+  useEffect(() => {
+    if (!user) {
+      setJobs([]);
+      setRequests([]);
+      setNotifications([]);
+    }
+  }, [user]);
+
   // Adjust default tab when switching roles
   useEffect(() => {
     if (role === 'technician') {

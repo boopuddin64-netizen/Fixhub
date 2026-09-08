@@ -41,6 +41,8 @@ const ALLOWED_TRANSITIONS: Record<RepairLifecycleStatus, RepairLifecycleStatus[]
   REFUNDED: [],
 };
 
+const activeAcceptLocks = new Set<string>();
+
 export class RepairWorkflowService {
   /**
    * Validates whether transition from current status to next status is permitted
@@ -51,107 +53,165 @@ export class RepairWorkflowService {
   }
 
   /**
-   * Accepts a quote, builds the RepairJob, and puts it in PAYMENT_PENDING
+   * Accepts a quote, builds the RepairJob, and puts it in PAYMENT_PENDING.
+   * Enforces strict concurrency locks, idempotency, expiration checks, and notifications.
    */
   public static acceptQuote(params: {
     requestId: string;
     quoteId: string;
     customerId: string;
-  }): { job: RepairJob } | { error: string } {
-    const { requestId, quoteId, customerId } = params;
+    idempotencyKey?: string;
+  }): { job: RepairJob; idempotent?: boolean } | { error: string } {
+    const { requestId, quoteId, customerId, idempotencyKey } = params;
 
-    const request = db.repairRequests.find((r) => r.id === requestId);
-    if (!request) return { error: 'Repair request not found.' };
-    if (request.customerId !== customerId) return { error: 'Unauthorized: Request does not belong to you.' };
-
-    if (request.status !== 'REQUESTED' && request.status !== 'QUOTING') {
-      return { error: `Request is no longer open for quote acceptance (current status: ${request.status}).` };
+    // Concurrency Lock: prevent two simultaneous acceptance operations on the same request
+    if (activeAcceptLocks.has(requestId)) {
+      return { error: 'Another quote acceptance is currently being processed for this request.' };
     }
+    activeAcceptLocks.add(requestId);
 
-    const quote = db.repairQuotes.find((q) => q.id === quoteId && q.requestId === requestId);
-    if (!quote) return { error: 'Quote not found for this request.' };
-    if (quote.status !== 'PENDING') {
-      return { error: `Quote is no longer available (current status: ${quote.status}).` };
-    }
+    try {
+      const request = db.repairRequests.find((r) => r.id === requestId);
+      if (!request) return { error: 'Repair request not found.' };
+      if (request.customerId !== customerId) return { error: 'Unauthorized: Request does not belong to you.' };
 
-    const tech = db.technicianProfiles.find((t) => t.userId === quote.technicianId);
-    if (!tech) return { error: 'Technician profile associated with quote not found.' };
+      // Idempotency check: with valid idempotencyKey, return the already created job
+      if (idempotencyKey && request.selectedQuoteId === quoteId) {
+        const existingJob = db.repairJobs.find((j) => j.requestId === requestId && j.quoteId === quoteId);
+        if (existingJob) {
+          return { job: existingJob, idempotent: true };
+        }
+      }
 
-    quote.status = 'ACCEPTED';
-    request.selectedQuoteId = quoteId;
-    request.selectedTechnicianId = quote.technicianId;
-    request.status = 'QUOTE_ACCEPTED';
-    request.updatedAt = new Date().toISOString();
+      // Security check: repeating quote acceptance on an already processed or selected request is blocked
+      if (request.selectedQuoteId) {
+        return { error: 'Repeating a quote acceptance on an already processed request is blocked.' };
+      }
 
-    // Mark other quotes for this request as REJECTED
-    db.repairQuotes
-      .filter((q) => q.requestId === requestId && q.id !== quoteId)
-      .forEach((q) => {
-        q.status = 'REJECTED';
+      // If already booked or past quoting with an existing job
+      if (request.status !== 'REQUESTED' && request.status !== 'QUOTING' && request.status !== 'SUBMITTED' && request.status !== 'MATCHING') {
+        return { error: `Request is no longer open for quote acceptance (current status: ${request.status}).` };
+      }
+
+      const quote = db.repairQuotes.find((q) => q.id === quoteId && q.requestId === requestId);
+      if (!quote) return { error: 'Quote not found for this request.' };
+
+      // Validate quote expiration
+      const now = new Date();
+      if (quote.status === 'EXPIRED' || (quote.expiresAt && new Date(quote.expiresAt).getTime() < now.getTime())) {
+        quote.status = 'EXPIRED';
+        db.save();
+        return { error: 'Cannot accept an expired quote.' };
+      }
+
+      // Validate quote rejected or withdrawn
+      if (quote.status === 'REJECTED') {
+        return { error: 'Cannot accept a rejected quote.' };
+      }
+      if (quote.status === 'WITHDRAWN') {
+        return { error: 'Cannot accept a withdrawn quote.' };
+      }
+
+      // Only PENDING, SUBMITTED, or VIEWED quotes can be accepted
+      if (quote.status !== 'PENDING' && quote.status !== 'SUBMITTED' && quote.status !== 'VIEWED') {
+        return { error: `Quote is no longer available (current status: ${quote.status}).` };
+      }
+
+      const tech = db.technicianProfiles.find((t) => t.userId === quote.technicianId);
+      if (!tech) return { error: 'Technician profile associated with quote not found.' };
+
+      quote.status = 'ACCEPTED';
+      quote.updatedAt = now.toISOString();
+      request.selectedQuoteId = quoteId;
+      request.selectedTechnicianId = quote.technicianId;
+      request.status = 'QUOTE_ACCEPTED';
+      request.updatedAt = now.toISOString();
+
+      // Mark other quotes for this request as REJECTED
+      db.repairQuotes
+        .filter((q) => q.requestId === requestId && q.id !== quoteId)
+        .forEach((q) => {
+          if (q.status !== 'EXPIRED' && q.status !== 'WITHDRAWN') {
+            q.status = 'REJECTED';
+            q.updatedAt = now.toISOString();
+          }
+        });
+
+      // Generate 6-digit verification codes (kept secure on backend)
+      const dropOffCode = `FX-${Math.floor(1000 + Math.random() * 9000)}`;
+      const pickupCode = `PK-${Math.floor(1000 + Math.random() * 9000)}`;
+      const handoffQrToken = `tok_fixhub_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
+      const total = quote.totalAmount;
+      const platformFee = Math.round(total * 0.085);
+      const techPayout = total - platformFee;
+
+      const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const bookingRef = `FH-${Math.floor(100000 + Math.random() * 900000)}`;
+      const isoNow = now.toISOString();
+
+      const job: RepairJob = {
+        id: jobId,
+        bookingRef,
+        requestId: request.id,
+        quoteId: quote.id,
+        customerId: request.customerId,
+        technicianId: quote.technicianId,
+        deviceBrand: request.deviceBrand,
+        deviceModel: request.deviceModel,
+        issues: request.issues,
+        status: 'PAYMENT_PENDING',
+        dropOffCode,
+        pickupCode,
+        handoffQrToken,
+        originalQuoteAmount: total,
+        finalAmount: total,
+        platformFeeAmount: platformFee,
+        technicianPayoutAmount: techPayout,
+        partsUsed: [],
+        createdAt: isoNow,
+        statusHistory: [
+          { status: 'REQUESTED', timestamp: request.createdAt, actorRole: 'customer' },
+          { status: 'QUOTING', timestamp: quote.createdAt, actorRole: 'technician' },
+          { status: 'QUOTE_ACCEPTED', timestamp: isoNow, actorRole: 'customer', note: `Accepted quote from ${quote.technicianName} (₦${total.toLocaleString()})` },
+          { status: 'PAYMENT_PENDING', timestamp: isoNow, actorRole: 'customer' },
+        ],
+      };
+
+      db.repairJobs.push(job);
+
+      // Notify technician
+      NotificationService.send({
+        userId: quote.technicianId,
+        title: 'Quote Accepted!',
+        message: `${request.customerName} accepted your quote of ₦${total.toLocaleString()} for ${request.deviceBrand} ${request.deviceModel}. Waiting for escrow payment.`,
+        type: 'QUOTE',
+        repairId: job.id,
       });
 
-    // Generate 6-digit verification codes
-    const dropOffCode = `FX-${Math.floor(1000 + Math.random() * 9000)}`;
-    const pickupCode = `PK-${Math.floor(1000 + Math.random() * 9000)}`;
-    const handoffQrToken = `tok_fixhub_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      // Notify customer of booking created
+      NotificationService.send({
+        userId: request.customerId,
+        title: 'Booking Created!',
+        message: `Your booking (Ref: ${bookingRef}) with ${quote.businessName} has been created for ₦${total.toLocaleString()}. Next step: Secure escrow payment.`,
+        type: 'STATUS_CHANGE',
+        repairId: job.id,
+      });
 
-    const total = quote.totalAmount;
-    const platformFee = Math.round(total * 0.085);
-    const techPayout = total - platformFee;
+      AuditService.log({
+        actorId: customerId,
+        actorRole: 'customer',
+        action: 'QUOTE_ACCEPTED',
+        resourceType: 'REPAIR_JOB',
+        resourceId: jobId,
+        details: { quoteId, totalAmount: total, bookingRef },
+      });
 
-    const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const bookingRef = `FH-${Math.floor(100000 + Math.random() * 900000)}`;
-    const now = new Date().toISOString();
-
-    const job: RepairJob = {
-      id: jobId,
-      bookingRef,
-      requestId: request.id,
-      quoteId: quote.id,
-      customerId: request.customerId,
-      technicianId: quote.technicianId,
-      deviceBrand: request.deviceBrand,
-      deviceModel: request.deviceModel,
-      issues: request.issues,
-      status: 'PAYMENT_PENDING',
-      dropOffCode,
-      pickupCode,
-      handoffQrToken,
-      originalQuoteAmount: total,
-      finalAmount: total,
-      platformFeeAmount: platformFee,
-      technicianPayoutAmount: techPayout,
-      partsUsed: [],
-      createdAt: now,
-      statusHistory: [
-        { status: 'REQUESTED', timestamp: request.createdAt, actorRole: 'customer' },
-        { status: 'QUOTING', timestamp: quote.createdAt, actorRole: 'technician' },
-        { status: 'QUOTE_ACCEPTED', timestamp: now, actorRole: 'customer', note: `Accepted quote from ${quote.technicianName} (₦${total.toLocaleString()})` },
-        { status: 'PAYMENT_PENDING', timestamp: now, actorRole: 'customer' },
-      ],
-    };
-
-    db.repairJobs.push(job);
-
-    NotificationService.send({
-      userId: quote.technicianId,
-      title: 'Quote Accepted!',
-      message: `${request.customerName} accepted your quote of ₦${total.toLocaleString()} for ${request.deviceBrand} ${request.deviceModel}. Waiting for escrow payment.`,
-      type: 'QUOTE',
-      repairId: job.id,
-    });
-
-    AuditService.log({
-      actorId: customerId,
-      actorRole: 'customer',
-      action: 'QUOTE_ACCEPTED',
-      resourceType: 'REPAIR_JOB',
-      resourceId: jobId,
-      details: { quoteId, totalAmount: total },
-    });
-
-    db.save();
-    return { job };
+      db.save();
+      return { job };
+    } finally {
+      activeAcceptLocks.delete(requestId);
+    }
   }
 
   /**

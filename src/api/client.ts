@@ -8,6 +8,7 @@ import {
   RepairIssue,
   RepairRequestDraft,
   RepairRequestAttachment,
+  RepairQuote,
 } from '../types/index';
 
 const API_BASE = '/api';
@@ -334,6 +335,26 @@ export class ApiClient {
     });
   }
 
+  public static getQuotesForRequest(requestId: string) {
+    return this.request<RepairQuote[]>(`/repairs/requests/${requestId}/quotes`);
+  }
+
+  public static getMyQuotes() {
+    return this.request<any[]>('/quotes/my-quotes');
+  }
+
+  public static withdrawQuote(quoteId: string) {
+    return this.request<{ success: boolean; quote: RepairQuote }>(`/quotes/${quoteId}/withdraw`, {
+      method: 'POST',
+    });
+  }
+
+  public static rejectQuote(quoteId: string) {
+    return this.request<{ success: boolean; quote: RepairQuote }>(`/quotes/${quoteId}/reject`, {
+      method: 'POST',
+    });
+  }
+
   public static acceptQuote(requestId: string, quoteId: string) {
     return this.request<any>('/quotes/accept', {
       method: 'POST',
@@ -464,12 +485,25 @@ export class ApiClient {
     }
   }
 
-  public static markNotificationRead(id: string) {
-    return this.request<any>(`/notifications/${id}/read`, { method: 'POST' });
+  public static async markNotificationRead(id: string): Promise<{ success: boolean }> {
+    try {
+      if (!id) return { success: true };
+      const res = await this.request<any>(`/notifications/${encodeURIComponent(id)}/read`, { method: 'POST' });
+      return res || { success: true };
+    } catch (err) {
+      console.warn(`[ApiClient] Failed to mark notification ${id} as read:`, err);
+      return { success: false };
+    }
   }
 
-  public static markAllNotificationsRead() {
-    return this.request<any>('/notifications/read-all', { method: 'POST' });
+  public static async markAllNotificationsRead(): Promise<{ success: boolean; count?: number }> {
+    try {
+      const res = await this.request<any>('/notifications/read-all', { method: 'POST' });
+      return res || { success: true };
+    } catch (err) {
+      console.warn('[ApiClient] Failed to mark all notifications as read:', err);
+      return { success: false, count: 0 };
+    }
   }
 
   // Messages
