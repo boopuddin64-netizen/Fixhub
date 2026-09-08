@@ -426,23 +426,124 @@ export interface TechnicianPart {
   photoUrl?: string;
 }
 
+export type PaymentStatus =
+  | 'INITIATED'
+  | 'PENDING'
+  | 'SUCCESS'
+  | 'FAILED'
+  | 'CANCELLED'
+  | 'REFUNDED'
+  | 'PARTIALLY_REFUNDED'
+  | 'ESCROW_HELD'
+  | 'RELEASED_TO_TECHNICIAN'
+  | 'DISPUTED';
+
 export interface PaymentTransaction {
   id: string;
   repairId: string;
   customerId: string;
   technicianId: string;
+  quoteId?: string;
   amountNaira: number;
   platformFeeNaira: number;
   technicianPayoutNaira: number;
   currency: 'NGN';
-  provider: 'PAYSTACK_SANDBOX' | 'PAYSTACK_LIVE';
-  status: 'INITIATED' | 'ESCROW_HELD' | 'RELEASED_TO_TECHNICIAN' | 'REFUNDED' | 'DISPUTED';
+  provider: 'PAYSTACK' | 'PAYSTACK_SANDBOX' | 'PAYSTACK_LIVE';
+  status: PaymentStatus;
   transactionRef: string;
+  providerReference?: string;
   idempotencyKey: string;
   paymentMethod: 'CARD' | 'BANK_TRANSFER' | 'USSD';
+  channel?: string;
+  authorizationUrl?: string;
+  accessCode?: string;
   paidAt?: string;
+  failedAt?: string;
   releasedAt?: string;
   refundedAt?: string;
+  failureReason?: string;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type EarningsStatus =
+  | 'PENDING'
+  | 'HELD'
+  | 'ELIGIBLE_FOR_PAYOUT'
+  | 'PAYOUT_INITIATED'
+  | 'PAID_OUT'
+  | 'REFUNDED';
+
+export interface TechnicianEarnings {
+  id: string;
+  technicianId: string;
+  repairId: string;
+  paymentId: string;
+  grossAmountNaira: number;
+  platformFeeNaira: number;
+  netEarningsNaira: number;
+  commissionPercent: number;
+  status: EarningsStatus;
+  createdAt: string;
+  updatedAt: string;
+  releasedAt?: string;
+  paidOutAt?: string;
+}
+
+export type PayoutStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'REJECTED';
+
+export interface PayoutRecord {
+  id: string;
+  technicianId: string;
+  earningsId?: string;
+  amountNaira: number;
+  currency: 'NGN';
+  destinationAccount?: {
+    bankCode: string;
+    bankName: string;
+    accountNumber: string;
+    accountName: string;
+  };
+  provider: 'PAYSTACK_TRANSFERS' | 'MANUAL';
+  providerReference?: string;
+  status: PayoutStatus;
+  createdAt: string;
+  updatedAt: string;
+  processedAt?: string;
+  failureReason?: string;
+}
+
+export type RefundStatus = 'PENDING' | 'COMPLETED' | 'REJECTED' | 'FAILED';
+
+export interface RefundRecord {
+  id: string;
+  paymentId: string;
+  repairId: string;
+  customerId: string;
+  amountNaira: number;
+  reason: string;
+  initiatedBy: string;
+  actorRole: UserRole;
+  providerReference?: string;
+  status: RefundStatus;
+  createdAt: string;
+  processedAt?: string;
+}
+
+export interface WebhookEventRecord {
+  id: string;
+  event: string;
+  providerReference: string;
+  provider: 'PAYSTACK';
+  payloadSummary?: Record<string, unknown>;
+  processedAt: string;
+  status: 'PROCESSED' | 'FAILED' | 'IGNORED';
 }
 
 export interface Review {

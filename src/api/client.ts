@@ -362,7 +362,67 @@ export class ApiClient {
     });
   }
 
-  // Payments
+  // Payments & Financial Architecture (Phase 5)
+  public static initializePayment(repairJobId: string, idempotencyKey: string, paymentMethod = 'CARD') {
+    return this.request<{
+      success: boolean;
+      payment: any;
+      authorizationUrl?: string;
+      accessCode?: string;
+      reference: string;
+      isExisting: boolean;
+      error?: string;
+    }>('/payments/initialize', {
+      method: 'POST',
+      body: JSON.stringify({ repairJobId, idempotencyKey, paymentMethod }),
+    });
+  }
+
+  public static verifyPayment(params: { reference?: string; paymentId?: string }) {
+    return this.request<{
+      success: boolean;
+      payment: any;
+      alreadyVerified?: boolean;
+      error?: string;
+    }>('/payments/verify', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  public static recordRefund(paymentId: string, reason: string, amountNaira?: number) {
+    return this.request<{ success: boolean; refund?: any; error?: string }>('/payments/refund', {
+      method: 'POST',
+      body: JSON.stringify({ paymentId, reason, amountNaira }),
+    });
+  }
+
+  public static getTechnicianEarnings() {
+    return this.request<{
+      earnings: any[];
+      payouts: any[];
+      summary: {
+        heldEarningsNaira: number;
+        availablePayoutNaira: number;
+        lockedInProcessingNaira: number;
+        totalCompletedPayoutsNaira: number;
+        commissionRatePercent: number;
+      };
+    }>('/technicians/earnings');
+  }
+
+  public static requestPayout(amountNaira: number, destinationAccount?: any) {
+    return this.request<{
+      success: boolean;
+      payout?: any;
+      eligibleBalanceNaira?: number;
+      error?: string;
+    }>('/technicians/payouts/request', {
+      method: 'POST',
+      body: JSON.stringify({ amountNaira, destinationAccount }),
+    });
+  }
+
   public static createPaymentIntent(repairJobId: string, idempotencyKey: string, paymentMethod = 'CARD') {
     return this.request<any>('/payments/create-intent', {
       method: 'POST',

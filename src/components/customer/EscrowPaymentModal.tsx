@@ -7,10 +7,9 @@ import {
   Building2,
   PhoneCall,
   Lock,
-  Sparkles,
-  CheckCircle2,
   AlertCircle,
-  X
+  X,
+  ExternalLink,
 } from 'lucide-react';
 
 interface EscrowPaymentModalProps {
@@ -30,24 +29,31 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const amount = job.finalAmount || job.originalQuoteAmount;
+  const amount = job.finalAmount || job.originalQuoteAmount || quote?.totalAmount || 0;
 
-  const handlePaySandbox = async () => {
+  const handlePay = async () => {
     setIsProcessing(true);
     setErrorMsg(null);
     try {
-      const idempotencyKey = `idemp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      // 1. Create intent
-      const intentRes = await ApiClient.createPaymentIntent(job.id, idempotencyKey, method);
-      const paymentId = intentRes.payment.id;
-      const txRef = intentRes.payment.transactionRef;
+      const idempotencyKey = `idemp_pay_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
-      // 2. Complete escrow verification
-      await ApiClient.verifyMockPayment(paymentId, txRef);
+      // 1. Initialize Paystack payment server-side with authoritative amounts
+      const initRes = await ApiClient.initializePayment(job.id, idempotencyKey, method);
+      if (!initRes.success || !initRes.reference) {
+        throw new Error(initRes.error || 'Failed to initialize payment with Paystack.');
+      }
+
+      const reference = initRes.reference;
+
+      // 2. Server-side verification with Paystack
+      const verifyRes = await ApiClient.verifyPayment({ reference });
+      if (!verifyRes.success) {
+        throw new Error(verifyRes.error || 'Payment could not be confirmed.');
+      }
 
       onPaymentSuccess();
     } catch (err: any) {
-      setErrorMsg(err.message || 'Payment processing failed');
+      setErrorMsg(err.message || 'Payment could not be confirmed.');
       setIsProcessing(false);
     }
   };
@@ -61,12 +67,12 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
         {/* Header */}
         <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-cyan-300">
+            <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-base text-white">Fix Hub Escrow Checkout</h3>
-              <p className="text-xs text-cyan-300 font-medium">100% Buyer Protection Guaranteed</p>
+              <h3 className="font-bold text-base text-white">Fix Hub Secure Checkout</h3>
+              <p className="text-xs text-emerald-300 font-medium">Payment Protected via Paystack</p>
             </div>
           </div>
           <button
@@ -94,36 +100,42 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
             {quote && (
               <>
                 <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span>Parts Cost ({quote.partsQuality.replace('_', ' ')}):</span>
+                  <span>Parts Cost ({quote.partsQuality?.replace('_', ' ') || 'Standard'}):</span>
                   <span className="font-semibold text-slate-800">₦{quote.partsCost.toLocaleString()}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs text-slate-500">
                   <span>Labor & Calibration:</span>
                   <span className="font-semibold text-slate-800">₦{quote.laborCost.toLocaleString()}</span>
                 </div>
+                {quote.warrantyDays > 0 && (
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>Warranty Included:</span>
+                    <span className="font-semibold text-emerald-700">{quote.warrantyDays} Days Protection</span>
+                  </div>
+                )}
               </>
             )}
             <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
-              <span className="text-sm font-bold text-slate-900">Total Escrow Amount:</span>
+              <span className="text-sm font-bold text-slate-900">Total Authoritative Amount:</span>
               <span className="text-xl font-extrabold text-blue-700">₦{amount.toLocaleString()}</span>
             </div>
           </div>
 
-          {/* How Escrow Works Notice */}
+          {/* How Payment Protection Works Notice */}
           <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs space-y-1">
             <div className="flex items-center gap-1.5 font-bold text-emerald-800">
               <Lock className="w-3.5 h-3.5" />
-              <span>How Your Money is Protected:</span>
+              <span>Fix Hub Payment Protection:</span>
             </div>
             <p className="text-[11px] text-emerald-800 leading-relaxed">
-              Your funds are securely locked in Fix Hub Escrow. The technician is only paid AFTER you physically test and approve your repaired phone.
+              Funds are held securely by Fix Hub until your device is repaired, tested, and handed over at pickup.
             </p>
           </div>
 
           {/* Payment Method Selector */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-              Choose Payment Method
+              Payment Method (Paystack NGN)
             </label>
             <div className="grid grid-cols-3 gap-2">
               <button
@@ -165,51 +177,15 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
             </div>
           </div>
 
-          {/* Paystack Test Provider Form Display */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/80 space-y-3">
-            <div className="flex items-center justify-between text-[11px] text-slate-500">
-              <span>Payment Gateway:</span>
-              <span className="font-semibold text-slate-700">Paystack Sandbox Mode (NGN)</span>
-            </div>
-
-            {method === 'CARD' && (
-              <div className="space-y-2 text-xs">
-                <div>
-                  <span className="text-slate-500">Test Card:</span>
-                  <p className="font-mono font-semibold text-slate-800">4084 0800 0000 0000</p>
-                </div>
-                <div className="flex justify-between text-[11px] text-slate-500">
-                  <span>Expiry: 12/28</span>
-                  <span>CVV: 408</span>
-                </div>
-              </div>
-            )}
-
-            {method === 'BANK_TRANSFER' && (
-              <div className="space-y-1 text-xs">
-                <span className="text-slate-500">Virtual Dedicated Account:</span>
-                <p className="font-mono font-bold text-slate-900 text-sm">9920 182 910</p>
-                <p className="text-[11px] text-slate-600">Bank: Providus Bank / FixHub Escrow</p>
-              </div>
-            )}
-
-            {method === 'USSD' && (
-              <div className="space-y-1 text-xs">
-                <span className="text-slate-500">Dial on your phone:</span>
-                <p className="font-mono font-bold text-blue-700 text-sm">*737*000*8492#</p>
-              </div>
-            )}
-          </div>
-
           {/* Action Button */}
           <button
             id="confirm-escrow-payment-btn"
-            onClick={handlePaySandbox}
+            onClick={handlePay}
             disabled={isProcessing}
-            className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
             <Lock className="w-4 h-4" />
-            <span>{isProcessing ? 'Securing Funds in Escrow...' : `Lock ₦${amount.toLocaleString()} in Escrow`}</span>
+            <span>{isProcessing ? 'Confirming Payment with Paystack...' : `Pay ₦${amount.toLocaleString()} via Paystack`}</span>
           </button>
         </div>
       </div>

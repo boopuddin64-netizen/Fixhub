@@ -9,6 +9,7 @@ import { runPhase3CertificationSuite } from './phase3_certification';
 import { runPhase4Tests } from './phase4_marketplace.test';
 import { runLocationFixTests } from './location_fix.test';
 import { runGoogleMapsIntegrationTests } from './google_maps_integration.test';
+import { runPhase5PaymentTests } from './phase5_payment.test';
 import {
   validateNumber,
   isValidCoordinates,
@@ -772,6 +773,11 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   const phase4Results = runPhase4Tests();
   passed += phase4Results.passed;
   failed += phase4Results.failed;
+
+  // Run Phase 5 Real Payment & Financial Architecture tests
+  const phase5Results = await runPhase5PaymentTests();
+  passed += phase5Results.passed;
+  failed += phase5Results.failed;
 
   console.log('\n===============================================================');
   console.log(`   GLOBAL TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);

@@ -162,20 +162,20 @@
   - **Phase**: P5
   - **Severity**: HIGH
   - **Area**: Payment Gateway Integration
-  - **Description**: Paystack integration operates in simulated/sandbox mode with mock payment verification.
-  - **Current behavior**: `/payments/create-intent` and `/payments/verify-mock` simulate real Paystack transaction references and webhook verification.
+  - **Description**: Paystack integration requires production server-side API integration, authoritative server pricing, and cryptographic webhook verification.
+  - **Current behavior**: Comprehensive server-side `PaystackClient` and `PaymentService` implemented with authoritative Naira calculations, idempotency controls, and `/api/payments/webhook` verifying `x-paystack-signature` with HMAC SHA512. Automatically uses live Paystack API when `PAYSTACK_SECRET_KEY` is provided, with realistic sandbox simulation for development.
   - **Expected behavior**: Live Paystack inline checkout, bank transfer virtual accounts, and production webhook signature verification (`x-paystack-signature`).
-  - **Status**: ACTIVE
+  - **Status**: RESOLVED (Phase 5 Implementation)
   - **Recommended fix phase**: Phase 5 (Payment)
 
 - **ID**: DEF-P5-002
   - **Phase**: P5
   - **Severity**: MEDIUM
-  - **Area**: Payouts & Sub-accounts
-  - **Description**: Technician payout and escrow release logic uses internal ledger rather than live Paystack split transfers.
-  - **Current behavior**: Payout calculation deducts platform fee (8.5%) and updates internal technician earnings balance.
-  - **Expected behavior**: Direct bank account settlement via Paystack Transfers API or Dedicated Virtual Accounts.
-  - **Status**: ACTIVE
+  - **Area**: Payouts & Financial Ledger
+  - **Description**: Technician payout and escrow release logic requires robust financial ledger tracking held funds vs. eligible payout balances, avoiding premature withdrawals.
+  - **Current behavior**: Financial ledger implemented with `technicianEarnings`, `payouts`, `refunds`, and `webhookEvents`. Explicit state machine prevents withdrawal of repair earnings while repair job is active (`HELD`). Earnings only transition to `ELIGIBLE_FOR_PAYOUT` when repair is completed and customer picks up the device. Payout requests validate eligible balance against pending/processing payouts.
+  - **Expected behavior**: Authoritative financial ledger with explicit separation of held repair earnings and eligible cleared balance, with payout request workflow.
+  - **Status**: RESOLVED (Phase 5 Implementation)
   - **Recommended fix phase**: Phase 5 (Payment)
 
 ---

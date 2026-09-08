@@ -22,6 +22,9 @@ import {
   FileText,
   Trash2,
   Check,
+  Wallet,
+  ArrowDownToLine,
+  Building,
 } from 'lucide-react';
 
 interface TechnicianDashboardViewProps {
@@ -37,24 +40,51 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
   const [requests, setRequests] = useState<RepairRequest[]>([]);
   const [jobs, setJobs] = useState<RepairJob[]>([]);
   const [myQuotes, setMyQuotes] = useState<any[]>([]);
+  const [financials, setFinancials] = useState<{
+    heldEarningsNaira: number;
+    availablePayoutNaira: number;
+    lockedInProcessingNaira: number;
+    totalCompletedPayoutsNaira: number;
+    commissionRatePercent: number;
+  }>({
+    heldEarningsNaira: 0,
+    availablePayoutNaira: 0,
+    lockedInProcessingNaira: 0,
+    totalCompletedPayoutsNaira: 0,
+    commissionRatePercent: 8.5,
+  });
+  const [earningsList, setEarningsList] = useState<any[]>([]);
+  const [payoutList, setPayoutList] = useState<any[]>([]);
+  const [payoutAmountInput, setPayoutAmountInput] = useState<string>('');
+  const [payoutBank, setPayoutBank] = useState<string>('Access Bank');
+  const [payoutAccountNum, setPayoutAccountNum] = useState<string>('0123456789');
+  const [isRequestingPayout, setIsRequestingPayout] = useState(false);
+  const [payoutMsg, setPayoutMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   const [inspectingRequest, setInspectingRequest] = useState<RepairRequest | null>(null);
   const [selectedRequestForQuote, setSelectedRequestForQuote] = useState<RepairRequest | null>(null);
   const [availability, setAvailability] = useState<string>(technicianProfile?.availabilityStatus || 'AVAILABLE');
   const [isUpdatingAvail, setIsUpdatingAvail] = useState(false);
-  const [activeTab, setActiveTab] = useState<'LEADS' | 'MY_QUOTES' | 'WORK_ORDERS'>('LEADS');
+  const [activeTab, setActiveTab] = useState<'LEADS' | 'MY_QUOTES' | 'WORK_ORDERS' | 'FINANCES'>('LEADS');
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   const fetchDashboardData = async () => {
     if (!user) return;
     try {
-      const [reqList, jobList, quotesList] = await Promise.all([
+      const [reqList, jobList, quotesList, finData] = await Promise.all([
         ApiClient.getRepairRequests().catch(() => []),
         ApiClient.getJobs().catch(() => []),
         ApiClient.getMyQuotes().catch(() => []),
+        ApiClient.getTechnicianEarnings().catch(() => null),
       ]);
       setRequests(Array.isArray(reqList) ? reqList : []);
       setJobs(Array.isArray(jobList) ? jobList : []);
       setMyQuotes(Array.isArray(quotesList) ? quotesList : []);
+      if (finData) {
+        if (finData.summary) setFinancials(finData.summary);
+        if (Array.isArray(finData.earnings)) setEarningsList(finData.earnings);
+        if (Array.isArray(finData.payouts)) setPayoutList(finData.payouts);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -84,6 +114,43 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
       fetchDashboardData();
     } catch (err: any) {
       alert(err.message || 'Failed to withdraw quote.');
+    }
+  };
+
+  const handleRequestPayout = async () => {
+    const amt = Number(payoutAmountInput);
+    if (!amt || amt <= 0) {
+      setPayoutMsg({ type: 'error', text: 'Please enter a valid payout amount in Naira.' });
+      return;
+    }
+    if (amt > financials.availablePayoutNaira) {
+      setPayoutMsg({
+        type: 'error',
+        text: `Requested amount exceeds available balance of ₦${financials.availablePayoutNaira.toLocaleString()}. (Note: Active repair funds are held until customer pickup).`,
+      });
+      return;
+    }
+
+    setIsRequestingPayout(true);
+    setPayoutMsg(null);
+    try {
+      const res = await ApiClient.requestPayout(amt, {
+        bankName: payoutBank,
+        accountNumber: payoutAccountNum,
+        bankCode: '044',
+        accountName: technicianProfile?.businessName || user?.name || 'Technician',
+      });
+      if (!res.success) {
+        setPayoutMsg({ type: 'error', text: res.error || 'Payout request failed.' });
+      } else {
+        setPayoutMsg({ type: 'success', text: `Payout request for ₦${amt.toLocaleString()} submitted successfully.` });
+        setPayoutAmountInput('');
+        fetchDashboardData();
+      }
+    } catch (err: any) {
+      setPayoutMsg({ type: 'error', text: err.message || 'Payout request failed.' });
+    } finally {
+      setIsRequestingPayout(false);
     }
   };
 
@@ -169,9 +236,9 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Completed Payouts</span>
-          <span className="text-xl font-black text-emerald-700">₦{clearedEarningsNaira.toLocaleString()}</span>
-          <span className="text-[11px] text-emerald-600 font-medium block">✓ Bank settlement ready</span>
+          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Held Repair Earnings</span>
+          <span className="text-xl font-black text-emerald-700">₦{(financials.heldEarningsNaira || 0).toLocaleString()}</span>
+          <span className="text-[11px] text-slate-500 font-medium block">Held pending customer pickup</span>
         </div>
       </div>
 
@@ -209,6 +276,17 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
           }`}
         >
           Active Work Orders ({activeJobs.length})
+        </button>
+        <button
+          id="tab-finances-btn"
+          onClick={() => setActiveTab('FINANCES')}
+          className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+            activeTab === 'FINANCES'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 bg-slate-100'
+          }`}
+        >
+          Earnings & Payouts
         </button>
       </div>
 
@@ -439,6 +517,191 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 4: Finances & Payouts */}
+      {activeTab === 'FINANCES' && (
+        <div id="technician-finances-tab" className="space-y-6">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Held by Fix Hub</span>
+              <span className="text-2xl font-black text-amber-600">₦{financials.heldEarningsNaira.toLocaleString()}</span>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Active repair earnings held securely until customer tests and completes physical pickup.
+              </p>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Eligible for Payout</span>
+              <span className="text-2xl font-black text-emerald-600">₦{financials.availablePayoutNaira.toLocaleString()}</span>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Available balance cleared from completed repairs ready for bank withdrawal.
+              </p>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Total Completed Payouts</span>
+              <span className="text-2xl font-black text-slate-900">₦{financials.totalCompletedPayoutsNaira.toLocaleString()}</span>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Settled withdrawals to your bank. Fix Hub platform fee: {financials.commissionRatePercent}%.
+              </p>
+            </div>
+          </div>
+
+          {/* Payout Request Section */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Request Bank Settlement</h3>
+                <p className="text-xs text-slate-500">Withdraw available cleared earnings directly to your bank account.</p>
+              </div>
+              <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 w-fit">
+                Eligible Balance: ₦{financials.availablePayoutNaira.toLocaleString()}
+              </span>
+            </div>
+
+            {payoutMsg && (
+              <div className={`p-3 rounded-xl text-xs font-semibold ${
+                payoutMsg.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
+              }`}>
+                {payoutMsg.text}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Bank Name</label>
+                <input
+                  type="text"
+                  value={payoutBank}
+                  onChange={(e) => setPayoutBank(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-slate-50 text-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Account Number</label>
+                <input
+                  type="text"
+                  value={payoutAccountNum}
+                  onChange={(e) => setPayoutAccountNum(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-slate-50 font-mono text-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Amount (₦)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={payoutAmountInput}
+                    onChange={(e) => setPayoutAmountInput(e.target.value)}
+                    placeholder={`Max: ${financials.availablePayoutNaira}`}
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl text-slate-800"
+                  />
+                  <button
+                    id="submit-payout-btn"
+                    onClick={handleRequestPayout}
+                    disabled={isRequestingPayout || financials.availablePayoutNaira <= 0}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl cursor-pointer disabled:opacity-50 shrink-0"
+                  >
+                    {isRequestingPayout ? 'Submitting...' : 'Request'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Earnings Ledger Table */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-slate-200 bg-slate-50/70 flex items-center justify-between">
+              <h4 className="font-bold text-sm text-slate-900">Repair Earnings Ledger</h4>
+              <span className="text-xs text-slate-500 font-medium">Authoritative Server Ledger</span>
+            </div>
+            {earningsList.length === 0 ? (
+              <div className="p-8 text-center text-slate-500 text-xs">
+                No repair earnings recorded yet. Accept customer quotes to generate earnings.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                    <tr>
+                      <th className="p-3">Repair ID</th>
+                      <th className="p-3">Customer Paid</th>
+                      <th className="p-3">Platform Fee ({financials.commissionRatePercent}%)</th>
+                      <th className="p-3">Net Earnings</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3">Recorded Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {earningsList.map((e) => (
+                      <tr key={e.id} className="hover:bg-slate-50/80">
+                        <td className="p-3 font-mono font-bold text-slate-800">{e.repairId}</td>
+                        <td className="p-3 font-semibold text-slate-900">₦{e.grossAmountNaira.toLocaleString()}</td>
+                        <td className="p-3 text-slate-500">-₦{e.platformFeeNaira.toLocaleString()}</td>
+                        <td className="p-3 font-bold text-emerald-700">₦{e.netEarningsNaira.toLocaleString()}</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                            e.status === 'HELD'
+                              ? 'bg-amber-100 text-amber-800'
+                              : e.status === 'ELIGIBLE_FOR_PAYOUT'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : e.status === 'PAID_OUT'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {e.status === 'HELD' ? 'Held by Fix Hub' : e.status === 'ELIGIBLE_FOR_PAYOUT' ? 'Eligible for Payout' : e.status}
+                          </span>
+                        </td>
+                        <td className="p-3 text-slate-400">{new Date(e.createdAt).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Payouts History Table */}
+          {payoutList.length > 0 && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+              <div className="p-4 border-b border-slate-200 bg-slate-50/70">
+                <h4 className="font-bold text-sm text-slate-900">Withdrawal History</h4>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                    <tr>
+                      <th className="p-3">Payout ID</th>
+                      <th className="p-3">Amount</th>
+                      <th className="p-3">Destination</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3">Requested At</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {payoutList.map((p) => (
+                      <tr key={p.id} className="hover:bg-slate-50/80">
+                        <td className="p-3 font-mono font-bold text-slate-800">{p.id}</td>
+                        <td className="p-3 font-bold text-slate-900">₦{p.amountNaira.toLocaleString()}</td>
+                        <td className="p-3 text-slate-600">{p.destinationAccount?.bankName} ({p.destinationAccount?.accountNumber})</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                            p.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            {p.status}
+                          </span>
+                        </td>
+                        <td className="p-3 text-slate-400">{new Date(p.createdAt).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

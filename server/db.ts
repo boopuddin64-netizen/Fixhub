@@ -23,6 +23,10 @@ import {
   RepairIssue,
   RepairRequestDraft,
   RepairRequestAttachment,
+  TechnicianEarnings,
+  PayoutRecord,
+  RefundRecord,
+  WebhookEventRecord,
 } from '../src/types/index';
 import { seedBrands, seedFamilies, seedModels } from './data/deviceCatalogData';
 import { standardRepairIssues } from './data/repairIssuesData';
@@ -44,6 +48,10 @@ export interface DatabaseSchema {
   repairJobs: RepairJob[];
   technicianParts: TechnicianPart[];
   payments: PaymentTransaction[];
+  technicianEarnings: TechnicianEarnings[];
+  payouts: PayoutRecord[];
+  refunds: RefundRecord[];
+  webhookEvents: WebhookEventRecord[];
   warranties: WarrantyRecord[];
   reviews: Review[];
   auditLogs: AuditLog[];
@@ -1144,6 +1152,10 @@ function getInitialSeedData(): DatabaseSchema {
     repairJobs,
     technicianParts,
     payments,
+    technicianEarnings: [],
+    payouts: [],
+    refunds: [],
+    webhookEvents: [],
     warranties,
     reviews,
     auditLogs,
@@ -1191,6 +1203,18 @@ class Database {
           }
           if (!parsed.drafts) {
             parsed.drafts = [];
+          }
+          if (!parsed.technicianEarnings) {
+            parsed.technicianEarnings = [];
+          }
+          if (!parsed.payouts) {
+            parsed.payouts = [];
+          }
+          if (!parsed.refunds) {
+            parsed.refunds = [];
+          }
+          if (!parsed.webhookEvents) {
+            parsed.webhookEvents = [];
           }
           return parsed;
         }
@@ -1245,6 +1269,10 @@ class Database {
   public get repairJobs() { return this.data.repairJobs; }
   public get technicianParts() { return this.data.technicianParts; }
   public get payments() { return this.data.payments; }
+  public get technicianEarnings() { return this.data.technicianEarnings; }
+  public get payouts() { return this.data.payouts; }
+  public get refunds() { return this.data.refunds; }
+  public get webhookEvents() { return this.data.webhookEvents; }
   public get warranties() { return this.data.warranties; }
   public get reviews() { return this.data.reviews; }
   public get auditLogs() { return this.data.auditLogs; }

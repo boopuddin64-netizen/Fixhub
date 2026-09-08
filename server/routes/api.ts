@@ -1468,6 +1468,140 @@ apiRouter.post('/quotes/accept', requireAuth, requireRole(['customer']), (req: A
 /* -------------------------------------------------------------
  * 6. PAYMENTS & ESCROW (Server-Authoritative Amounts & Ownership)
  * ----------------------------------------------------------- */
+apiRouter.post('/payments/initialize', requireAuth, requireRole(['customer']), async (req: AuthenticatedRequest, res: Response) => {
+  const { repairJobId, idempotencyKey, paymentMethod } = req.body;
+  if (!isNonEmptyString(repairJobId) || !isNonEmptyString(idempotencyKey)) {
+    return res.status(400).json({ error: 'Repair Job ID and Idempotency Key are required.' });
+  }
+
+  const allowedMethods = ['CARD', 'BANK_TRANSFER', 'USSD'] as const;
+  const resolvedMethod = allowedMethods.includes(paymentMethod) ? paymentMethod : 'CARD';
+
+  const result = await PaymentService.initializePayment({
+    repairJobId,
+    customerId: req.user!.id,
+    idempotencyKey: sanitizeString(idempotencyKey, 100),
+    paymentMethod: resolvedMethod,
+    customerEmail: req.user!.email,
+  });
+
+  if (!result.success) {
+    return res.status(400).json({ error: 'error' in result ? result.error : 'Payment initialization failed.' });
+  }
+
+  return res.json(result);
+});
+
+apiRouter.post('/payments/verify', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const { reference, paymentId } = req.body;
+  if (!reference && !paymentId) {
+    return res.status(400).json({ error: 'Transaction Reference or Payment ID is required.' });
+  }
+
+  const result = await PaymentService.verifyPayment({
+    reference: reference ? String(reference) : '',
+    paymentId: paymentId ? String(paymentId) : '',
+    actorId: req.user!.id,
+    actorRole: req.user!.role,
+  });
+
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+
+  return res.json(result);
+});
+
+apiRouter.post('/payments/webhook', async (req: Request, res: Response) => {
+  const signatureHeader = req.headers['x-paystack-signature'] as string | undefined;
+  const rawBody = (req as any).rawBody || JSON.stringify(req.body);
+
+  const result = await PaymentService.processWebhook({
+    rawBody,
+    signatureHeader,
+    eventPayload: req.body,
+  });
+
+  return res.status(result.statusCode).json(result);
+});
+
+apiRouter.post('/payments/refund', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  const { paymentId, amountNaira, reason } = req.body;
+  if (!paymentId || !reason) {
+    return res.status(400).json({ error: 'Payment ID and Refund Reason are required.' });
+  }
+
+  const result = PaymentService.recordRefund({
+    paymentId: String(paymentId),
+    amountNaira: amountNaira ? Number(amountNaira) : undefined,
+    reason: sanitizeString(reason, 300),
+    actorId: req.user!.id,
+    actorRole: req.user!.role,
+  });
+
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+
+  return res.json(result);
+});
+
+apiRouter.get('/technicians/earnings', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
+  const technicianId = req.user!.id;
+  const earnings = db.technicianEarnings.filter((e) => e.technicianId === technicianId);
+  const payouts = db.payouts.filter((p) => p.technicianId === technicianId);
+
+  const heldNaira = earnings
+    .filter((e) => e.status === 'HELD')
+    .reduce((sum, e) => sum + e.netEarningsNaira, 0);
+
+  const eligibleGrossNaira = earnings
+    .filter((e) => e.status === 'ELIGIBLE_FOR_PAYOUT')
+    .reduce((sum, e) => sum + e.netEarningsNaira, 0);
+
+  const lockedInPayoutsNaira = payouts
+    .filter((p) => p.status === 'PENDING' || p.status === 'PROCESSING')
+    .reduce((sum, p) => sum + p.amountNaira, 0);
+
+  const availablePayoutNaira = Math.max(0, eligibleGrossNaira - lockedInPayoutsNaira);
+
+  const completedPayoutsNaira = payouts
+    .filter((p) => p.status === 'COMPLETED')
+    .reduce((sum, p) => sum + p.amountNaira, 0);
+
+  return res.json({
+    earnings,
+    payouts,
+    summary: {
+      heldEarningsNaira: heldNaira,
+      availablePayoutNaira,
+      lockedInProcessingNaira: lockedInPayoutsNaira,
+      totalCompletedPayoutsNaira: completedPayoutsNaira,
+      commissionRatePercent: PaymentService.COMMISSION_RATE * 100,
+    },
+  });
+});
+
+apiRouter.post('/technicians/payouts/request', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
+  const { amountNaira, destinationAccount } = req.body;
+  if (!amountNaira || Number(amountNaira) <= 0) {
+    return res.status(400).json({ error: 'Valid payout amount in Naira is required.' });
+  }
+
+  const result = PaymentService.requestPayout({
+    technicianId: req.user!.id,
+    amountNaira: Math.round(Number(amountNaira)),
+    destinationAccount,
+    actorId: req.user!.id,
+  });
+
+  if (!result.success) {
+    return res.status(400).json({ error: result.error, eligibleBalanceNaira: result.eligibleBalanceNaira });
+  }
+
+  return res.json(result);
+});
+
 apiRouter.post('/payments/create-intent', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
   const { repairJobId, idempotencyKey, paymentMethod } = req.body;
   if (!isNonEmptyString(repairJobId) || !isNonEmptyString(idempotencyKey)) {
