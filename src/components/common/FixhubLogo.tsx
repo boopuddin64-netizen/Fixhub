@@ -165,7 +165,7 @@ export const FixhubLogo: React.FC<FixhubLogoProps> = ({
                 isLight ? 'text-slate-500' : 'text-slate-400'
               } font-medium tracking-normal mt-0.5`}
             >
-              Phone Repair & Escrow
+              Phone Repair & Protection
             </p>
           )}
         </div>

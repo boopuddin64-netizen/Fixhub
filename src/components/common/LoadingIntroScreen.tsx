@@ -241,7 +241,7 @@ export const LoadingIntroScreen: React.FC<LoadingIntroScreenProps> = ({
             FIX<span className="text-emerald-400">HUB</span>
           </h1>
           <p className="text-xs font-semibold text-slate-400 tracking-wider uppercase mt-1">
-            Phone Repair & Escrow
+            Phone Repair & Protection
           </p>
         </div>
 
@@ -250,7 +250,7 @@ export const LoadingIntroScreen: React.FC<LoadingIntroScreenProps> = ({
           <p className="text-xs text-slate-300 font-medium tracking-normal transition-opacity duration-200">
             {phase === 'booting' && 'Powering device diagnostics...'}
             {phase === 'diagnostics' && 'Connecting to verified repair hubs...'}
-            {phase === 'escrow' && 'Securing escrow payment guarantee...'}
+            {phase === 'escrow' && 'Securing Paystack payment guarantee...'}
             {phase === 'ready' && 'Find. Fix. Done.'}
           </p>
         </div>

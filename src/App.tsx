@@ -10,7 +10,7 @@ import { RepairRequestWizard } from './components/customer/RepairRequestWizard';
 import { SavedDevicesManager } from './components/customer/SavedDevicesManager';
 import { QuoteComparisonView } from './components/customer/QuoteComparisonView';
 import { ActiveRepairTracker } from './components/customer/ActiveRepairTracker';
-import { EscrowPaymentModal } from './components/customer/EscrowPaymentModal';
+import { PaystackCheckoutModal } from './components/customer/PaystackCheckoutModal';
 import { VerifiedReviewModal } from './components/customer/VerifiedReviewModal';
 import { WarrantyPassportView } from './components/customer/WarrantyPassportView';
 import { CustomerProfileView } from './components/customer/CustomerProfileView';
@@ -452,9 +452,9 @@ function MainAppContent() {
         />
       )}
 
-      {/* Escrow Payment Modal */}
+      {/* Paystack Checkout Modal */}
       {paymentTarget && (
-        <EscrowPaymentModal
+        <PaystackCheckoutModal
           job={paymentTarget.job}
           quote={paymentTarget.quote}
           onClose={() => setPaymentTarget(null)}

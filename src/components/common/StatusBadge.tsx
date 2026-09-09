@@ -47,7 +47,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md', s
       break;
     case 'PAYMENT_CONFIRMED':
     case 'BOOKED':
-      label = 'Payment Secured (Escrow)';
+      label = 'Payment Confirmed';
       bg = 'bg-emerald-50 text-emerald-800 border-emerald-200';
       Icon = ShieldCheck;
       break;

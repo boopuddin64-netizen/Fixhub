@@ -16,7 +16,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 
-interface EscrowPaymentModalProps {
+export interface PaystackCheckoutModalProps {
   job: RepairJob;
   quote?: RepairQuote;
   onClose: () => void;
@@ -25,7 +25,7 @@ interface EscrowPaymentModalProps {
 
 type CheckoutStep = 'REVIEW' | 'INITIALIZING' | 'CHECKOUT' | 'VERIFYING' | 'CONFIRMED' | 'FAILED';
 
-export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
+export const PaystackCheckoutModal: React.FC<PaystackCheckoutModalProps> = ({
   job,
   quote,
   onClose,
@@ -47,7 +47,7 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
     try {
       const idempotencyKey = `idemp_pay_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
       const initRes = await ApiClient.initializePayment(job.id, idempotencyKey, method);
-      
+
       if (!initRes.success || !initRes.reference) {
         throw new Error(initRes.error || 'Failed to initialize Paystack checkout.');
       }
@@ -70,18 +70,18 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
     try {
       const verifyRes = await ApiClient.verifyPayment({ reference: paymentRef });
       if (!verifyRes.success) {
-        throw new Error(verifyRes.error || 'Payment verification failed at Paystack.');
+        throw new Error(verifyRes.error || 'Payment verification pending or failed at Paystack.');
       }
       setStep('CONFIRMED');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Payment could not be verified.');
+      setErrorMsg(err.message || 'Payment could not be verified by server.');
       setStep('FAILED');
     }
   };
 
   return (
     <div
-      id="escrow-payment-modal"
+      id="paystack-checkout-modal"
       className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
     >
       <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-8">
@@ -93,7 +93,7 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-base text-white">Fix Hub Secure Checkout</h3>
-              <p className="text-xs text-blue-300 font-medium">Payment Protected via Paystack</p>
+              <p className="text-xs text-blue-300 font-medium">Payment Handled by Paystack</p>
             </div>
           </div>
           {step !== 'VERIFYING' && step !== 'INITIALIZING' && (
@@ -151,17 +151,17 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
               <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-950 text-xs space-y-1">
                 <div className="flex items-center gap-1.5 font-bold text-blue-800">
                   <Lock className="w-3.5 h-3.5" />
-                  <span>Fix Hub Protection Guarantee:</span>
+                  <span>Fix Hub Payment Protection:</span>
                 </div>
                 <p className="text-[11px] text-blue-800 leading-relaxed">
-                  Your funds are secured upon checkout and held until your device repair is diagnosed, completed, and confirmed during pickup.
+                  Your payment is processed securely via Paystack and held by the platform until you test and confirm your completed repair.
                 </p>
               </div>
 
               {/* Payment Method Selector */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Select Payment Method
+                  Select Paystack Channel
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   <button
@@ -205,7 +205,7 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
 
               {/* Proceed to Checkout */}
               <button
-                id="confirm-escrow-payment-btn"
+                id="initialize-paystack-btn"
                 onClick={handleInitialize}
                 className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
@@ -251,7 +251,7 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
                     <span>Paystack Card Authorization</span>
                   </p>
                   <p className="text-slate-600 text-[11px]">
-                    Card transactions in sandbox are automatically authorized for rapid testing.
+                    Card transactions in sandbox/test mode are authorized via Paystack.
                   </p>
                 </div>
               )}
@@ -292,12 +292,12 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
               )}
 
               <button
-                id="authorize-paystack-btn"
+                id="verify-paystack-btn"
                 onClick={handleVerify}
                 className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Complete & Confirm Payment</span>
+                <span>Verify Payment with Paystack</span>
               </button>
             </div>
           )}
@@ -362,4 +362,3 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
     </div>
   );
 };
-

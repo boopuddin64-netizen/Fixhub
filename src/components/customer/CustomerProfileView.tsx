@@ -111,7 +111,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
               <Lock className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-900">Fix Hub Escrow Protection</p>
+              <p className="text-sm font-bold text-slate-900">Fix Hub Payment Protection</p>
               <p className="text-xs text-slate-500">100% money back on unauthorized alterations</p>
             </div>
           </div>

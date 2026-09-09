@@ -206,7 +206,7 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
           Configure Your Fix Hub Workshop & Parts Catalog
         </h1>
         <p className="text-xs sm:text-sm text-indigo-200/80 max-w-2xl leading-relaxed">
-          Set up your operating hours in Computer Village, verify your bank account for escrow payouts, and list your stock to start receiving nearby repair requests.
+          Set up your operating hours, verify your bank account for repair payouts, and list your stock to start receiving nearby repair requests.
         </p>
 
         {/* Step Indicator */}
@@ -344,8 +344,8 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
               <CreditCard className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-extrabold text-white">Escrow Settlement Bank Account</h2>
-              <p className="text-xs text-slate-400">Where you receive automatic payouts upon customer pickup verification</p>
+              <h2 className="text-base font-extrabold text-white">Direct Payout Settlement Bank Account</h2>
+              <p className="text-xs text-slate-400">Where you receive direct withdrawals upon customer repair completion</p>
             </div>
           </div>
 
@@ -353,10 +353,10 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
             <div className="p-4 rounded-2xl bg-blue-950/40 border border-blue-500/30 text-blue-200 space-y-1">
               <span className="font-bold flex items-center gap-1.5 text-blue-300">
                 <ShieldCheck className="w-4 h-4" />
-                Guaranteed Escrow Payout Protocol:
+                Guaranteed Payout Protocol:
               </span>
               <p className="text-[11px] text-blue-200/80">
-                When a customer enters the 6-digit pickup verification code (`PK-XXXX`), escrow funds (Net of 8.5% platform escrow fee) settle directly into your bank account within minutes.
+                When a customer verifies the repair at pickup and confirms completion, your net earnings (8.5% platform fee deducted) become instantly eligible for withdrawal to your bank account.
               </p>
             </div>
 

@@ -41,10 +41,10 @@ export const IntroScreen: React.FC<IntroScreenProps> = ({ onComplete, canDismiss
     },
     {
       step: '2',
-      title: 'Your money is safe in Escrow',
+      title: 'Your payment is 100% protected',
       description:
-        'You never pay the technician upfront. Your money is held safely in escrow until you personally test and verify your fixed phone.',
-      badge: '100% Escrow Protected',
+        'You never pay the technician upfront. Your money is secured safely by Fix Hub until you personally test and verify your fixed phone.',
+      badge: '100% Payment Protected',
       icon: ShieldCheck,
       iconColor: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
       highlights: [
@@ -104,8 +104,8 @@ export const IntroScreen: React.FC<IntroScreenProps> = ({ onComplete, canDismiss
           </h2>
 
           <p className="mt-2 text-xs sm:text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
-            Connect with verified local phone repair technicians. Your money is held securely in
-            escrow and only paid out after you test your repaired device.
+            Connect with verified local phone repair technicians. Your payment is held securely
+            and only released after you test your repaired device.
           </p>
         </div>
 
@@ -130,7 +130,7 @@ export const IntroScreen: React.FC<IntroScreenProps> = ({ onComplete, canDismiss
                 >
                   {s.step}
                 </span>
-                <span className="truncate hidden sm:inline">{idx === 0 ? 'Request' : idx === 1 ? 'Escrow' : 'Warranty'}</span>
+                <span className="truncate hidden sm:inline">{idx === 0 ? 'Request' : idx === 1 ? 'Protected' : 'Warranty'}</span>
               </button>
             ))}
           </div>

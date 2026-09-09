@@ -34,7 +34,7 @@ export const RepairTimeline: React.FC<RepairTimelineProps> = ({ status }) => {
       ].includes(status),
     },
     {
-      label: 'Quotes & Escrow',
+      label: 'Quote & Payment',
       done: [
         'QUOTE_ACCEPTED',
         'PAYMENT_PENDING',

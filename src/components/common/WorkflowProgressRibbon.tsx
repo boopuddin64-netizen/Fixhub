@@ -71,7 +71,7 @@ export const WorkflowProgressRibbon: React.FC<WorkflowProgressRibbonProps> = ({
                     : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white'
                 }`}
               >
-                2. Quotes & Escrow
+                2. Quotes & Payment
               </button>
               <span className="text-slate-600">→</span>
               <button

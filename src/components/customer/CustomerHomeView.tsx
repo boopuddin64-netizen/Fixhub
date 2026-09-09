@@ -177,7 +177,7 @@ export const CustomerHomeView: React.FC<CustomerHomeViewProps> = ({
             Hi, {user?.name?.split(' ')[0] || 'Friend'} 👋
           </h2>
           <p className="text-xs text-slate-500 font-medium">
-            Get reliable, escrow-protected device repairs in Port Harcourt & Rivers State
+            Get reliable, protected device repairs across Nigeria
           </p>
         </div>
         <button
@@ -195,15 +195,15 @@ export const CustomerHomeView: React.FC<CustomerHomeViewProps> = ({
         <div className="relative z-10 space-y-4">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/20 text-cyan-300 text-xs font-semibold border border-blue-400/30">
             <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Computer Village & Nationwide Certified Techs</span>
+            <span>Verified & Nationwide Certified Techs</span>
           </div>
 
           <div className="max-w-xl space-y-2">
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white leading-tight">
-              Fix your phone with verified parts and 100% escrow protection.
+              Fix your phone with verified parts and 100% payment protection.
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              No hidden fees. Get fair quotes from top vetted shops, pay into escrow, and release funds only after you test the fix.
+              No hidden fees. Get fair quotes from top vetted shops, pay securely via Paystack, and release funds only after you test the fix.
             </p>
           </div>
 
@@ -367,7 +367,7 @@ export const CustomerHomeView: React.FC<CustomerHomeViewProps> = ({
                     Issues: <span className="font-semibold text-slate-700">{(job.issues || []).join(', ')}</span>
                   </p>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    Secured Escrow: <span className="font-bold text-emerald-700">₦{job.finalAmount.toLocaleString()}</span>
+                    Secured Payment: <span className="font-bold text-emerald-700">₦{job.finalAmount.toLocaleString()}</span>
                   </p>
                 </div>
               </div>
@@ -570,9 +570,9 @@ export const CustomerHomeView: React.FC<CustomerHomeViewProps> = ({
           <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
             <Lock className="w-4 h-4" />
           </div>
-          <h4 className="font-bold text-xs text-slate-900">Escrow Protection Guarantee</h4>
+          <h4 className="font-bold text-xs text-slate-900">Payment Protection Guarantee</h4>
           <p className="text-[11px] text-slate-500 leading-relaxed">
-            Your money stays in escrow. We release payment only AFTER you inspect your device.
+            Your money stays secured. We release payment only AFTER you inspect your repaired device.
           </p>
         </div>
 

@@ -705,7 +705,7 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
       <div className="mt-8 text-center text-xs text-slate-500 flex items-center justify-center gap-4 flex-wrap">
         <span className="flex items-center gap-1">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-          Escrow Buyer Guarantee
+          Paystack Buyer Guarantee
         </span>
         <span>•</span>
         <span className="flex items-center gap-1">
@@ -715,7 +715,7 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
         <span>•</span>
         <span className="flex items-center gap-1">
           <Lock className="w-3.5 h-3.5 text-purple-400" />
-          Bank Escrow Settlement
+          Protected Direct Settlement
         </span>
       </div>
     </div>
