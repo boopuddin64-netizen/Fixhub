@@ -17,6 +17,7 @@ import {
   ConditionReport,
   PartsQuality,
   CustomerDevice,
+  TechnicianProfile,
 } from '../../src/types/index';
 import {
   isNonEmptyString,
@@ -524,8 +525,13 @@ apiRouter.delete('/customer/devices/:id', requireAuth, requireRole(['customer'])
 /* -------------------------------------------------------------
  * 3. TECHNICIAN DISCOVERY & MATCHING (Public / Lead Matching)
  * ----------------------------------------------------------- */
+export function sanitizeTechnicianForPublic(tech: TechnicianProfile): Omit<TechnicianProfile, 'bankDetails' | 'trustScore'> {
+  const { bankDetails, trustScore, ...publicTech } = tech;
+  return publicTech;
+}
+
 apiRouter.get('/technicians', (_req: Request, res: Response) => {
-  return res.json(db.technicianProfiles);
+  return res.json(db.technicianProfiles.map(sanitizeTechnicianForPublic));
 });
 
 apiRouter.get('/technicians/:id', (req: Request, res: Response) => {
@@ -535,7 +541,7 @@ apiRouter.get('/technicians/:id', (req: Request, res: Response) => {
   }
   const parts = db.technicianParts.filter((p) => p.technicianId === tech.userId);
   const reviews = db.reviews.filter((r) => r.technicianId === tech.userId);
-  return res.json({ technician: tech, parts, reviews });
+  return res.json({ technician: sanitizeTechnicianForPublic(tech), parts, reviews });
 });
 
 apiRouter.post('/technicians/match', (req: Request, res: Response) => {
@@ -564,7 +570,12 @@ apiRouter.post('/technicians/match', (req: Request, res: Response) => {
     maxDistanceKm: maxDistanceKm ? Math.min(Math.max(Number(maxDistanceKm), 1), 100) : 30,
   });
 
-  return res.json(results);
+  const sanitizedResults = results.map((r) => ({
+    ...r,
+    technician: sanitizeTechnicianForPublic(r.technician),
+  }));
+
+  return res.json(sanitizedResults);
 });
 
 /* -------------------------------------------------------------
