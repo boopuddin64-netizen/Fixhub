@@ -281,6 +281,36 @@ export type QuoteStatus =
   | 'EXPIRED'
   | 'WITHDRAWN';
 
+export interface QuoteLineItem {
+  id: string;
+  inventoryItemId: string;
+  partNameSnapshot: string;
+  qualitySnapshot: PartsQuality;
+  unitPriceSnapshot: number;
+  priceVersion: number;
+  quantity: number;
+  subtotal: number;
+  skuSnapshot?: string;
+  brandSnapshot?: string;
+  categorySnapshot?: string;
+  warrantyDaysSnapshot?: number;
+}
+
+export interface QuotePriceAuditMetadata {
+  requestCreatedAt: string;
+  quoteCreatedAt: string;
+  inventoryPriceBeforeQuote?: number;
+  inventoryPriceChangeCount?: number;
+  flaggedForPriceManipulation?: boolean;
+  priceDeltas?: Array<{
+    inventoryItemId: string;
+    partName: string;
+    previousPrice: number;
+    quotedPrice: number;
+    priceChangedAt: string;
+  }>;
+}
+
 export interface RepairQuote {
   id: string;
   requestId: string;
@@ -292,6 +322,7 @@ export interface RepairQuote {
   technicianRating: number;
   technicianReviewsCount: number;
   distanceKm: number;
+  items?: QuoteLineItem[];
   partsCost: number;
   laborCost: number;
   diagnosticCost?: number;
@@ -305,6 +336,7 @@ export interface RepairQuote {
   expiresAt?: string;
   status: QuoteStatus;
   viewedAt?: string;
+  priceAuditMetadata?: QuotePriceAuditMetadata;
   createdAt: string;
   updatedAt?: string;
 }
@@ -327,22 +359,77 @@ export interface ConditionReport {
 export interface PartUsedRecord {
   id: string;
   partId?: string;
+  inventoryItemId?: string;
+  quoteLineItemId?: string;
   partName: string;
+  deviceBrand?: string;
   deviceModel: string;
   quality: PartsQuality;
   priceNaira: number;
+  unitPriceSnapshot?: number;
+  quantity?: number;
   warrantyDays: number;
   supplier?: string;
+  serialNumber?: string;
+  sku?: string;
   beforePhotoUrl?: string;
   afterPhotoUrl?: string;
+  technicianId?: string;
   installationTimestamp: string;
 }
+
+export interface InventoryPriceHistoryItem {
+  priceNaira: number;
+  version: number;
+  changedAt: string;
+  reason?: string;
+  changedBy?: string;
+}
+
+export type InventoryItemStatus = 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK' | 'DISCONTINUED';
+
+export interface TechnicianInventoryItem {
+  id: string;
+  inventoryItemId?: string;
+  technicianId: string;
+  partName: string;
+  name?: string; // alias for backwards compatibility
+  category: string;
+  brand: string;
+  deviceBrand?: string; // alias
+  compatibleModels: string[];
+  deviceModel?: string; // alias
+  quality: PartsQuality;
+  sku: string;
+  unitPriceNaira: number;
+  priceNaira?: number; // alias
+  currency: 'NGN';
+  quantityOnHand: number;
+  quantityReserved: number;
+  quantityAvailable: number; // calculated: quantityOnHand - quantityReserved
+  inStockCount?: number; // alias
+  stockQuantity?: number; // alias
+  warrantyDays: number;
+  status: InventoryItemStatus;
+  priceVersion: number;
+  priceHistory: InventoryPriceHistoryItem[];
+  partsUsedCount?: number;
+  supplier?: string;
+  photoUrl?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type TechnicianPart = TechnicianInventoryItem;
 
 export interface AdditionalDiagnosis {
   id: string;
   discoveredAt: string;
   title: string;
   description: string;
+  inventoryItemId?: string;
+  partName?: string;
   photoEvidence: string[];
   additionalCostNaira: number;
   newTotalAmountNaira: number;
@@ -410,21 +497,6 @@ export interface RepairJob {
     actorRole: UserRole;
     note?: string;
   }>;
-}
-
-export interface TechnicianPart {
-  id: string;
-  technicianId: string;
-  name: string;
-  partName?: string;
-  deviceBrand: string;
-  deviceModel: string;
-  quality: PartsQuality;
-  priceNaira: number;
-  inStockCount: number;
-  stockQuantity?: number;
-  warrantyDays: number;
-  photoUrl?: string;
 }
 
 export type PaymentStatus =

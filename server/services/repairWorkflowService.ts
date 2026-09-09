@@ -13,6 +13,7 @@ import { AuditService } from './auditService';
 import { NotificationService } from './notificationService';
 import { PaymentService } from './paymentService';
 import { QuoteAccuracyService } from './quoteAccuracyService';
+import { InventoryService } from './inventoryService';
 
 const ALLOWED_TRANSITIONS: Record<RepairLifecycleStatus, RepairLifecycleStatus[]> = {
   DRAFT: ['SUBMITTED', 'CANCELLED'],
@@ -180,6 +181,9 @@ export class RepairWorkflowService {
 
       db.repairJobs.push(job);
 
+      // Reserve stock in technician inventory for quoted line items
+      InventoryService.reserveStockForQuote(quote, job.id);
+
       // Notify technician
       NotificationService.send({
         userId: quote.technicianId,
@@ -344,11 +348,14 @@ export class RepairWorkflowService {
       return { success: false, error: `Cannot record parts when job status is ${job.status}.` };
     }
 
-    const partRecord: PartUsedRecord = {
+    let partRecord: PartUsedRecord = {
       id: `partrec_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       ...part,
       installationTimestamp: new Date().toISOString(),
     };
+
+    // Deduct stock from technician inventory & enrich passport record
+    partRecord = InventoryService.deductStockForInstalledPart(partRecord, jobId, technicianId);
 
     job.partsUsed.push(partRecord);
 
@@ -358,7 +365,13 @@ export class RepairWorkflowService {
       action: 'PART_RECORDED',
       resourceType: 'REPAIR_JOB',
       resourceId: jobId,
-      details: { partName: part.partName, quality: part.quality, priceNaira: part.priceNaira },
+      details: {
+        partName: partRecord.partName,
+        sku: partRecord.sku,
+        quality: partRecord.quality,
+        priceNaira: partRecord.priceNaira,
+        inventoryItemId: partRecord.inventoryItemId,
+      },
     });
 
     db.save();

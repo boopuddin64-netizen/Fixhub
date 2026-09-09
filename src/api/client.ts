@@ -9,6 +9,8 @@ import {
   RepairRequestDraft,
   RepairRequestAttachment,
   RepairQuote,
+  TechnicianInventoryItem,
+  InventoryPriceHistoryItem,
 } from '../types/index';
 
 const API_BASE = '/api';
@@ -505,7 +507,57 @@ export class ApiClient {
     }
   }
 
-  // Parts
+  // Parts & Inventory (Phase 7)
+  public static async getInventory(params?: {
+    search?: string;
+    brand?: string;
+    category?: string;
+    status?: string;
+    deviceModel?: string;
+  }): Promise<TechnicianInventoryItem[]> {
+    try {
+      const query = new URLSearchParams();
+      if (params?.search) query.append('search', params.search);
+      if (params?.brand) query.append('brand', params.brand);
+      if (params?.category) query.append('category', params.category);
+      if (params?.status) query.append('status', params.status);
+      if (params?.deviceModel) query.append('deviceModel', params.deviceModel);
+      const qs = query.toString();
+      const res = await this.request<any>(`/inventory${qs ? `?${qs}` : ''}`);
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
+  }
+
+  public static addInventoryItem(data: Partial<TechnicianInventoryItem> & { name?: string; priceNaira?: number }) {
+    return this.request<TechnicianInventoryItem>('/inventory', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public static updateInventoryItem(id: string, data: Partial<TechnicianInventoryItem> & { priceChangeReason?: string }) {
+    return this.request<TechnicianInventoryItem>(`/inventory/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public static getInventoryItem(id: string) {
+    return this.request<TechnicianInventoryItem>(`/inventory/${id}`);
+  }
+
+  public static getInventoryPriceHistory(id: string) {
+    return this.request<{
+      itemId: string;
+      partName: string;
+      currentPrice: number;
+      currentVersion: number;
+      priceHistory: InventoryPriceHistoryItem[];
+    }>(`/inventory/${id}/price-history`);
+  }
+
   public static async getTechnicianParts(techId: string): Promise<any[]> {
     try {
       const res = await this.request<any>(`/parts/technician/${techId}`);

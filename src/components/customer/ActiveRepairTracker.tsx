@@ -303,7 +303,7 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
                     <p className="font-bold text-slate-900">{part.partName}</p>
                     <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
                       <span className="font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded">
-                        {part.quality.replace('_', ' ')}
+                        {(part.quality || 'ORIGINAL_OEM').replace(/_/g, ' ')}
                       </span>
                       <span>• {part.warrantyDays} Days Warranty</span>
                     </div>

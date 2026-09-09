@@ -422,7 +422,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
                     {/* Breakdown */}
                     <div className="p-3 bg-slate-50 rounded-xl space-y-1 text-xs text-slate-600">
                       <div className="flex justify-between">
-                        <span>Parts ({q.partsQuality.replace(/_/g, ' ')}):</span>
+                        <span>Parts ({((q.partsQuality as any) || 'STANDARD_AFTERMARKET').replace(/_/g, ' ')}):</span>
                         <span className="font-semibold text-slate-800">₦{(q.partsCost || 0).toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between">

@@ -8,6 +8,7 @@ import { PaymentService } from '../services/paymentService';
 import { RepairWorkflowService } from '../services/repairWorkflowService';
 import { AuditService } from '../services/auditService';
 import { NotificationService } from '../services/notificationService';
+import { InventoryService } from '../services/inventoryService';
 import { calculateDistanceKm } from '../services/technicianMatchingService';
 import {
   UserRole,
@@ -1133,11 +1134,13 @@ apiRouter.patch('/repairs/requests/:id/location', requireAuth, requireRole(['cus
 });
 
 /* -------------------------------------------------------------
- * 5. TECHNICIAN QUOTES (Strict Validation & Anti-Tampering)
+ * 5. TECHNICIAN QUOTES (Strict Validation & Inventory-Backed Pricing)
  * ----------------------------------------------------------- */
 apiRouter.post('/quotes/submit', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
   const {
     requestId,
+    items,
+    parts,
     partsCost,
     laborCost,
     diagnosticCost,
@@ -1187,10 +1190,78 @@ apiRouter.post('/quotes/submit', requireAuth, requireRole(['technician']), (req:
     });
   }
 
-  // 3. Strict Server-Side Numerical Validation
-  const partsVal = validateNumber(partsCost, 'Parts cost', { min: 0, max: 10_000_000 });
-  if (partsVal.valid === false) return res.status(400).json({ error: partsVal.error });
+  // 3. Authoritative Inventory Line Items Processing
+  const rawItems = Array.isArray(items) ? items : (Array.isArray(parts) ? parts : undefined);
+  let resolvedLineItems: any[] = [];
+  let serverCalculatedPartsCost = 0;
+  let serverPredominantQuality: PartsQuality = 'PREMIUM_AFTERMARKET';
+  let serverMaxWarrantyDays = 30;
+  let priceAuditMetadata: any = undefined;
 
+  if (rawItems && rawItems.length > 0) {
+    const validatedInventory = InventoryService.validateAndBuildQuoteLineItems(
+      req.user!.id,
+      rawItems,
+      request
+    );
+
+    if (validatedInventory.valid === false) {
+      return res.status(400).json({ error: validatedInventory.error });
+    }
+
+    resolvedLineItems = validatedInventory.items;
+    serverCalculatedPartsCost = validatedInventory.totalPartsCost;
+    serverPredominantQuality = validatedInventory.predominantQuality;
+    serverMaxWarrantyDays = validatedInventory.maxWarrantyDays;
+    priceAuditMetadata = validatedInventory.priceAuditMetadata;
+  } else if (partsCost !== undefined && partsCost !== null && Number(partsCost) > 0) {
+    // Backwards compatibility / fallback: Verify if technician has registered parts for this device or create verified inventory record
+    const partsVal = validateNumber(partsCost, 'Parts cost', { min: 0, max: 10_000_000 });
+    if (partsVal.valid === false) return res.status(400).json({ error: partsVal.error });
+    serverCalculatedPartsCost = partsVal.value;
+
+    // Check for existing matching inventory part or create snapshot item
+    let matchingPart = db.technicianParts.find(
+      (p) => p.technicianId === req.user!.id && (p.brand === request.deviceBrand || p.deviceBrand === request.deviceBrand)
+    );
+
+    if (!matchingPart) {
+      const created = InventoryService.createInventoryItem(req.user!.id, {
+        partName: `${request.deviceBrand} ${request.deviceModel} Repair Component`,
+        brand: request.deviceBrand,
+        compatibleModels: [request.deviceModel],
+        quality: partsQuality || 'PREMIUM_AFTERMARKET',
+        unitPriceNaira: partsVal.value,
+        quantityOnHand: 5,
+        warrantyDays: warrantyDays || 60,
+      });
+      if (created.success) matchingPart = created.item;
+    }
+
+    if (matchingPart) {
+      resolvedLineItems = [
+        {
+          id: `qli_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          inventoryItemId: matchingPart.id,
+          partNameSnapshot: matchingPart.partName || matchingPart.name,
+          qualitySnapshot: matchingPart.quality,
+          unitPriceSnapshot: partsVal.value,
+          priceVersion: matchingPart.priceVersion || 1,
+          quantity: 1,
+          subtotal: partsVal.value,
+          skuSnapshot: matchingPart.sku,
+          brandSnapshot: matchingPart.brand,
+          warrantyDaysSnapshot: matchingPart.warrantyDays || 60,
+        },
+      ];
+    }
+  } else {
+    // Labor-only repair with 0 parts cost
+    serverCalculatedPartsCost = 0;
+    resolvedLineItems = [];
+  }
+
+  // 4. Numerical Cost Validation
   const laborVal = validateNumber(laborCost, 'Labor cost', { min: 0, max: 10_000_000 });
   if (laborVal.valid === false) return res.status(400).json({ error: laborVal.error });
 
@@ -1209,11 +1280,12 @@ apiRouter.post('/quotes/submit', requireAuth, requireRole(['technician']), (req:
   const hoursVal = validateNumber(estimatedTimeHours || 2, 'Estimated time', { min: 1, max: 720, integerOnly: true });
   if (hoursVal.valid === false) return res.status(400).json({ error: hoursVal.error });
 
-  const warrantyVal = validateNumber(warrantyDays || 60, 'Warranty days', { min: 14, max: 365, integerOnly: true });
+  const minWarranty = Math.max(14, serverMaxWarrantyDays);
+  const warrantyVal = validateNumber(warrantyDays || minWarranty, 'Warranty days', { min: 14, max: 365, integerOnly: true });
   if (warrantyVal.valid === false) return res.status(400).json({ error: warrantyVal.error });
 
   // Server-Authoritative Total Calculation (never trust client total)
-  const totalAmount = partsVal.value + laborVal.value + diagnosticVal.value + otherVal.value;
+  const totalAmount = serverCalculatedPartsCost + laborVal.value + diagnosticVal.value + otherVal.value;
   if (totalAmount <= 0) {
     return res.status(400).json({ error: 'Total quote amount must be greater than zero.' });
   }
@@ -1229,10 +1301,10 @@ apiRouter.post('/quotes/submit', requireAuth, requireRole(['technician']), (req:
     'UNKNOWN',
   ];
 
-  if (!partsQuality || !allowedQualities.includes(partsQuality)) {
-    return res.status(400).json({ error: 'Invalid parts quality specified.' });
-  }
-  const resolvedQuality: PartsQuality = partsQuality;
+  const resolvedQuality: PartsQuality =
+    partsQuality && allowedQualities.includes(partsQuality)
+      ? partsQuality
+      : serverPredominantQuality;
 
   const distanceKm =
     eligibility.distanceKm ??
@@ -1289,18 +1361,20 @@ apiRouter.post('/quotes/submit', requireAuth, requireRole(['technician']), (req:
     technicianRating: tech.rating,
     technicianReviewsCount: tech.reviewCount,
     distanceKm: Math.round((distanceKm || 0) * 10) / 10,
-    partsCost: partsVal.value,
+    items: resolvedLineItems,
+    partsCost: serverCalculatedPartsCost,
     laborCost: laborVal.value,
     diagnosticCost: diagnosticVal.value,
     otherCost: otherVal.value,
     totalAmount,
     estimatedTimeHours: hoursVal.value,
-    warrantyDays: warrantyVal.value,
+    warrantyDays: Math.max(warrantyVal.value, serverMaxWarrantyDays),
     partsQuality: resolvedQuality,
     notes: sanitizeString(notes || '', 1000),
     limitationsOrConditions: sanitizeString(limitationsOrConditions || '', 1000),
     expiresAt,
     status: 'SUBMITTED' as const,
+    priceAuditMetadata,
     createdAt: existingQuote ? existingQuote.createdAt : now.toISOString(),
     updatedAt: now.toISOString(),
   };
@@ -1339,7 +1413,14 @@ apiRouter.post('/quotes/submit', requireAuth, requireRole(['technician']), (req:
     action: 'QUOTE_SUBMITTED',
     resourceType: 'REPAIR_QUOTE',
     resourceId: quoteId,
-    details: { requestId, totalAmount, partsQuality: resolvedQuality },
+    details: {
+      requestId,
+      totalAmount,
+      partsCost: serverCalculatedPartsCost,
+      laborCost: laborVal.value,
+      partsQuality: resolvedQuality,
+      lineItemsCount: resolvedLineItems.length,
+    },
   });
 
   db.save();
@@ -2013,57 +2094,77 @@ apiRouter.get('/reviews/technician/:id', (req: Request, res: Response) => {
 });
 
 /* -------------------------------------------------------------
- * 9. PARTS CATALOG & TECHNICIAN SETTINGS (Strict Identity Enforcement)
+ * 9. PARTS CATALOG & TECHNICIAN INVENTORY (Authoritative & Traceable)
  * ----------------------------------------------------------- */
+apiRouter.get('/inventory', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
+  const { search, brand, category, status, deviceModel } = req.query;
+  const items = InventoryService.getInventoryByTechnician(req.user!.id, {
+    search: typeof search === 'string' ? search : undefined,
+    brand: typeof brand === 'string' ? brand : undefined,
+    category: typeof category === 'string' ? category : undefined,
+    status: typeof status === 'string' ? status : undefined,
+    deviceModel: typeof deviceModel === 'string' ? deviceModel : undefined,
+  });
+  return res.json(items);
+});
+
+apiRouter.post('/inventory', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
+  const result = InventoryService.createInventoryItem(req.user!.id, req.body);
+  if (result.success === false) {
+    return res.status(400).json({ error: result.error });
+  }
+  return res.status(201).json(result.item);
+});
+
+apiRouter.get('/inventory/:id', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  const item = InventoryService.getInventoryItemById(req.params.id);
+  if (!item) {
+    return res.status(404).json({ error: 'Inventory item not found.' });
+  }
+  return res.json(item);
+});
+
+apiRouter.patch('/inventory/:id', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
+  const result = InventoryService.updateInventoryItem(req.params.id, req.user!.id, req.body);
+  if (result.success === false) {
+    return res.status(400).json({ error: result.error });
+  }
+  return res.json(result.item);
+});
+
+apiRouter.put('/inventory/:id', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
+  const result = InventoryService.updateInventoryItem(req.params.id, req.user!.id, req.body);
+  if (result.success === false) {
+    return res.status(400).json({ error: result.error });
+  }
+  return res.json(result.item);
+});
+
+apiRouter.get('/inventory/:id/price-history', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  const item = InventoryService.getInventoryItemById(req.params.id);
+  if (!item) {
+    return res.status(404).json({ error: 'Inventory item not found.' });
+  }
+  return res.json({
+    itemId: item.id,
+    partName: item.partName,
+    currentPrice: item.unitPriceNaira,
+    currentVersion: item.priceVersion,
+    priceHistory: item.priceHistory || [],
+  });
+});
+
 apiRouter.get('/parts/technician/:id', (req: Request, res: Response) => {
-  const parts = db.technicianParts.filter((p) => p.technicianId === req.params.id);
+  const parts = InventoryService.getInventoryByTechnician(req.params.id);
   return res.json(parts);
 });
 
 apiRouter.post('/parts', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
-  const { name, partName, deviceBrand, deviceModel, quality, priceNaira, inStockCount, stockQuantity, warrantyDays, photoUrl } = req.body;
-  const resolvedName = name || partName;
-
-  if (!isNonEmptyString(resolvedName)) {
-    return res.status(400).json({ error: 'Part name is required.' });
+  const result = InventoryService.createInventoryItem(req.user!.id, req.body);
+  if (result.success === false) {
+    return res.status(400).json({ error: result.error });
   }
-
-  const priceVal = validateNumber(priceNaira, 'Part price', { min: 0, max: 10_000_000 });
-  if (priceVal.valid === false) return res.status(400).json({ error: priceVal.error });
-
-  const rawStock = inStockCount !== undefined ? inStockCount : (stockQuantity !== undefined ? stockQuantity : 5);
-  const stockVal = validateNumber(rawStock, 'Stock count', { min: 0, max: 10_000, integerOnly: true });
-  if (stockVal.valid === false) return res.status(400).json({ error: stockVal.error });
-
-  const warrantyVal = validateNumber(warrantyDays !== undefined ? warrantyDays : 60, 'Warranty days', { min: 0, max: 365, integerOnly: true });
-  if (warrantyVal.valid === false) return res.status(400).json({ error: warrantyVal.error });
-
-  const allowedQualities: PartsQuality[] = [
-    'ORIGINAL_OEM',
-    'PREMIUM_AFTERMARKET',
-    'STANDARD_AFTERMARKET',
-    'REFURBISHED',
-  ];
-  const resolvedQuality: PartsQuality = allowedQualities.includes(quality) ? quality : 'PREMIUM_AFTERMARKET';
-
-  const part = {
-    id: `part_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-    technicianId: req.user!.id, // Enforce authenticated technician identity
-    name: sanitizeString(resolvedName, 120),
-    partName: sanitizeString(resolvedName, 120),
-    deviceBrand: sanitizeString(deviceBrand, 80) || 'All',
-    deviceModel: sanitizeString(deviceModel, 80) || 'All Models',
-    quality: resolvedQuality,
-    priceNaira: priceVal.value,
-    inStockCount: stockVal.value,
-    stockQuantity: stockVal.value,
-    warrantyDays: warrantyVal.value,
-    photoUrl: photoUrl ? sanitizeString(photoUrl, 500) : undefined,
-  };
-
-  db.technicianParts.push(part);
-  db.save();
-  return res.status(201).json(part);
+  return res.status(201).json(result.item);
 });
 
 apiRouter.put('/technicians/profile', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {

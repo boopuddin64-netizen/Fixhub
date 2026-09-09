@@ -325,13 +325,48 @@ export const QuoteComparisonView: React.FC<QuoteComparisonViewProps> = ({
                     </span>
                   </div>
 
-                  {/* Price Breakdown */}
-                  <div className="p-3 bg-slate-50 rounded-xl space-y-1.5 text-xs text-slate-600">
-                    <div className="flex justify-between">
-                      <span>Parts Cost:</span>
-                      <span className="font-semibold text-slate-800">₦{quote.partsCost.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between">
+                  {/* Price & Transparent Parts Breakdown */}
+                  <div className="p-3 bg-slate-50 rounded-xl space-y-2 text-xs text-slate-600">
+                    {quote.items && quote.items.length > 0 ? (
+                      <div className="space-y-1.5 pb-2 border-b border-slate-200">
+                        <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                          Itemized Verified Parts ({quote.items.length})
+                        </span>
+                        {quote.items.map((item, idx) => {
+                          const partName = item.partNameSnapshot || (item as any).partName || 'Replacement Part';
+                          const rawQuality = item.qualitySnapshot || (item as any).quality || quote.partsQuality || 'PREMIUM_AFTERMARKET';
+                          const qualityFormatted = typeof rawQuality === 'string' ? rawQuality.replace(/_/g, ' ') : 'Standard';
+                          const unitPrice = item.unitPriceSnapshot ?? (item as any).unitPriceNaira ?? 0;
+                          const quantity = item.quantity || 1;
+                          const subtotal = item.subtotal ?? (item as any).subtotalNaira ?? (unitPrice * quantity);
+
+                          return (
+                            <div key={item.id || idx} className="flex justify-between items-start text-[11px]">
+                              <div className="min-w-0 pr-2">
+                                <p className="font-semibold text-slate-900 truncate">
+                                  {partName}
+                                </p>
+                                <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                                  <span>{qualityFormatted}</span>
+                                  {quantity > 1 && <span>• Qty: {quantity}</span>}
+                                  <span>• ₦{unitPrice.toLocaleString()} ea</span>
+                                </div>
+                              </div>
+                              <span className="font-bold text-slate-800 shrink-0">
+                                ₦{subtotal.toLocaleString()}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="flex justify-between">
+                        <span>Parts Cost:</span>
+                        <span className="font-semibold text-slate-800">₦{quote.partsCost.toLocaleString()}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between pt-0.5">
                       <span>Labor & Bench:</span>
                       <span className="font-semibold text-slate-800">₦{quote.laborCost.toLocaleString()}</span>
                     </div>
@@ -341,6 +376,12 @@ export const QuoteComparisonView: React.FC<QuoteComparisonViewProps> = ({
                         <span className="font-semibold text-slate-800">₦{quote.diagnosticCost.toLocaleString()}</span>
                       </div>
                     )}
+                    {quote.otherCost && quote.otherCost > 0 ? (
+                      <div className="flex justify-between">
+                        <span>Other / Misc:</span>
+                        <span className="font-semibold text-slate-800">₦{quote.otherCost.toLocaleString()}</span>
+                      </div>
+                    ) : null}
                     <div className="pt-1.5 border-t border-slate-200 flex justify-between items-center text-sm font-bold text-slate-900">
                       <span>Total Guaranteed Price:</span>
                       <span className="text-blue-700 text-base">₦{quote.totalAmount.toLocaleString()}</span>

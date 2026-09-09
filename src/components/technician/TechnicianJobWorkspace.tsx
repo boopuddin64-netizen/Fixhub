@@ -496,13 +496,41 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
             </div>
 
             <div className="space-y-3 text-xs">
+              {quote?.items && quote.items.length > 0 && (
+                <div>
+                  <label className="font-bold block text-slate-700 mb-1">Select from Quoted Parts:</label>
+                  <div className="space-y-1">
+                    {quote.items.map((item) => {
+                      const pName = item.partNameSnapshot || (item as any).partName || 'Replacement Part';
+                      const pQuality = item.qualitySnapshot || (item as any).quality || quote.partsQuality || 'PREMIUM_AFTERMARKET';
+                      const pPrice = item.unitPriceSnapshot ?? (item as any).unitPriceNaira ?? 0;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            setPartName(pName);
+                            setPartQuality(pQuality);
+                            setPartPrice(pPrice);
+                          }}
+                          className="w-full text-left p-2 rounded-lg border border-slate-200 hover:border-purple-300 hover:bg-purple-50/50 flex items-center justify-between text-xs transition-colors"
+                        >
+                          <span className="font-bold text-slate-800">{pName}</span>
+                          <span className="text-purple-700 font-bold">₦{pPrice.toLocaleString()}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="font-bold block text-slate-700 mb-1">Part Description</label>
                 <input
                   type="text"
                   value={partName}
                   onChange={(e) => setPartName(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-medium"
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">

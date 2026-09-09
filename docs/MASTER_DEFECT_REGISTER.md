@@ -256,6 +256,28 @@
   - **Status**: ACTIVE
   - **Recommended fix phase**: Phase 7 (Account + Retention)
 
+## P7 — Technician Inventory & Transparent Parts Pricing
+
+- **ID**: DEF-P7-003
+  - **Phase**: P7
+  - **Severity**: HIGH
+  - **Area**: Technician Inventory & Authoritative Pricing Protection
+  - **Description**: Free-text arbitrary parts price inputs in quotes allowed malicious technicians to mark up prices ad-hoc after viewing customer requests.
+  - **Current behavior**: Technicians must select registered inventory items (`TechnicianInventoryItem`). Server calculates parts subtotal, unit prices, quality badges, and warranty limits authoritatively from the technician's stock record (`InventoryService.validateAndBuildQuoteLineItems`). Quotes embed immutable `QuoteLineItem` snapshots with audit metadata. Subsequent inventory price changes do not mutate existing quotes.
+  - **Expected behavior**: All quoted repair parts originate from verified registered inventory with server-authoritative calculations and price version audit trails.
+  - **Status**: RESOLVED (Phase 7 Implementation)
+  - **Recommended fix phase**: Phase 7 (Technician Inventory & Price Protection)
+
+- **ID**: DEF-P7-004
+  - **Phase**: P7
+  - **Severity**: HIGH
+  - **Area**: Stock Reservation & Lifecycle Deduction
+  - **Description**: Multi-quote scenarios could lead to double-allocating physical inventory components or stock overselling.
+  - **Current behavior**: Integrated stock reservation (`InventoryService.reserveStockForQuote`) upon quote acceptance and automatic physical deduction (`InventoryService.deductStockForInstalledPart`) upon part installation. If a quote is rejected or cancelled, stock reservations are released.
+  - **Expected behavior**: Accurate available vs. reserved quantity management across the entire repair lifecycle.
+  - **Status**: RESOLVED (Phase 7 Implementation)
+  - **Recommended fix phase**: Phase 7 (Technician Inventory & Price Protection)
+
 ---
 
 ## Cross-Phase / Security
