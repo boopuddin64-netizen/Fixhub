@@ -182,55 +182,105 @@
 
 ## P6 — Repair Lifecycle
 
-- **ID**: DEF-P6-001
+- **ID**: D-P6-001
   - **Phase**: P6
   - **Severity**: HIGH
-  - **Area**: Physical Intake & Check-in
-  - **Description**: Device intake condition report with physical checks (front, back, screen, frame, touch, notes) before transitioning to `DEVICE_RECEIVED`.
-  - **Current behavior**: Comprehensive intake scan modal in technician workspace enforces check-in only when job is paid/booked (`BOOKED`, `PAYMENT_CONFIRMED`, `DEVICE_DROPPED_OFF`), prevents duplicate intake reports, records condition report, and advances lifecycle to `DEVICE_RECEIVED`.
-  - **Expected behavior**: Technician completes condition report at shop counter before disassembly commences.
+  - **Area**: Repair Lifecycle State Transition Integrity
+  - **Description**: Strict server-authoritative state machine enforcement for repair job progression (`PAYMENT_CONFIRMED` → `BOOKED` → `DEVICE_DROPPED_OFF` → `DEVICE_RECEIVED` → `DIAGNOSING` → `REPAIR_IN_PROGRESS` → `ADDITIONAL_DIAGNOSIS` → `READY_FOR_PICKUP` → `PICKED_UP` → `COMPLETED`).
+  - **Current behavior**: Server validates transitions against `ALLOWED_TRANSITIONS` map, blocks invalid skipping or unverified customer status mutations.
+  - **Expected behavior**: State machine strictly enforced server-side with audit logging for every lifecycle step.
   - **Status**: RESOLVED (Phase 6 Implementation)
-  - **Recommended fix phase**: Phase 6 (Repair Lifecycle)
+  - **Recommended fix phase**: Phase 6
 
-- **ID**: DEF-P6-002
+- **ID**: D-P6-002
   - **Phase**: P6
   - **Severity**: HIGH
-  - **Area**: Additional Diagnosis Approval Flow
-  - **Description**: Additional diagnosis approval requires server-authoritative recalculation of total cost, platform fee, and technician earnings, with explicit approve/decline endpoints.
-  - **Current behavior**: Implemented `/api/jobs/:id/additional-diagnosis/respond` and `RepairWorkflowService.respondToAdditionalDiagnosis`. Customer can approve or decline additional diagnosis. Approval updates `finalAmount`, recalculates 8.5% fee and technician payout, advances status to `REPAIR_IN_PROGRESS`, and notifies technician. Declining keeps original scope and notifies technician.
-  - **Expected behavior**: Customer controls budget increases with server-side financial integrity.
+  - **Area**: Device Drop-off / Check-in Integration
+  - **Description**: Physical device check-in requirement at shop counter before diagnostic scan commences.
+  - **Current behavior**: Technicians record intake condition report (screen, housing, chassis, power test, notes, photos) via `/api/jobs/:id/check-in` which moves status to `DEVICE_RECEIVED`.
+  - **Expected behavior**: Shop check-in records physical condition and timestamp before bench work.
   - **Status**: RESOLVED (Phase 6 Implementation)
-  - **Recommended fix phase**: Phase 6 (Repair Lifecycle)
+  - **Recommended fix phase**: Phase 6
 
-- **ID**: DEF-P6-003
+- **ID**: D-P6-003
   - **Phase**: P6
   - **Severity**: HIGH
-  - **Area**: Pickup Verification & Counter Handoff
-  - **Description**: Shop counter handoff requires technician to verify customer's 6-digit pickup code before device handoff.
-  - **Current behavior**: Implemented `/api/jobs/:id/verify-pickup` and `RepairWorkflowService.verifyPickup`. Technician enters pickup code from customer; server verifies code match and transitions job to `PICKED_UP` with audit log and notification.
-  - **Expected behavior**: Verification code prevents mistaken or unauthorized device release.
+  - **Area**: Diagnosis and Additional Diagnosis Approval Integration
+  - **Description**: Managing newly discovered issues during diagnostic disassembly requiring budget adjustments.
+  - **Current behavior**: Technicians submit additional diagnosis with cost and evidence via `/api/jobs/:id/additional-diagnosis`. Customers approve or decline via `/api/jobs/:id/additional-diagnosis/respond`. Approvals recalculate 8.5% fee and payout balance.
+  - **Expected behavior**: Explicit customer approval flow for scope and budget increases.
   - **Status**: RESOLVED (Phase 6 Implementation)
-  - **Recommended fix phase**: Phase 6 (Repair Lifecycle)
+  - **Recommended fix phase**: Phase 6
 
-- **ID**: DEF-P6-004
+- **ID**: D-P6-004
+  - **Phase**: D-P6-004
+  - **Severity**: MEDIUM
+  - **Area**: Repair Progress and Evidence Integration
+  - **Description**: Bench repair tracking, installed part serial logging, and customer progress status updates.
+  - **Current behavior**: Real-time status tracker displays progression steps, installed parts log, and technician notes.
+  - **Expected behavior**: Clear visual feedback on bench repair progress for both customer and technician.
+  - **Status**: RESOLVED (Phase 6 Implementation)
+  - **Recommended fix phase**: Phase 6
+
+- **ID**: D-P6-005
   - **Phase**: P6
   - **Severity**: HIGH
-  - **Area**: Authoritative Completion & Warranty Activation
-  - **Description**: Completion inspection releases held funds to technician payout balance and generates active digital warranty passport.
-  - **Current behavior**: Implemented `/api/jobs/:id/confirm-completion` and `RepairWorkflowService.confirmCompletion`. Server validates customer ownership and status (`READY_FOR_PICKUP` or `PICKED_UP`), marks job `COMPLETED`, creates `WarrantyRecord`, releases funds to technician ledger (`ELIGIBLE_FOR_PAYOUT`), evaluates quote accuracy, and dispatches celebration confetti and review prompt.
-  - **Expected behavior**: One-touch completion releases funds and activates warranty.
+  - **Area**: Pickup Verification / Completion Integration
+  - **Description**: Secure shop counter handoff using 6-digit pickup verification code and customer completion confirmation.
+  - **Current behavior**: Technician verifies code via `/api/jobs/:id/verify-pickup`. Customer confirms completion via `/api/jobs/:id/confirm-completion`, triggering escrow funds release to technician payout ledger.
+  - **Expected behavior**: Code verification prevents unauthorized release; completion releases escrow.
   - **Status**: RESOLVED (Phase 6 Implementation)
-  - **Recommended fix phase**: Phase 6 (Repair Lifecycle)
+  - **Recommended fix phase**: Phase 6
 
-- **ID**: DEF-P6-005
+- **ID**: D-P6-006
+  - **Phase**: P6
+  - **Severity**: HIGH
+  - **Area**: Warranty Lifecycle Integration
+  - **Description**: Automatic digital warranty activation upon repair completion.
+  - **Current behavior**: Server automatically generates `WarrantyRecord` (30–90 days based on quote) upon completion, storing terms in `db.warranties`.
+  - **Expected behavior**: Active warranty coverage logged and accessible to customer upon completion.
+  - **Status**: RESOLVED (Phase 6 Implementation)
+  - **Recommended fix phase**: Phase 6
+
+- **ID**: D-P6-007
   - **Phase**: P6
   - **Severity**: MEDIUM
-  - **Area**: Request Creation → Discovery Routing
-  - **Description**: Request creation wizard needed to route directly to `TechnicianDiscoveryView` with matched technicians and live quotes banner.
-  - **Current behavior**: Wizard redirects to `TechnicianDiscoveryView` with `requestId`, executes matching, displays nearby eligible technicians, shows live quote counts, and provides seamless one-click comparison CTA.
-  - **Expected behavior**: Customer sees matched nearby technicians immediately after posting repair request.
+  - **Area**: Repair Passport Lifecycle Integration
+  - **Description**: Cryptographically auditable digital passport containing full history of parts, intake condition, and job milestones.
+  - **Current behavior**: `WarrantyPassportView` displays complete repair history, installed part serial numbers, intake report, and active warranty status.
+  - **Expected behavior**: Unified repair passport for device provenance and resale value.
   - **Status**: RESOLVED (Phase 6 Implementation)
-  - **Recommended fix phase**: Phase 6 (Repair Lifecycle)
+  - **Recommended fix phase**: Phase 6
+
+- **ID**: D-P6-008
+  - **Phase**: P6
+  - **Severity**: MEDIUM
+  - **Area**: Review Lifecycle Integration
+  - **Description**: Verified customer reviews restricted to completed repair transactions.
+  - **Current behavior**: Endpoints `/api/reviews` enforce `job.status === 'COMPLETED'`, block duplicate reviews, and update technician rating averages.
+  - **Expected behavior**: 1 repair = 1 verified review with rating calculation.
+  - **Status**: RESOLVED (Phase 6 Implementation)
+  - **Recommended fix phase**: Phase 6
+
+- **ID**: D-P6-009
+  - **Phase**: P6
+  - **Severity**: MEDIUM
+  - **Area**: Cross-Role Customer / Technician Synchronization
+  - **Description**: Real-time notification synchronization across customer and technician views.
+  - **Current behavior**: `NotificationService` dispatches status updates, payment notifications, and chat messages to both customer and technician accounts.
+  - **Expected behavior**: Synchronized dual-role lifecycle notifications across both parties.
+  - **Status**: RESOLVED (Phase 6 Implementation)
+  - **Recommended fix phase**: Phase 6
+
+- **ID**: D-P6-010
+  - **Phase**: P6
+  - **Severity**: HIGH
+  - **Area**: Lifecycle Authorization / Data Integrity
+  - **Description**: Object-level ownership validation preventing customer IDOR or cross-technician job tampering.
+  - **Current behavior**: All repair job routes enforce strict `job.customerId === req.user.id` or `job.technicianId === req.user.id` authorization checks.
+  - **Expected behavior**: Uncompromising data security across all repair job endpoints.
+  - **Status**: RESOLVED (Phase 6 Implementation)
+  - **Recommended fix phase**: Phase 6
 
 ---
 

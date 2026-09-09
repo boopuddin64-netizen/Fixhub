@@ -1735,9 +1735,9 @@ apiRouter.post('/jobs/:id/check-in', requireAuth, requireRole(['technician']), (
     return res.status(404).json({ error: 'Repair job not found.' });
   }
 
-  // Job must currently be in BOOKED status
-  if (job.status !== 'BOOKED') {
-    return res.status(400).json({ error: `Cannot check in device: Job status is ${job.status}, expected BOOKED.` });
+  // Job must currently be in BOOKED or DEVICE_DROPPED_OFF status
+  if (job.status !== 'BOOKED' && job.status !== 'DEVICE_DROPPED_OFF') {
+    return res.status(400).json({ error: `Cannot check in device: Job status is ${job.status}, expected BOOKED or DEVICE_DROPPED_OFF.` });
   }
 
   // Prevent duplicate check-in
@@ -1832,7 +1832,6 @@ apiRouter.patch('/jobs/:id/status', requireAuth, (req: AuthenticatedRequest, res
     // Task 6: Customers can only initiate legitimate customer handoff/pickup updates
     const allowedCustomerStatuses: RepairLifecycleStatus[] = [
       'DEVICE_DROPPED_OFF',
-      'PICKED_UP',
       'CANCELLED',
     ];
     if (!allowedCustomerStatuses.includes(newStatus)) {
