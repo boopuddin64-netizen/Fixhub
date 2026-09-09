@@ -39,17 +39,31 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
   onOpenReviewModal,
 }) => {
   const [isConfirmingPickup, setIsConfirmingPickup] = useState(false);
+  const [isRespondingDiagnosis, setIsRespondingDiagnosis] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const steps = [
     { label: 'Request & Quote', done: true },
-    { label: 'Payment Escrow', done: job.status !== 'REQUESTED' && job.status !== 'QUOTING' && job.status !== 'QUOTE_ACCEPTED' && job.status !== 'PAYMENT_PENDING' },
+    { label: 'Payment Confirmed', done: job.status !== 'REQUESTED' && job.status !== 'QUOTING' && job.status !== 'QUOTE_ACCEPTED' && job.status !== 'PAYMENT_PENDING' },
     { label: 'Device Intake', done: ['DEVICE_RECEIVED', 'DIAGNOSING', 'REPAIR_IN_PROGRESS', 'ADDITIONAL_DIAGNOSIS', 'READY_FOR_PICKUP', 'PICKED_UP', 'COMPLETED'].includes(job.status) },
     { label: 'Repair & Parts', done: ['REPAIR_IN_PROGRESS', 'READY_FOR_PICKUP', 'PICKED_UP', 'COMPLETED'].includes(job.status) },
     { label: 'Ready for Pickup', done: ['READY_FOR_PICKUP', 'PICKED_UP', 'COMPLETED'].includes(job.status) },
     { label: 'Complete & Warranty', done: job.status === 'COMPLETED' },
   ];
+
+  const handleAdditionalDiagnosisResponse = async (approved: boolean) => {
+    setIsRespondingDiagnosis(true);
+    setActionError(null);
+    try {
+      await ApiClient.respondToAdditionalDiagnosis(job.id, approved);
+      onRefresh();
+    } catch (err: any) {
+      setActionError(err.message || 'Failed to update additional diagnosis');
+    } finally {
+      setIsRespondingDiagnosis(false);
+    }
+  };
 
   const handleConfirmCompletion = async () => {
     setIsConfirmingPickup(true);
@@ -144,7 +158,7 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
 
       {/* ADDITIONAL DIAGNOSIS ALERT (IF TECHNICIAN FOUND NEW ISSUE) */}
       {job.additionalDiagnosis && job.additionalDiagnosis.status === 'PENDING_APPROVAL' && (
-        <div className="p-5 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-3 animate-pulse">
+        <div className="p-5 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-3">
           <div className="flex items-center gap-2 font-bold text-sm text-amber-900">
             <AlertTriangle className="w-5 h-5 text-amber-600" />
             <span>Technician Action Required: Additional Issue Discovered</span>
@@ -159,30 +173,44 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
             <span>Additional Cost:</span>
             <span className="text-amber-900 text-sm">+₦{job.additionalDiagnosis.additionalCostNaira.toLocaleString()}</span>
           </div>
-          <div className="flex items-center gap-2 pt-2">
+          <div className="flex items-center gap-3 pt-2">
             <button
-              onClick={() => {
-                ApiClient.updateJobStatus(job.id, 'REPAIR_IN_PROGRESS', 'Customer approved additional repair').then(onRefresh);
-              }}
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow-sm cursor-pointer"
+              id="approve-additional-diagnosis-btn"
+              disabled={isRespondingDiagnosis}
+              onClick={() => handleAdditionalDiagnosisResponse(true)}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer disabled:opacity-50"
             >
-              Approve Additional ₦{job.additionalDiagnosis.additionalCostNaira.toLocaleString()}
+              {isRespondingDiagnosis ? 'Processing...' : `Approve (+₦${job.additionalDiagnosis.additionalCostNaira.toLocaleString()})`}
+            </button>
+            <button
+              id="decline-additional-diagnosis-btn"
+              disabled={isRespondingDiagnosis}
+              onClick={() => handleAdditionalDiagnosisResponse(false)}
+              className="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
+            >
+              Decline & Keep Original Scope
             </button>
           </div>
         </div>
       )}
 
-      {/* READY FOR PICKUP BANNER & ACTION */}
-      {job.status === 'READY_FOR_PICKUP' && (
+      {/* READY FOR PICKUP / PICKED UP BANNER & ACTION */}
+      {(job.status === 'READY_FOR_PICKUP' || job.status === 'PICKED_UP') && (
         <div className="p-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-xl space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <span className="inline-block px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[11px] font-bold uppercase tracking-wider mb-1">
-                Action Required
+                {job.status === 'PICKED_UP' ? 'Device Picked Up' : 'Ready for Pickup'}
               </span>
-              <h3 className="text-lg font-extrabold text-white">Your Device is Ready for Pickup!</h3>
+              <h3 className="text-lg font-extrabold text-white">
+                {job.status === 'PICKED_UP'
+                  ? 'Verify Repair & Complete'
+                  : 'Your Device is Ready for Pickup!'}
+              </h3>
               <p className="text-xs text-emerald-100 mt-1 max-w-lg leading-relaxed">
-                Visit the shop, present your Pickup Code (<strong className="text-white font-mono">{job.pickupCode}</strong>), test your device, and tap below to complete and activate your warranty.
+                {job.status === 'PICKED_UP'
+                  ? 'Your device was handed over. Confirm repair completion below to release payment to the technician and activate your official warranty passport.'
+                  : `Visit the shop, present your Pickup Code (${job.pickupCode}), test your device, and tap below to complete and activate your warranty.`}
               </p>
             </div>
             <div className="bg-white/10 p-3 rounded-xl text-center border border-white/20 shrink-0">
@@ -198,7 +226,7 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
             className="w-full py-3.5 bg-white hover:bg-slate-100 text-emerald-900 font-extrabold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
             <ShieldCheck className="w-5 h-5 text-emerald-600" />
-            <span>{isConfirmingPickup ? 'Releasing Escrow & Activating Warranty...' : 'Confirm Pickup & Complete Repair'}</span>
+            <span>{isConfirmingPickup ? 'Releasing Payment & Activating Warranty...' : 'Confirm Completion & Activate Warranty'}</span>
           </button>
         </div>
       )}

@@ -1876,6 +1876,45 @@ apiRouter.post('/jobs/:id/additional-diagnosis', requireAuth, requireRole(['tech
   return res.status(201).json(result);
 });
 
+apiRouter.post('/jobs/:id/additional-diagnosis/respond', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
+  const { approved, reason } = req.body;
+  if (typeof approved !== 'boolean') {
+    return res.status(400).json({ error: 'Field "approved" (boolean) is required.' });
+  }
+
+  const result = RepairWorkflowService.respondToAdditionalDiagnosis({
+    jobId: req.params.id,
+    customerId: req.user!.id,
+    approved,
+    reason: reason ? sanitizeString(reason, 300) : undefined,
+  });
+
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+
+  return res.json(result);
+});
+
+apiRouter.post('/jobs/:id/verify-pickup', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
+  const { pickupCode } = req.body;
+  if (!isNonEmptyString(pickupCode)) {
+    return res.status(400).json({ error: 'Customer pickup code is required.' });
+  }
+
+  const result = RepairWorkflowService.verifyPickup({
+    jobId: req.params.id,
+    technicianId: req.user!.id,
+    pickupCode: sanitizeString(pickupCode, 30),
+  });
+
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+
+  return res.json(result);
+});
+
 apiRouter.post('/jobs/:id/confirm-completion', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
   const result = RepairWorkflowService.confirmCompletion({
     jobId: req.params.id,

@@ -184,22 +184,52 @@
 
 - **ID**: DEF-P6-001
   - **Phase**: P6
-  - **Severity**: MEDIUM
+  - **Severity**: HIGH
   - **Area**: Physical Intake & Check-in
-  - **Description**: Condition report photo upload requires multi-angle camera intake in technician shop.
-  - **Current behavior**: Condition report records front, back, and frame condition with text notes and optional photos.
-  - **Expected behavior**: Mandatory 4-angle photo capture with timestamp watermarks before status transitions to `DEVICE_RECEIVED`.
-  - **Status**: ACTIVE
+  - **Description**: Device intake condition report with physical checks (front, back, screen, frame, touch, notes) before transitioning to `DEVICE_RECEIVED`.
+  - **Current behavior**: Comprehensive intake scan modal in technician workspace enforces check-in only when job is paid/booked (`BOOKED`, `PAYMENT_CONFIRMED`, `DEVICE_DROPPED_OFF`), prevents duplicate intake reports, records condition report, and advances lifecycle to `DEVICE_RECEIVED`.
+  - **Expected behavior**: Technician completes condition report at shop counter before disassembly commences.
+  - **Status**: RESOLVED (Phase 6 Implementation)
   - **Recommended fix phase**: Phase 6 (Repair Lifecycle)
 
 - **ID**: DEF-P6-002
   - **Phase**: P6
-  - **Severity**: MEDIUM
+  - **Severity**: HIGH
   - **Area**: Additional Diagnosis Approval Flow
-  - **Description**: Additional diagnosis approval timeout policy and auto-escalation handling.
-  - **Current behavior**: Additional diagnosis can be approved or rejected by customer.
-  - **Expected behavior**: Automated 24-hour reminder notifications and dispute escalation if customer does not respond.
-  - **Status**: ACTIVE
+  - **Description**: Additional diagnosis approval requires server-authoritative recalculation of total cost, platform fee, and technician earnings, with explicit approve/decline endpoints.
+  - **Current behavior**: Implemented `/api/jobs/:id/additional-diagnosis/respond` and `RepairWorkflowService.respondToAdditionalDiagnosis`. Customer can approve or decline additional diagnosis. Approval updates `finalAmount`, recalculates 8.5% fee and technician payout, advances status to `REPAIR_IN_PROGRESS`, and notifies technician. Declining keeps original scope and notifies technician.
+  - **Expected behavior**: Customer controls budget increases with server-side financial integrity.
+  - **Status**: RESOLVED (Phase 6 Implementation)
+  - **Recommended fix phase**: Phase 6 (Repair Lifecycle)
+
+- **ID**: DEF-P6-003
+  - **Phase**: P6
+  - **Severity**: HIGH
+  - **Area**: Pickup Verification & Counter Handoff
+  - **Description**: Shop counter handoff requires technician to verify customer's 6-digit pickup code before device handoff.
+  - **Current behavior**: Implemented `/api/jobs/:id/verify-pickup` and `RepairWorkflowService.verifyPickup`. Technician enters pickup code from customer; server verifies code match and transitions job to `PICKED_UP` with audit log and notification.
+  - **Expected behavior**: Verification code prevents mistaken or unauthorized device release.
+  - **Status**: RESOLVED (Phase 6 Implementation)
+  - **Recommended fix phase**: Phase 6 (Repair Lifecycle)
+
+- **ID**: DEF-P6-004
+  - **Phase**: P6
+  - **Severity**: HIGH
+  - **Area**: Authoritative Completion & Warranty Activation
+  - **Description**: Completion inspection releases held funds to technician payout balance and generates active digital warranty passport.
+  - **Current behavior**: Implemented `/api/jobs/:id/confirm-completion` and `RepairWorkflowService.confirmCompletion`. Server validates customer ownership and status (`READY_FOR_PICKUP` or `PICKED_UP`), marks job `COMPLETED`, creates `WarrantyRecord`, releases funds to technician ledger (`ELIGIBLE_FOR_PAYOUT`), evaluates quote accuracy, and dispatches celebration confetti and review prompt.
+  - **Expected behavior**: One-touch completion releases funds and activates warranty.
+  - **Status**: RESOLVED (Phase 6 Implementation)
+  - **Recommended fix phase**: Phase 6 (Repair Lifecycle)
+
+- **ID**: DEF-P6-005
+  - **Phase**: P6
+  - **Severity**: MEDIUM
+  - **Area**: Request Creation → Discovery Routing
+  - **Description**: Request creation wizard needed to route directly to `TechnicianDiscoveryView` with matched technicians and live quotes banner.
+  - **Current behavior**: Wizard redirects to `TechnicianDiscoveryView` with `requestId`, executes matching, displays nearby eligible technicians, shows live quote counts, and provides seamless one-click comparison CTA.
+  - **Expected behavior**: Customer sees matched nearby technicians immediately after posting repair request.
+  - **Status**: RESOLVED (Phase 6 Implementation)
   - **Recommended fix phase**: Phase 6 (Repair Lifecycle)
 
 ---

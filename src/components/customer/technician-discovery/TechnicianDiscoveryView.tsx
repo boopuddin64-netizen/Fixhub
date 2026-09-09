@@ -11,13 +11,16 @@ import { LocationSelector } from '../repair-flow/LocationSelector';
 interface TechnicianDiscoveryViewProps {
   requestId: string;
   onBack: () => void;
+  onProceedToQuotes?: (requestId: string) => void;
 }
 
 export const TechnicianDiscoveryView: React.FC<TechnicianDiscoveryViewProps> = ({
   requestId,
   onBack,
+  onProceedToQuotes,
 }) => {
   const [request, setRequest] = useState<RepairRequest | null>(null);
+  const [quotesCount, setQuotesCount] = useState<number>(0);
   const [matches, setMatches] = useState<TechnicianMatchResult[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +72,14 @@ export const TechnicianDiscoveryView: React.FC<TechnicianDiscoveryViewProps> = (
       if (data.request) setRequest(data.request);
       if (Array.isArray(data.matchedTechnicians)) {
         setMatches(data.matchedTechnicians);
+      }
+
+      // Check for quotes
+      try {
+        const quotes = await ApiClient.getQuotesForRequest(requestId);
+        setQuotesCount(Array.isArray(quotes) ? quotes.filter((q) => q.status !== 'WITHDRAWN').length : 0);
+      } catch {
+        // ignore
       }
     } catch (err: any) {
       console.error('Error in technician discovery:', err);
@@ -220,6 +231,35 @@ export const TechnicianDiscoveryView: React.FC<TechnicianDiscoveryViewProps> = (
               </span>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Quote Comparison Transition Banner */}
+      {quotesCount > 0 && onProceedToQuotes && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/20 text-white flex items-center justify-center shrink-0">
+              <Wrench className="w-5 h-5 text-cyan-300" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-cyan-300 uppercase tracking-wider block">Quotes Available</span>
+              <h4 className="text-sm font-extrabold text-white">
+                {quotesCount} Technician Quote{quotesCount > 1 ? 's' : ''} Received
+              </h4>
+              <p className="text-xs text-blue-100">
+                Compare prices, warranty guarantees, and part qualities from matched technicians.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            id="view-quotes-comparison-btn"
+            onClick={() => onProceedToQuotes(requestId)}
+            className="px-4 py-2.5 bg-white hover:bg-blue-50 text-blue-900 font-extrabold text-xs rounded-xl shadow-md transition-all shrink-0 cursor-pointer flex items-center gap-1.5"
+          >
+            <span>Compare Quotes ({quotesCount})</span>
+            <span>→</span>
+          </button>
         </div>
       )}
 

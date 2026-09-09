@@ -284,7 +284,7 @@ function MainAppContent() {
                   setShowWizard(false);
                   setWizardPrefill(null);
                   setSelectedRequestId(reqId);
-                  setCurrentTab('quotes');
+                  setCurrentTab('discovery');
                   loadData();
                 }}
                 preselectedDevice={wizardPrefill?.device}
@@ -296,6 +296,10 @@ function MainAppContent() {
               <TechnicianDiscoveryView
                 requestId={selectedRequestId}
                 onBack={() => setCurrentTab('repairs')}
+                onProceedToQuotes={(reqId) => {
+                  setSelectedRequestId(reqId);
+                  setCurrentTab('quotes');
+                }}
               />
             ) : currentTab === 'quotes' && activeRequest ? (
               <QuoteComparisonView

@@ -141,12 +141,21 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
     }
   };
 
-  const handleVerifyPickupCode = () => {
-    if (enteredPickupCode.toUpperCase() === job.pickupCode.toUpperCase()) {
+  const handleVerifyPickupCode = async () => {
+    if (!enteredPickupCode.trim()) {
+      setErrorMsg('Please enter the customer pickup code.');
+      return;
+    }
+    setIsUpdating(true);
+    setErrorMsg(null);
+    try {
+      await ApiClient.verifyPickup(job.id, enteredPickupCode.trim().toUpperCase());
       setCodeSuccess(true);
-      setErrorMsg(null);
-    } else {
-      setErrorMsg(`Invalid code. Enter customer pickup code (Demo: ${job.pickupCode})`);
+      onRefresh();
+    } catch (err: any) {
+      setErrorMsg(err.message || `Invalid code. Enter customer pickup code (Demo: ${job.pickupCode})`);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -168,7 +177,7 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
             <StatusBadge status={job.status} size="lg" />
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Work Order: <span className="font-mono text-cyan-300 font-bold">{job.id}</span> • Customer Escrow: <strong className="text-emerald-400">₦{job.finalAmount.toLocaleString()}</strong>
+            Work Order: <span className="font-mono text-cyan-300 font-bold">{job.id}</span> • Customer Payment: <strong className="text-emerald-400">₦{job.finalAmount.toLocaleString()}</strong>
           </p>
         </div>
 
@@ -198,7 +207,7 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
 
         <div className="flex flex-wrap items-center gap-2.5">
           {/* Step 1: Intake Check-in */}
-          {['BOOKED', 'PAYMENT_CONFIRMED', 'DEVICE_DROPPED_OFF'].includes(job.status) && (
+          {['BOOKED', 'PAYMENT_CONFIRMED', 'DEVICE_DROPPED_OFF'].includes(job.status) && !job.conditionReport && (
             <button
               id="tech-intake-device-btn"
               onClick={() => setShowIntakeModal(true)}
@@ -274,11 +283,24 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
 
           {job.status === 'COMPLETED' && (
             <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
-              ✓ Repair Completed & Escrow Released to Your Payout Balance
+              ✓ Repair Completed & Payment Released to Your Available Payout Balance
             </span>
           )}
         </div>
       </div>
+
+      {/* PICKED UP STATUS BANNER */}
+      {job.status === 'PICKED_UP' && (
+        <div className="p-5 bg-emerald-50 border-2 border-emerald-300 rounded-2xl space-y-2 animate-fadeIn">
+          <div className="flex items-center gap-2 text-emerald-900 font-bold text-sm">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+            <span>Pickup Verified — Device Handed Over to Customer</span>
+          </div>
+          <p className="text-xs text-emerald-800">
+            Customer has verified the device at the shop and is confirming completion to release payment to your payout balance.
+          </p>
+        </div>
+      )}
 
       {/* PICKUP CODE VERIFICATION BOX */}
       {job.status === 'READY_FOR_PICKUP' && (
@@ -291,7 +313,7 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
             <span className="text-xs font-bold text-teal-800">Shop Counter Handoff</span>
           </div>
           <p className="text-xs text-teal-800">
-            Ask the customer for their 6-digit Pickup Code to verify identity and release the escrow funds.
+            Ask the customer for their Pickup Code to verify identity before handing over the device.
           </p>
 
           <div className="flex items-center gap-3">
@@ -302,16 +324,18 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
               placeholder={`e.g. ${job.pickupCode}`}
               maxLength={7}
               className="p-2.5 bg-white border border-teal-300 rounded-xl text-base font-mono font-bold text-slate-900 tracking-wider max-w-[180px] text-center focus:ring-2 focus:ring-teal-500 uppercase"
-            />
+            >
+            </input>
             <button
               onClick={handleVerifyPickupCode}
-              className="px-4 py-2.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold rounded-xl cursor-pointer"
+              disabled={isUpdating}
+              className="px-4 py-2.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold rounded-xl cursor-pointer disabled:opacity-50"
             >
               Verify Code
             </button>
             {codeSuccess && (
               <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
-                <CheckCircle2 className="w-4 h-4" /> Code Verified! Customer can now release funds.
+                <CheckCircle2 className="w-4 h-4" /> Code Verified! Status updated to Picked Up.
               </span>
             )}
           </div>

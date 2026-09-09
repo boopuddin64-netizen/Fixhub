@@ -468,6 +468,20 @@ export class ApiClient {
     });
   }
 
+  public static respondToAdditionalDiagnosis(jobId: string, approved: boolean, reason?: string) {
+    return this.request<{ success: boolean; job?: any; error?: string }>(`/jobs/${jobId}/additional-diagnosis/respond`, {
+      method: 'POST',
+      body: JSON.stringify({ approved, reason }),
+    });
+  }
+
+  public static verifyPickup(jobId: string, pickupCode: string) {
+    return this.request<{ success: boolean; job?: any; error?: string }>(`/jobs/${jobId}/verify-pickup`, {
+      method: 'POST',
+      body: JSON.stringify({ pickupCode }),
+    });
+  }
+
   public static confirmJobCompletion(jobId: string) {
     return this.request<any>(`/jobs/${jobId}/confirm-completion`, {
       method: 'POST',

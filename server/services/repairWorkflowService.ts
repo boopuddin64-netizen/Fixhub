@@ -439,6 +439,157 @@ export class RepairWorkflowService {
   }
 
   /**
+   * Customer responds to additional diagnosis
+   */
+  public static respondToAdditionalDiagnosis(params: {
+    jobId: string;
+    customerId: string;
+    approved: boolean;
+    reason?: string;
+  }): { success: boolean; job?: RepairJob; error?: string } {
+    const { jobId, customerId, approved, reason } = params;
+    const job = db.repairJobs.find((j) => j.id === jobId);
+    if (!job) return { success: false, error: 'Repair job not found.' };
+    if (job.customerId !== customerId) {
+      return { success: false, error: 'Unauthorized: Repair job does not belong to you.' };
+    }
+
+    if (!job.additionalDiagnosis || job.additionalDiagnosis.status !== 'PENDING_APPROVAL') {
+      return { success: false, error: 'No pending additional diagnosis requires approval for this repair.' };
+    }
+
+    const now = new Date().toISOString();
+
+    if (approved) {
+      job.additionalDiagnosis.status = 'APPROVED';
+      job.additionalDiagnosis.resolvedAt = now;
+      job.finalAmount = job.additionalDiagnosis.newTotalAmountNaira;
+      job.platformFeeAmount = Math.round(job.finalAmount * 0.085);
+      job.technicianPayoutAmount = job.finalAmount - job.platformFeeAmount;
+      job.status = 'REPAIR_IN_PROGRESS';
+
+      job.statusHistory.push({
+        status: 'REPAIR_IN_PROGRESS',
+        timestamp: now,
+        actorRole: 'customer',
+        note: `Customer approved additional diagnosis (${job.additionalDiagnosis.title}) for +₦${job.additionalDiagnosis.additionalCostNaira.toLocaleString()}. Final amount: ₦${job.finalAmount.toLocaleString()}`,
+      });
+
+      NotificationService.send({
+        userId: job.technicianId,
+        title: 'Additional Diagnosis Approved!',
+        message: `Customer approved the additional repair: "${job.additionalDiagnosis.title}" (+₦${job.additionalDiagnosis.additionalCostNaira.toLocaleString()}). You may proceed with repair.`,
+        type: 'STATUS_CHANGE',
+        repairId: job.id,
+      });
+
+      AuditService.log({
+        actorId: customerId,
+        actorRole: 'customer',
+        action: 'ADDITIONAL_DIAGNOSIS_APPROVED',
+        resourceType: 'REPAIR_JOB',
+        resourceId: job.id,
+        details: {
+          title: job.additionalDiagnosis.title,
+          additionalCostNaira: job.additionalDiagnosis.additionalCostNaira,
+          newFinalAmountNaira: job.finalAmount,
+        },
+      });
+    } else {
+      job.additionalDiagnosis.status = 'REJECTED';
+      job.additionalDiagnosis.resolvedAt = now;
+      job.status = 'REPAIR_IN_PROGRESS';
+
+      job.statusHistory.push({
+        status: 'REPAIR_IN_PROGRESS',
+        timestamp: now,
+        actorRole: 'customer',
+        note: `Customer declined additional diagnosis (${job.additionalDiagnosis.title}). Proceeding with original repair scope. Reason: ${reason || 'Customer opted out'}`,
+      });
+
+      NotificationService.send({
+        userId: job.technicianId,
+        title: 'Additional Diagnosis Declined',
+        message: `Customer declined additional diagnosis "${job.additionalDiagnosis.title}". Please proceed with the original repair scope or contact the customer.`,
+        type: 'STATUS_CHANGE',
+        repairId: job.id,
+      });
+
+      AuditService.log({
+        actorId: customerId,
+        actorRole: 'customer',
+        action: 'ADDITIONAL_DIAGNOSIS_REJECTED',
+        resourceType: 'REPAIR_JOB',
+        resourceId: job.id,
+        details: {
+          title: job.additionalDiagnosis.title,
+          declinedCostNaira: job.additionalDiagnosis.additionalCostNaira,
+          reason,
+        },
+      });
+    }
+
+    db.save();
+    return { success: true, job };
+  }
+
+  /**
+   * Technician verifies pickup code and marks device as PICKED_UP
+   */
+  public static verifyPickup(params: {
+    jobId: string;
+    technicianId: string;
+    pickupCode: string;
+  }): { success: boolean; job?: RepairJob; error?: string } {
+    const { jobId, technicianId, pickupCode } = params;
+    const job = db.repairJobs.find((j) => j.id === jobId);
+    if (!job) return { success: false, error: 'Repair job not found.' };
+    if (job.technicianId !== technicianId) {
+      return { success: false, error: 'Unauthorized: Repair job is not assigned to you.' };
+    }
+
+    if (job.status !== 'READY_FOR_PICKUP') {
+      return {
+        success: false,
+        error: `Cannot verify pickup: Job is in status ${job.status}, expected READY_FOR_PICKUP.`,
+      };
+    }
+
+    if (!pickupCode || job.pickupCode.trim().toUpperCase() !== pickupCode.trim().toUpperCase()) {
+      return { success: false, error: 'Invalid pickup verification code.' };
+    }
+
+    const now = new Date().toISOString();
+    job.status = 'PICKED_UP';
+    job.statusHistory.push({
+      status: 'PICKED_UP',
+      timestamp: now,
+      actorRole: 'technician',
+      note: 'Customer pickup code verified at shop counter. Device handed over to customer.',
+    });
+
+    NotificationService.send({
+      userId: job.customerId,
+      title: 'Device Handed Over / Picked Up',
+      message: `Your ${job.deviceBrand} ${job.deviceModel} was handed over at the shop. Please inspect your device and confirm completion in the app to activate your warranty.`,
+      type: 'STATUS_CHANGE',
+      repairId: job.id,
+    });
+
+    AuditService.log({
+      actorId: technicianId,
+      actorRole: 'technician',
+      action: 'PICKUP_VERIFIED',
+      resourceType: 'REPAIR_JOB',
+      resourceId: job.id,
+      details: { pickupCodeEntered: pickupCode.trim().toUpperCase() },
+    });
+
+    db.save();
+    return { success: true, job };
+  }
+
+  /**
    * Customer confirms pickup and repair completion
    */
   public static confirmCompletion(params: {
