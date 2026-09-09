@@ -260,6 +260,13 @@ export class ApiClient {
     });
   }
 
+  public static updateCustomerProfile(data: any) {
+    return this.request<any>('/customer/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
   public static updateTechnicianProfile(data: any) {
     return this.request<any>('/technicians/profile', {
       method: 'PUT',
@@ -501,6 +508,15 @@ export class ApiClient {
   public static async getTechnicianReviews(techId: string): Promise<any[]> {
     try {
       const res = await this.request<any>(`/reviews/technician/${techId}`);
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
+  }
+
+  public static async getMyReviews(): Promise<any[]> {
+    try {
+      const res = await this.request<any>('/reviews/my-reviews');
       return Array.isArray(res) ? res : [];
     } catch {
       return [];

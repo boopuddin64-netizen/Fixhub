@@ -386,7 +386,7 @@ function MainAppContent() {
                 onClose={() => setShowDevicesManager(false)}
                 onSelectDeviceForRepair={(dev) => {
                   setShowDevicesManager(false);
-                  setWizardPrefill({ device: dev });
+                  setWizardPrefill({ device: dev, brand: dev.brandName, model: dev.modelName });
                   setShowWizard(true);
                 }}
               />
@@ -434,7 +434,7 @@ function MainAppContent() {
             ) : currentTab === 'catalog' ? (
               <PartsCatalogView />
             ) : (
-              <TechnicianProfileView />
+              <TechnicianProfileView onNavigateToCatalog={() => setCurrentTab('catalog')} />
             )}
           </>
         )}

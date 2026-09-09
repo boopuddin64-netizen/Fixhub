@@ -221,6 +221,55 @@ apiRouter.get('/auth/me', requireAuth, (req: AuthenticatedRequest, res: Response
   return res.json(session);
 });
 
+apiRouter.put('/customer/profile', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
+  const user = db.users.find((u) => u.id === req.user!.id);
+  const cust = db.customerProfiles.find((c) => c.userId === req.user!.id);
+  if (!user) {
+    return res.status(404).json({ error: 'Customer user record not found.' });
+  }
+
+  const { name, phone, email, address, landmark, city, state, notificationPreferences } = req.body;
+
+  if (isNonEmptyString(name)) {
+    user.name = sanitizeString(name, 100);
+  }
+  if (isNonEmptyString(phone)) {
+    user.phone = sanitizeString(phone, 30);
+  }
+  if (isNonEmptyString(email)) {
+    user.email = sanitizeString(email, 120);
+  }
+
+  if (cust) {
+    if (address !== undefined) cust.defaultLocation.address = sanitizeString(address, 200);
+    if (landmark !== undefined) cust.defaultLocation.landmark = sanitizeString(landmark, 100);
+    if (city !== undefined) cust.defaultLocation.city = sanitizeString(city, 80);
+    if (state !== undefined) cust.defaultLocation.state = sanitizeString(state, 80);
+
+    if (notificationPreferences && typeof notificationPreferences === 'object') {
+      cust.notificationPreferences = {
+        repairUpdates: notificationPreferences.repairUpdates !== undefined ? Boolean(notificationPreferences.repairUpdates) : true,
+        paymentUpdates: notificationPreferences.paymentUpdates !== undefined ? Boolean(notificationPreferences.paymentUpdates) : true,
+        promotional: notificationPreferences.promotional !== undefined ? Boolean(notificationPreferences.promotional) : false,
+      };
+    }
+  }
+
+  db.save();
+
+  AuditService.log({
+    actorId: req.user!.id,
+    actorRole: 'customer',
+    action: 'CUSTOMER_PROFILE_UPDATED',
+    resourceType: 'USER',
+    resourceId: user.id,
+    details: { name: user.name, email: user.email },
+  });
+
+  const session = AuthService.getUserSession(req.user!.id);
+  return res.json({ success: true, user, profile: cust, session });
+});
+
 /* -------------------------------------------------------------
  * 2. DEVICES & CATALOG (Public Discovery)
  * ----------------------------------------------------------- */
@@ -2089,6 +2138,11 @@ apiRouter.post('/reviews', requireAuth, requireRole(['customer']), (req: Authent
 
 apiRouter.get('/reviews/technician/:id', (req: Request, res: Response) => {
   const reviews = db.reviews.filter((r) => r.technicianId === req.params.id);
+  return res.json(reviews);
+});
+
+apiRouter.get('/reviews/my-reviews', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
+  const reviews = db.reviews.filter((r) => r.customerId === req.user!.id);
   return res.json(reviews);
 });
 

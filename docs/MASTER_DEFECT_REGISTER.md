@@ -328,6 +328,120 @@
   - **Status**: RESOLVED (Phase 7 Implementation)
   - **Recommended fix phase**: Phase 7 (Technician Inventory & Price Protection)
 
+- **ID**: D-P7-005
+  - **Phase**: P7
+  - **Severity**: HIGH
+  - **Area**: Legacy Arbitrary Parts Cost Quote Fallback
+  - **Description**: Legacy fallback allowing arbitrary `partsCost` input in quotes when inventory items are bypassed.
+  - **Current behavior**: Secondary fallback branch exists for backward compatibility in legacy quotes.
+  - **Expected behavior**: Strict enforcement of verified inventory items (`inventoryItemId`) for all line items across all quoting flows.
+  - **Status**: OPEN (Deferred to Post-Feature-Freeze Security & Hardening Phase)
+  - **Recommended fix phase**: Final Hardening Phase
+
+---
+
+## P8 — Account, Retention & Profile Completion
+
+- **ID**: D-P8-001
+  - **Phase**: P8
+  - **Severity**: HIGH
+  - **Area**: Customer Account / Profile Completeness
+  - **Description**: Customer profile fields (name, phone, email, address, landmark, city, state) required validation, sanitization, length limits, and server-side persistence via `PUT /customer/profile`.
+  - **Current behavior**: Full input validation, sanitization, length limits, and server persistence implemented via `PUT /customer/profile`. Protected account fields (id, role, internal trust scores) strictly disallowed from modification.
+  - **Expected behavior**: Secure, validated customer profile editing with strict permission boundaries.
+  - **Status**: RESOLVED (Phase 8 Implementation)
+  - **Recommended fix phase**: Phase 8
+
+- **ID**: D-P8-002
+  - **Phase**: P8
+  - **Severity**: HIGH
+  - **Area**: Technician Account / Profile Completeness
+  - **Description**: Technician shop profile fields (businessName, bio, phone, operating hours, shop location, service radius) required complete validation and server-side persistence.
+  - **Current behavior**: Fully implemented via `PUT /technicians/profile` with input sanitization, length constraints, and protection of read-only metrics (verification status, rating, completed job count).
+  - **Expected behavior**: Secure technician shop profile editing with protected trust metrics.
+  - **Status**: RESOLVED (Phase 8 Implementation)
+  - **Recommended fix phase**: Phase 8
+
+- **ID**: D-P8-003
+  - **Phase**: P8
+  - **Severity**: MEDIUM
+  - **Area**: Repair History Integration
+  - **Description**: Complete customer repair history tracking across active, completed, and cancelled repair states.
+  - **Current behavior**: CustomerRepairsView and CustomerProfileView provide complete history, state tracking, and direct access to ActiveRepairTracker and WarrantyPassportView.
+  - **Expected behavior**: Seamless repair history access across all lifecycle states.
+  - **Status**: RESOLVED (Phase 8 Implementation)
+  - **Recommended fix phase**: Phase 8
+
+- **ID**: D-P8-004
+  - **Phase**: D-P8-004
+  - **Severity**: MEDIUM
+  - **Area**: Warranty / Passport Account Integration
+  - **Description**: Integration of digital repair passports and active warranty records into customer account hubs.
+  - **Current behavior**: WarrantyPassportView displays active warranties, covered repair details, serialized parts logs, and claim guidelines.
+  - **Expected behavior**: Direct access to digital warranties and device provenance passports.
+  - **Status**: RESOLVED (Phase 8 Implementation)
+  - **Recommended fix phase**: Phase 8
+
+- **ID**: D-P8-005
+  - **Phase**: P8
+  - **Severity**: MEDIUM
+  - **Area**: Notification Center / Preferences
+  - **Description**: Configurable notification categories for repair, payment, and promotional alerts with non-disabled transactional messages.
+  - **Current behavior**: NotificationDrawer and CustomerProfileView support preference configuration while mandating transactional repair and escrow alerts.
+  - **Expected behavior**: User-configurable notifications preserving mandatory transactional alerts.
+  - **Status**: RESOLVED (Phase 8 Implementation)
+  - **Recommended fix phase**: Phase 8
+
+- **ID**: D-P8-006
+  - **Phase**: P8
+  - **Severity**: HIGH
+  - **Area**: Session / Logout / Security UX
+  - **Description**: Robust session termination, borrowed phone session protection, and immediate local token wipe on logout.
+  - **Current behavior**: AuthContext and CustomerProfileView provide immediate session wipe, borrowed phone warnings, and unauthenticated redirection.
+  - **Expected behavior**: Clean, secure session lifecycle management.
+  - **Status**: RESOLVED (Phase 8 Implementation)
+  - **Recommended fix phase**: Phase 8
+
+- **ID**: D-P8-007
+  - **Phase**: P8
+  - **Severity**: HIGH
+  - **Area**: Technician Financial / Account Integration
+  - **Description**: Technician settlement bank account configuration, Providus/Paystack validation, and earnings/payout ledger integration.
+  - **Current behavior**: TechnicianProfileView provides settlement bank account management (bank name, 10-digit account number, account name) and payout ledger modal.
+  - **Expected behavior**: Validated settlement bank account setup for automated escrow releases.
+  - **Status**: RESOLVED (Phase 8 Implementation)
+  - **Recommended fix phase**: Phase 8
+
+- **ID**: D-P8-008
+  - **Phase**: P8
+  - **Severity**: LOW
+  - **Area**: Account Navigation Consistency
+  - **Description**: Unified role-aware bottom navigation tabs and top headers across customer and technician portals.
+  - **Current behavior**: BottomNav and Header maintain distinct, non-cluttered bottom tabs (Customer: Home, Repairs, Messages, Profile; Technician: Dashboard, Work Orders, Parts Catalog, Shop Profile).
+  - **Expected behavior**: Consistent, intuitive navigation layout across customer and technician experiences.
+  - **Status**: RESOLVED (Phase 8 Implementation)
+  - **Recommended fix phase**: Phase 8
+
+- **ID**: D-P8-009
+  - **Phase**: P8
+  - **Severity**: HIGH
+  - **Area**: Cross-Role Account Data Isolation
+  - **Description**: Strict authorization boundaries preventing customers from accessing technician workspace actions or vice versa.
+  - **Current behavior**: Server middleware (`requireAuth`, `requireRole`) and ownership checks prevent cross-role data leaks or unauthorized mutations.
+  - **Expected behavior**: Rigorous multi-role data isolation across all endpoints.
+  - **Status**: RESOLVED (Phase 8 Implementation)
+  - **Recommended fix phase**: Phase 8
+
+- **ID**: D-P8-010
+  - **Phase**: P8
+  - **Severity**: MEDIUM
+  - **Area**: Retention / Repeat-Repair Workflow
+  - **Description**: 1-tap "Repair this device again" retention action for saved devices.
+  - **Current behavior**: SavedDevicesManager includes a "Repair" button that pre-fills the 4-step Repair Request Wizard with device brand, model, nickname, color, and storage.
+  - **Expected behavior**: Frictionless repeat repair initiation for registered devices.
+  - **Status**: RESOLVED (Phase 8 Implementation)
+  - **Recommended fix phase**: Phase 8
+
 ---
 
 ## Cross-Phase / Security

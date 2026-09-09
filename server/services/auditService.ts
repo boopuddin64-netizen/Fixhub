@@ -31,4 +31,8 @@ export class AuditService {
   public static getLogsForResource(resourceId: string): AuditLog[] {
     return db.auditLogs.filter((log) => log.resourceId === resourceId);
   }
+
+  public static getLogs(): AuditLog[] {
+    return db.auditLogs;
+  }
 }

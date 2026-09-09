@@ -92,6 +92,11 @@ export interface CustomerProfile {
   totalRepairsCount: number;
   activeRepairsCount: number;
   emergencyContactPhone?: string;
+  notificationPreferences?: {
+    repairUpdates?: boolean;
+    paymentUpdates?: boolean;
+    promotional?: boolean;
+  };
 }
 
 export interface TechnicianProfile {

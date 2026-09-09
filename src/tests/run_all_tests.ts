@@ -10,6 +10,7 @@ import { runPhase4Tests } from './phase4_marketplace.test';
 import { runLocationFixTests } from './location_fix.test';
 import { runGoogleMapsIntegrationTests } from './google_maps_integration.test';
 import { runPhase5PaymentTests } from './phase5_payment.test';
+import { runPhase8AccountRetentionTests } from './phase8_account_retention.test';
 import {
   validateNumber,
   isValidCoordinates,
@@ -778,6 +779,9 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   const phase5Results = await runPhase5PaymentTests();
   passed += phase5Results.passed;
   failed += phase5Results.failed;
+
+  // Run Phase 8 Account, Retention & Profile Completion tests
+  runPhase8AccountRetentionTests(assert);
 
   console.log('\n===============================================================');
   console.log(`   GLOBAL TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);
