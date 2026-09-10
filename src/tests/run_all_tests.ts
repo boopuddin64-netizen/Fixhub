@@ -11,6 +11,7 @@ import { runLocationFixTests } from './location_fix.test';
 import { runGoogleMapsIntegrationTests } from './google_maps_integration.test';
 import { runPhase5PaymentTests } from './phase5_payment.test';
 import { runPhase8AccountRetentionTests } from './phase8_account_retention.test';
+import { runDefectRemediationPart1Tests } from './defect_remediation_part1.test';
 import {
   validateNumber,
   isValidCoordinates,
@@ -782,6 +783,11 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
 
   // Run Phase 8 Account, Retention & Profile Completion tests
   runPhase8AccountRetentionTests(assert);
+
+  // Run Defect Remediation Part 1 (Core Integrity & Workflow) tests
+  const remediation1Results = await runDefectRemediationPart1Tests();
+  passed += remediation1Results.passed;
+  failed += remediation1Results.failed;
 
   console.log('\n===============================================================');
   console.log(`   GLOBAL TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);

@@ -494,6 +494,7 @@ export interface RepairJob {
   receivedAt?: string;
   repairStartedAt?: string;
   readyForPickupAt?: string;
+  pickupVerifiedAt?: string;
   completedAt?: string;
   
   statusHistory: Array<{

@@ -812,6 +812,23 @@ apiRouter.post('/repairs/attachments/upload', requireAuth, requireRole(['custome
       else attachExt = 'webm';
     }
 
+    // Inspect SVG attachments for embedded scripts / malicious tags (Stored XSS mitigation)
+    if (lowerMime.includes('svg') || attachExt === 'svg') {
+      const textContent = buffer.toString('utf8');
+      if (
+        /<script/i.test(textContent) ||
+        /javascript:/i.test(textContent) ||
+        /onload=/i.test(textContent) ||
+        /onerror=/i.test(textContent) ||
+        /<foreignObject/i.test(textContent) ||
+        /<iframe/i.test(textContent)
+      ) {
+        return res.status(400).json({
+          error: 'Security violation: Malicious scripts or executable markup detected in SVG attachment.',
+        });
+      }
+    }
+
     const filename = `${attachId}.${attachExt}`;
     fs.writeFileSync(path.join(attachmentsDir, filename), buffer);
 
@@ -825,6 +842,9 @@ apiRouter.post('/repairs/attachments/upload', requireAuth, requireRole(['custome
       durationSeconds: durationSeconds ? Number(durationSeconds) : undefined,
       ownerId: req.user!.id,
     };
+
+    db.uploadedAttachments.push(attachment);
+    db.save();
 
     return res.status(201).json(attachment);
   } catch (err) {
@@ -848,13 +868,16 @@ apiRouter.get('/repairs/attachments/:filename', requireAuth, (req: Authenticated
 
   let authorized = false;
   if (userRole === 'customer') {
+    const ownsUpload = db.uploadedAttachments.some(
+      (a) => a.ownerId === userId && a.url?.includes(safeFilename)
+    );
     const ownsRequest = db.repairRequests.some(
       (r) => r.customerId === userId && (r.photos?.some((p) => p.includes(safeFilename)) || r.attachments?.some((a) => a.url?.includes(safeFilename)))
     );
     const ownsDraft = db.drafts.some(
       (d) => d.customerId === userId && (d.photos?.some((p) => p.includes(safeFilename)) || d.attachments?.some((a) => a.url?.includes(safeFilename)))
     );
-    authorized = ownsRequest || ownsDraft;
+    authorized = ownsUpload || ownsRequest || ownsDraft;
   } else if (userRole === 'technician') {
     const isAssigned = db.repairJobs.some((j) => j.technicianId === userId && db.repairRequests.some((r) => r.id === j.requestId && (r.photos?.some((p) => p.includes(safeFilename)) || r.attachments?.some((a) => a.url?.includes(safeFilename)))));
     const hasQuoted = db.repairQuotes.some((q) => q.technicianId === userId && db.repairRequests.some((r) => r.id === q.requestId && (r.photos?.some((p) => p.includes(safeFilename)) || r.attachments?.some((a) => a.url?.includes(safeFilename)))));
@@ -1275,50 +1298,15 @@ apiRouter.post('/quotes/submit', requireAuth, requireRole(['technician']), (req:
     serverMaxWarrantyDays = validatedInventory.maxWarrantyDays;
     priceAuditMetadata = validatedInventory.priceAuditMetadata;
   } else if (partsCost !== undefined && partsCost !== null && Number(partsCost) > 0) {
-    // Backwards compatibility / fallback: Verify if technician has registered parts for this device or create verified inventory record
-    const partsVal = validateNumber(partsCost, 'Parts cost', { min: 0, max: 10_000_000 });
-    if (partsVal.valid === false) return res.status(400).json({ error: partsVal.error });
-    serverCalculatedPartsCost = partsVal.value;
-
-    // Check for existing matching inventory part or create snapshot item
-    let matchingPart = db.technicianParts.find(
-      (p) => p.technicianId === req.user!.id && (p.brand === request.deviceBrand || p.deviceBrand === request.deviceBrand)
-    );
-
-    if (!matchingPart) {
-      const created = InventoryService.createInventoryItem(req.user!.id, {
-        partName: `${request.deviceBrand} ${request.deviceModel} Repair Component`,
-        brand: request.deviceBrand,
-        compatibleModels: [request.deviceModel],
-        quality: partsQuality || 'PREMIUM_AFTERMARKET',
-        unitPriceNaira: partsVal.value,
-        quantityOnHand: 5,
-        warrantyDays: warrantyDays || 60,
-      });
-      if (created.success) matchingPart = created.item;
-    }
-
-    if (matchingPart) {
-      resolvedLineItems = [
-        {
-          id: `qli_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-          inventoryItemId: matchingPart.id,
-          partNameSnapshot: matchingPart.partName || matchingPart.name,
-          qualitySnapshot: matchingPart.quality,
-          unitPriceSnapshot: partsVal.value,
-          priceVersion: matchingPart.priceVersion || 1,
-          quantity: 1,
-          subtotal: partsVal.value,
-          skuSnapshot: matchingPart.sku,
-          brandSnapshot: matchingPart.brand,
-          warrantyDaysSnapshot: matchingPart.warrantyDays || 60,
-        },
-      ];
-    }
+    return res.status(400).json({
+      error: 'Direct partsCost submission is deprecated and rejected. All repair parts must be itemized from your inventory using the items array.',
+    });
   } else {
     // Labor-only repair with 0 parts cost
     serverCalculatedPartsCost = 0;
     resolvedLineItems = [];
+    serverPredominantQuality = partsQuality || 'PREMIUM_AFTERMARKET';
+    serverMaxWarrantyDays = warrantyDays ? Number(warrantyDays) : 30;
   }
 
   // 4. Numerical Cost Validation
@@ -1776,10 +1764,14 @@ apiRouter.get('/jobs/:id', requireAuth, (req: AuthenticatedRequest, res: Respons
   const payment = db.payments.find((p) => p.repairId === job.id);
   const quote = db.repairQuotes.find((q) => q.id === job.quoteId);
 
+  const safeTech = technician
+    ? (req.user!.role === 'technician' && job.technicianId === req.user!.id ? technician : sanitizeTechnicianForPublic(technician))
+    : null;
+
   return res.json({
     job,
     customer: customer ? { id: customer.id, name: customer.name, phone: customer.phone, avatarUrl: customer.avatarUrl } : null,
-    technician,
+    technician: safeTech,
     payment,
     quote,
   });

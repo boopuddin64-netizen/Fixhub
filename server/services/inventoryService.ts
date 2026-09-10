@@ -596,7 +596,7 @@ export class InventoryService {
     if (!Array.isArray(quote.items) || quote.items.length === 0) return;
 
     for (const item of quote.items) {
-      const rawIndex = db.technicianParts.findIndex((p) => p.id === item.inventoryItemId);
+      const rawIndex = db.technicianParts.findIndex((p) => p.id === item.inventoryItemId && p.technicianId === quote.technicianId);
       if (rawIndex !== -1) {
         const inv = this.normalizeItem(db.technicianParts[rawIndex]);
         inv.quantityReserved = (inv.quantityReserved || 0) + item.quantity;
@@ -638,7 +638,7 @@ export class InventoryService {
     if (!Array.isArray(quote.items) || quote.items.length === 0) return;
 
     for (const item of quote.items) {
-      const rawIndex = db.technicianParts.findIndex((p) => p.id === item.inventoryItemId);
+      const rawIndex = db.technicianParts.findIndex((p) => p.id === item.inventoryItemId && p.technicianId === quote.technicianId);
       if (rawIndex !== -1) {
         const inv = this.normalizeItem(db.technicianParts[rawIndex]);
         inv.quantityReserved = Math.max(0, (inv.quantityReserved || 0) - item.quantity);
@@ -687,7 +687,7 @@ export class InventoryService {
     const qty = partRecord.quantity || 1;
 
     if (targetId) {
-      const rawIndex = db.technicianParts.findIndex((p) => p.id === targetId);
+      const rawIndex = db.technicianParts.findIndex((p) => p.id === targetId && p.technicianId === technicianId);
       if (rawIndex !== -1) {
         const inv = this.normalizeItem(db.technicianParts[rawIndex]);
 

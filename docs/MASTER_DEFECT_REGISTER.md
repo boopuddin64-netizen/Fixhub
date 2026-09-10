@@ -333,10 +333,10 @@
   - **Severity**: HIGH
   - **Area**: Legacy Arbitrary Parts Cost Quote Fallback
   - **Description**: Legacy fallback allowing arbitrary `partsCost` input in quotes when inventory items are bypassed.
-  - **Current behavior**: Secondary fallback branch exists for backward compatibility in legacy quotes.
+  - **Current behavior**: Removed arbitrary `partsCost` input from `submitQuote` endpoint (`server/routes/api.ts`). Quotes strictly require registered inventory items (`items` array). Unitemized quotes with raw `partsCost` are rejected with 400 Bad Request. Quote total is strictly calculated on server from valid parts and labor.
   - **Expected behavior**: Strict enforcement of verified inventory items (`inventoryItemId`) for all line items across all quoting flows.
-  - **Status**: OPEN (Deferred to Post-Feature-Freeze Security & Hardening Phase)
-  - **Recommended fix phase**: Final Hardening Phase
+  - **Status**: RESOLVED (Defect Remediation Part 1)
+  - **Recommended fix phase**: Defect Remediation Part 1
 
 ---
 
@@ -455,3 +455,62 @@
   - **Expected behavior**: Zero IDOR vulnerabilities across all quote lifecycle endpoints.
   - **Status**: RESOLVED (Hardened in Phase 4)
   - **Recommended fix phase**: Phase 4
+
+---
+
+## Defect Remediation Part 1 — Core Integrity & Critical Workflow
+
+- **ID**: DEF-REM1-001
+  - **Phase**: Remediation Part 1
+  - **Severity**: CRITICAL
+  - **Area**: Inventory Ownership & Cross-Technician Manipulation (IDOR)
+  - **Description**: Ensure technicians can only quote, reserve, and deduct parts that belong to their own authenticated technician profile.
+  - **Remediation**: Hardened `InventoryService.validateAndBuildQuoteLineItems`, `reserveStockForQuote`, `releaseStockForQuote`, and `deductStockForInstalledPart` with strict `technicianId` checks matching the active technician profile. Attempting to quote or manipulate another technician's inventory items results in security rejection.
+  - **Status**: RESOLVED
+  - **Verification**: `src/tests/defect_remediation_part1.test.ts` (Module 1)
+
+- **ID**: DEF-REM1-002
+  - **Phase**: Remediation Part 1
+  - **Severity**: CRITICAL
+  - **Area**: Payout Bank Account Fallback & NUBAN Validation
+  - **Description**: Remove hardcoded fallback demo bank details (`058`/`0123456789`) in payout requests. Enforce authentic registered bank account or validated destination account.
+  - **Remediation**: Removed default mock bank fallback in `PaymentService.requestPayout`. Added strict validation requiring registered technician profile `bankDetails` or provided `destinationAccount` with valid 10-digit NUBAN account number and recognized bank code.
+  - **Status**: RESOLVED
+  - **Verification**: `src/tests/phase5_payment.test.ts`, `src/tests/defect_remediation_part1.test.ts` (Module 2)
+
+- **ID**: DEF-REM1-003
+  - **Phase**: Remediation Part 1
+  - **Severity**: HIGH
+  - **Area**: Additional Diagnosis Financial Auto-Approval Removal
+  - **Description**: Any additional diagnosis submitted by a technician with financial impact (`additionalCostNaira > 0`) must require explicit customer approval and cannot auto-approve.
+  - **Remediation**: Refactored `RepairWorkflowService.submitAdditionalDiagnosis` to set `status: 'PENDING_APPROVAL'` and `isMinorAutoApproved: false` whenever `additionalCostNaira > 0`. The job enters `ADDITIONAL_DIAGNOSIS` status until the customer explicitly reviews photo evidence and approves.
+  - **Status**: RESOLVED
+  - **Verification**: `src/tests/defect_remediation_part1.test.ts` (Module 3)
+
+- **ID**: DEF-REM1-004
+  - **Phase**: Remediation Part 1
+  - **Severity**: HIGH
+  - **Area**: Shop Counter Pickup Verification & Re-use Guard
+  - **Description**: Counter pickup code verification must record the exact handover timestamp (`pickupVerifiedAt`) and prevent code re-verification on already picked-up devices.
+  - **Remediation**: Updated `RepairWorkflowService.verifyPickup` to set `job.pickupVerifiedAt = now` and ensure jobs in `PICKED_UP` or subsequent statuses cannot be re-verified.
+  - **Status**: RESOLVED
+  - **Verification**: `src/tests/defect_remediation_part1.test.ts` (Module 3)
+
+- **ID**: DEF-REM1-005
+  - **Phase**: Remediation Part 1
+  - **Severity**: HIGH
+  - **Area**: Sensitive Technician Data Exposure in Job View
+  - **Description**: Customer fetching job via `GET /jobs/:id` received raw technician profile, exposing private `bankDetails` and internal `trustScore`.
+  - **Remediation**: Applied `sanitizeTechnicianForPublic` in `GET /jobs/:id` so that customers receive sanitized profile data without sensitive financial information.
+  - **Status**: RESOLVED
+  - **Verification**: `src/tests/defect_remediation_part1.test.ts` (Module 4)
+
+- **ID**: DEF-REM1-006
+  - **Phase**: Remediation Part 1
+  - **Severity**: HIGH
+  - **Area**: Attachment Security & Stored XSS Mitigation
+  - **Description**: Uploaded SVG files could contain executable scripts, and raw attachment files required database tracking and authorization checks.
+  - **Remediation**: Added script tag and executable markup detection for SVG uploads in `/api/repairs/attachments/upload`. Stored all uploaded attachments in `db.uploadedAttachments` and enforced ownership checks in `/api/repairs/attachments/:filename`.
+  - **Status**: RESOLVED
+  - **Verification**: `src/tests/defect_remediation_part1.test.ts` (Module 5)
+

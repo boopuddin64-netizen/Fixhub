@@ -58,6 +58,14 @@ export interface DatabaseSchema {
   auditLogs: AuditLog[];
   notifications: NotificationItem[];
   messages: MessageItem[];
+  uploadedAttachments: Array<{
+    id: string;
+    url: string;
+    ownerId: string;
+    mimeType: string;
+    size: number;
+    createdAt: string;
+  }>;
   riskEvents: Array<{
     id: string;
     actorId: string;
@@ -1318,6 +1326,7 @@ function getInitialSeedData(): DatabaseSchema {
     auditLogs,
     notifications,
     messages,
+    uploadedAttachments: [],
     riskEvents: [],
   };
 }
@@ -1372,6 +1381,9 @@ class Database {
           }
           if (!parsed.webhookEvents) {
             parsed.webhookEvents = [];
+          }
+          if (!parsed.uploadedAttachments) {
+            parsed.uploadedAttachments = [];
           }
           return parsed;
         }
@@ -1435,6 +1447,10 @@ class Database {
   public get auditLogs() { return this.data.auditLogs; }
   public get notifications() { return this.data.notifications; }
   public get messages() { return this.data.messages; }
+  public get uploadedAttachments() {
+    if (!this.data.uploadedAttachments) this.data.uploadedAttachments = [];
+    return this.data.uploadedAttachments;
+  }
   public get riskEvents() { return this.data.riskEvents; }
 }
 

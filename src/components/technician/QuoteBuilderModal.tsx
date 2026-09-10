@@ -220,7 +220,6 @@ export const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({
       await ApiClient.submitQuote({
         requestId: request.id,
         items: itemsPayload,
-        partsCost,
         laborCost: Number(laborCost),
         diagnosticCost: Number(diagnosticCost || 0),
         otherCost: Number(otherCost || 0),

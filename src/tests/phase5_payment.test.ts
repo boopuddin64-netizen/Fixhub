@@ -164,6 +164,62 @@ export async function runPhase5PaymentTests(): Promise<{ passed: number; failed:
   });
   assert(zeroPayout.success === false, 'Validation: Zero payout request is rejected');
 
+  // Verify missing bank account details rejection (Removal of demo fallback 058/0123456789)
+  const noBankTechId = `tech_nobank_${Date.now()}`;
+  db.technicianProfiles.push({
+    id: `tp_${noBankTechId}`,
+    userId: noBankTechId,
+    businessName: 'No Bank Tech',
+    bio: 'Test bio',
+    location: { address: 'PH', city: 'Port Harcourt', state: 'Rivers', lga: 'Port Harcourt', latitude: 4.8, longitude: 7.0 },
+    serviceRadiusKm: 10,
+    specializations: ['Apple'],
+    deviceTypesSupported: ['PHONE'],
+    rating: 5,
+    reviewsCount: 0,
+    isVerified: true,
+    verificationStatus: 'VERIFIED',
+    joinedAt: new Date().toISOString(),
+    completedRepairsCount: 0,
+    activeRepairsCount: 0,
+    badges: [],
+    // bankDetails intentionally omitted!
+  } as any);
+  db.technicianEarnings.push({
+    id: `te_${noBankTechId}`,
+    technicianId: noBankTechId,
+    repairId: `job_${noBankTechId}`,
+    paymentId: `pay_${noBankTechId}`,
+    grossAmountNaira: 20000,
+    platformFeeNaira: 1700,
+    netEarningsNaira: 18300,
+    commissionPercent: 8.5,
+    status: 'ELIGIBLE_FOR_PAYOUT',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  const missingBankPayout = await PaymentService.requestPayout({
+    technicianId: noBankTechId,
+    amountNaira: 5000,
+    actorId: noBankTechId,
+  });
+  assert(missingBankPayout.success === false, 'Security: Payout rejected when technician has no registered bank account (demo fallback removed)');
+  assert(missingBankPayout.error?.includes('bank details are missing or unverified'), 'Security: Clean error message returned when bank details missing');
+
+  const invalidAccountPayout = await PaymentService.requestPayout({
+    technicianId: noBankTechId,
+    amountNaira: 5000,
+    actorId: noBankTechId,
+    destinationAccount: {
+      accountNumber: '123', // invalid NUBAN
+      bankCode: '058',
+      bankName: 'GTB',
+      accountName: 'Test',
+    },
+  });
+  assert(invalidAccountPayout.success === false, 'Validation: Malformed NUBAN account number is rejected');
+
   // Test 8: Webhook Processing & Cryptographic Verification
   console.log('\n8. Webhook Processing & Signature Validation');
   const nowStr = new Date().toISOString();

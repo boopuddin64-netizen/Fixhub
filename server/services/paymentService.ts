@@ -856,12 +856,20 @@ export class PaymentService {
           accountName: profile.bankDetails.accountName || profile.businessName || 'Technician',
         };
       } else {
-        // Fallback default for demo/sandbox if none configured
-        destinationAccount = {
-          bankCode: '058',
-          bankName: 'Guaranty Trust Bank',
-          accountNumber: '0123456789',
-          accountName: profile?.businessName || `Technician ${technicianId}`,
+        return {
+          success: false,
+          eligibleBalanceNaira: availablePayoutNaira,
+          error: 'Technician payout bank details are missing or unverified. Please configure your registered Nigerian bank account in your profile before requesting a payout.',
+        };
+      }
+    } else {
+      const cleanAccount = String(destinationAccount.accountNumber).trim();
+      const cleanBankCode = String(destinationAccount.bankCode).trim();
+      if (!/^\d{10}$/.test(cleanAccount) || !/^\d{3,6}$/.test(cleanBankCode)) {
+        return {
+          success: false,
+          eligibleBalanceNaira: availablePayoutNaira,
+          error: 'Invalid bank account details. A valid 10-digit NUBAN account number and Nigerian bank code are required.',
         };
       }
     }

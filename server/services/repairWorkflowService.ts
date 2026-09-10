@@ -398,7 +398,7 @@ export class RepairWorkflowService {
       return { success: false, error: `Cannot submit additional diagnosis when job status is ${job.status}.` };
     }
 
-    const isMinor = QuoteAccuracyService.isMinorVariation(job.originalQuoteAmount, additionalCostNaira);
+    const requiresApproval = additionalCostNaira > 0;
     const newTotal = job.originalQuoteAmount + additionalCostNaira;
 
     const diagnosis: AdditionalDiagnosis = {
@@ -409,17 +409,15 @@ export class RepairWorkflowService {
       photoEvidence,
       additionalCostNaira,
       newTotalAmountNaira: newTotal,
-      isMinorAutoApproved: isMinor,
-      status: isMinor ? 'APPROVED' : 'PENDING_APPROVAL',
-      resolvedAt: isMinor ? new Date().toISOString() : undefined,
+      isMinorAutoApproved: false,
+      status: requiresApproval ? 'PENDING_APPROVAL' : 'APPROVED',
+      resolvedAt: requiresApproval ? undefined : new Date().toISOString(),
     };
 
     job.additionalDiagnosis = diagnosis;
 
-    if (isMinor) {
+    if (!requiresApproval) {
       job.finalAmount = newTotal;
-      job.platformFeeAmount = Math.round(newTotal * 0.085);
-      job.technicianPayoutAmount = newTotal - job.platformFeeAmount;
     } else {
       job.status = 'ADDITIONAL_DIAGNOSIS';
       job.statusHistory.push({
@@ -444,7 +442,7 @@ export class RepairWorkflowService {
       action: 'ADDITIONAL_DIAGNOSIS_SUBMITTED',
       resourceType: 'REPAIR_JOB',
       resourceId: jobId,
-      details: { title, additionalCostNaira, isMinorAutoApproved: isMinor },
+      details: { title, additionalCostNaira, requiresApproval },
     });
 
     db.save();
@@ -573,6 +571,7 @@ export class RepairWorkflowService {
     }
 
     const now = new Date().toISOString();
+    job.pickupVerifiedAt = now;
     job.status = 'PICKED_UP';
     job.statusHistory.push({
       status: 'PICKED_UP',
