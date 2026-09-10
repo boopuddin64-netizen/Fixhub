@@ -12,9 +12,9 @@ export const RepairSubmitting: React.FC = () => {
       </div>
 
       <div className="space-y-2">
-        <h3 className="text-xl font-extrabold text-slate-900">Submitting your repair request...</h3>
+        <h3 className="text-xl font-extrabold text-slate-900">Sending your repair request...</h3>
         <p className="text-xs sm:text-sm text-slate-500 max-w-xs mx-auto">
-          Checking technician availability and saving your evidence securely on Fix Hub.
+          Checking technician availability and saving your evidence securely on Fixhub.
         </p>
       </div>
 

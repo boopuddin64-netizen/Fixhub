@@ -25,7 +25,7 @@ export const RepairSuccess: React.FC<RepairSuccessProps> = ({
       <div className="space-y-2">
         <h3 className="text-2xl font-extrabold text-slate-900 tracking-tight">Repair request submitted</h3>
         <p className="text-xs sm:text-sm text-slate-500 max-w-xs mx-auto">
-          Your request for <span className="font-bold text-slate-800">{deviceBrand} {deviceModel}</span> has been logged securely on Fix Hub.
+          Your request for <span className="font-bold text-slate-800">{deviceBrand} {deviceModel}</span> has been logged securely on Fixhub.
         </p>
       </div>
 
@@ -36,7 +36,7 @@ export const RepairSuccess: React.FC<RepairSuccessProps> = ({
         </div>
         <p className="text-base font-mono font-extrabold text-white tracking-wide">{formattedReqId}</p>
         <p className="text-[11px] text-slate-400">
-          We are scanning nearby verified repair labs matching your device and issue requirements.
+          We are notifying nearby verified technicians matching your device and problem requirements.
         </p>
       </div>
 

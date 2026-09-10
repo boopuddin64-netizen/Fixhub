@@ -92,7 +92,7 @@ export const PaystackCheckoutModal: React.FC<PaystackCheckoutModalProps> = ({
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-base text-white">Fix Hub Secure Checkout</h3>
+              <h3 className="font-bold text-base text-white">Fixhub Secure Checkout</h3>
               <p className="text-xs text-blue-300 font-medium">Payment Handled by Paystack</p>
             </div>
           </div>
@@ -151,7 +151,7 @@ export const PaystackCheckoutModal: React.FC<PaystackCheckoutModalProps> = ({
               <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-950 text-xs space-y-1">
                 <div className="flex items-center gap-1.5 font-bold text-blue-800">
                   <Lock className="w-3.5 h-3.5" />
-                  <span>Fix Hub Payment Protection:</span>
+                  <span>Fixhub Payment Protection:</span>
                 </div>
                 <p className="text-[11px] text-blue-800 leading-relaxed">
                   Your payment is processed securely via Paystack and held by the platform until you test and confirm your completed repair.
@@ -273,7 +273,7 @@ export const PaystackCheckoutModal: React.FC<PaystackCheckoutModalProps> = ({
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">Beneficiary:</span>
-                      <span className="font-bold text-slate-800">Fix Hub / Paystack</span>
+                      <span className="font-bold text-slate-800">Fixhub / Paystack</span>
                     </div>
                   </div>
                 </div>

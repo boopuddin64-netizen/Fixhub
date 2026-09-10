@@ -323,7 +323,25 @@ export async function runDefectRemediationPart1Tests(): Promise<{ passed: number
   (testLifecycleJob as any).status = 'BOOKED';
   testLifecycleJob.statusHistory.push({ status: 'BOOKED', timestamp: now, actorRole: 'admin', note: 'Payment verified' });
 
-  // 3.4: Check-in device workflow
+  // 3.3b: Drop-off verification step: Invalid drop-off code is rejected
+  const invalidDropOffRes = RepairWorkflowService.verifyDropOff({
+    jobId: testLifecycleJob.id,
+    technicianId: tech1Id,
+    dropOffCode: 'WRONG-CODE',
+  });
+  assert(invalidDropOffRes.success === false, 'Invalid drop-off verification code is rejected');
+
+  // 3.3c: Drop-off verification step: Valid drop-off code transitions to DEVICE_DROPPED_OFF
+  const validDropOffRes = RepairWorkflowService.verifyDropOff({
+    jobId: testLifecycleJob.id,
+    technicianId: tech1Id,
+    dropOffCode: testLifecycleJob.dropOffCode!,
+  });
+  assert(validDropOffRes.success === true, 'Drop-off verification succeeds with correct code');
+  assert((testLifecycleJob.status as string) === 'DEVICE_DROPPED_OFF', 'Job status transitions to DEVICE_DROPPED_OFF');
+  assert(Boolean((testLifecycleJob as any).dropOffVerifiedAt), 'Drop-off timestamp dropOffVerifiedAt recorded');
+
+  // 3.4: Check-in device workflow (transitions DEVICE_DROPPED_OFF -> DEVICE_RECEIVED)
   const checkInRes = RepairWorkflowService.checkInDevice({
     jobId: testLifecycleJob.id,
     technicianId: tech1Id,

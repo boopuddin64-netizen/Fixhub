@@ -43,7 +43,7 @@ export const IntroScreen: React.FC<IntroScreenProps> = ({ onComplete, canDismiss
       step: '2',
       title: 'Your payment is 100% protected',
       description:
-        'You never pay the technician upfront. Your money is secured safely by Fix Hub until you personally test and verify your fixed phone.',
+        'You never pay the technician upfront. Your money is secured safely by Fixhub until you personally test and verify your fixed phone.',
       badge: '100% Payment Protected',
       icon: ShieldCheck,
       iconColor: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',

@@ -287,7 +287,7 @@ export const DeviceSelectorModal: React.FC<DeviceSelectorModalProps> = ({
                   onChange={(e) => setSaveToAccount(e.target.checked)}
                   className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
-                <span className="text-xs font-medium text-slate-700">Save this device to my Fix Hub profile</span>
+                <span className="text-xs font-medium text-slate-700">Save this device to my Fixhub profile</span>
               </label>
 
               <button type="submit"

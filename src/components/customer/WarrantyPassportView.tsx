@@ -41,7 +41,7 @@ export const WarrantyPassportView: React.FC = () => {
         </div>
         <h2 className="text-xl font-black text-white">Digital Repair Passport & Warranties</h2>
         <p className="text-xs text-slate-300 max-w-lg leading-relaxed">
-          Every repair performed via Fix Hub creates an immutable digital passport entry with part serials, quality grades, and active warranty terms.
+          Every repair performed via Fixhub creates an immutable digital passport entry with part serials, quality grades, and active warranty terms.
         </p>
       </div>
 

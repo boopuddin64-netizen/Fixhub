@@ -219,8 +219,67 @@ export class RepairWorkflowService {
   }
 
   /**
+   * Technician verifies customer drop-off code when device is delivered to shop
+   * Transitions BOOKED -> DEVICE_DROPPED_OFF
+   */
+  public static verifyDropOff(params: {
+    jobId: string;
+    technicianId: string;
+    dropOffCode: string;
+  }): { success: boolean; job?: RepairJob; error?: string } {
+    const { jobId, technicianId, dropOffCode } = params;
+    const job = db.repairJobs.find((j) => j.id === jobId);
+    if (!job) return { success: false, error: 'Repair job not found.' };
+    if (job.technicianId !== technicianId) {
+      return { success: false, error: 'Unauthorized: Repair job is not assigned to you.' };
+    }
+
+    if (job.status !== 'BOOKED') {
+      return {
+        success: false,
+        error: `Cannot verify drop-off: Job is in status ${job.status}, expected BOOKED.`,
+      };
+    }
+
+    if (!dropOffCode || !job.dropOffCode || job.dropOffCode.trim().toUpperCase() !== dropOffCode.trim().toUpperCase()) {
+      return { success: false, error: 'Invalid drop-off verification code.' };
+    }
+
+    const now = new Date().toISOString();
+    job.status = 'DEVICE_DROPPED_OFF';
+    (job as any).dropOffVerifiedAt = now;
+
+    job.statusHistory.push({
+      status: 'DEVICE_DROPPED_OFF',
+      timestamp: now,
+      actorRole: 'technician',
+      note: 'Customer drop-off code verified at shop counter. Device dropped off.',
+    });
+
+    NotificationService.send({
+      userId: job.customerId,
+      title: 'Device Dropped Off',
+      message: `Your drop-off code has been verified by the technician. Your device is now dropped off at the shop.`,
+      type: 'STATUS_CHANGE',
+      repairId: job.id,
+    });
+
+    AuditService.log({
+      actorId: technicianId,
+      actorRole: 'technician',
+      action: 'DEVICE_DROPPED_OFF',
+      resourceType: 'REPAIR_JOB',
+      resourceId: job.id,
+      details: { verifiedCode: dropOffCode.trim().toUpperCase() },
+    });
+
+    db.save();
+    return { success: true, job };
+  }
+
+  /**
    * Device Check-in by Technician at shop
-   * Dedicated workflow: ONLY valid path to transition BOOKED -> DEVICE_RECEIVED
+   * Dedicated workflow: Transitions DEVICE_DROPPED_OFF or BOOKED -> DEVICE_RECEIVED
    */
   public static checkInDevice(params: {
     jobId: string;

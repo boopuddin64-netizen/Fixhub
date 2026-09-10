@@ -528,7 +528,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
           {/* Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Held by Fix Hub</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Held by Fixhub</span>
               <span className="text-2xl font-black text-amber-600">₦{financials.heldEarningsNaira.toLocaleString()}</span>
               <p className="text-xs text-slate-500 leading-relaxed">
                 Active repair earnings held securely until customer tests and completes physical pickup.
@@ -547,7 +547,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Total Completed Payouts</span>
               <span className="text-2xl font-black text-slate-900">₦{financials.totalCompletedPayoutsNaira.toLocaleString()}</span>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Settled withdrawals to your bank. Fix Hub platform fee: {financials.commissionRatePercent}%.
+                Settled withdrawals to your bank. Fixhub platform fee: {financials.commissionRatePercent}%.
               </p>
             </div>
           </div>
@@ -654,7 +654,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
                               ? 'bg-blue-100 text-blue-800'
                               : 'bg-slate-100 text-slate-700'
                           }`}>
-                            {e.status === 'HELD' ? 'Held by Fix Hub' : e.status === 'ELIGIBLE_FOR_PAYOUT' ? 'Eligible for Payout' : e.status}
+                            {e.status === 'HELD' ? 'Held by Fixhub' : e.status === 'ELIGIBLE_FOR_PAYOUT' ? 'Eligible for Payout' : e.status}
                           </span>
                         </td>
                         <td className="p-3 text-slate-400">{new Date(e.createdAt).toLocaleDateString()}</td>

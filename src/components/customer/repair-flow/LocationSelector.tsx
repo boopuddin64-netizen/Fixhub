@@ -219,8 +219,8 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                       </div>
                     </div>
                     {area.isTechHub && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200/60">
-                        Repair Hub
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                        Popular Area
                       </span>
                     )}
                   </button>
@@ -410,7 +410,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                       id="state-gps-detected"
                       className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200/60 rounded-full text-[10px] font-bold shrink-0"
                     >
-                      GPS
+                      Current Location
                     </span>
                   )}
                   {location.source === 'GEOCODED' && (

@@ -64,7 +64,7 @@ export const RepairReview: React.FC<RepairReviewProps> = ({
               <Wrench className="w-4 h-4" />
             </div>
             <div className="min-w-0 space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Reported Problems</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Problem</span>
               <div className="flex flex-wrap gap-1.5 pt-0.5">
                 {selectedIssueIds.map((id) => (
                   <span key={id} className="px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200/60 rounded-md text-[11px] font-semibold">
@@ -96,9 +96,9 @@ export const RepairReview: React.FC<RepairReviewProps> = ({
               <FileText className="w-4 h-4" />
             </div>
             <div className="min-w-0 space-y-0.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Symptoms & Details</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Description</span>
               <p className="text-xs text-slate-700 font-medium break-words leading-relaxed">
-                {description || 'No additional custom description provided.'}
+                {description || 'No additional description provided.'}
               </p>
             </div>
           </div>
@@ -119,7 +119,7 @@ export const RepairReview: React.FC<RepairReviewProps> = ({
               <Camera className="w-4 h-4" />
             </div>
             <div className="min-w-0 space-y-1.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Evidence</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Photos & Voice Note</span>
               {photos.length === 0 && !voiceNoteUrl ? (
                 <p className="text-xs text-slate-500 italic">No photos or voice note attached.</p>
               ) : (
@@ -160,7 +160,7 @@ export const RepairReview: React.FC<RepairReviewProps> = ({
               <MapPin className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Repair Location</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Your Location</span>
               <p className="text-xs font-bold text-slate-900 mt-0.5 truncate">
                 {location?.address || location?.area || location?.city || 'Location Selected'}
               </p>
@@ -191,7 +191,7 @@ export const RepairReview: React.FC<RepairReviewProps> = ({
       <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>Fix Hub Escrow Protected • Verified Techs Only</span>
+          <span>Fixhub Escrow Protected • Verified Technicians Only</span>
         </div>
 
         <button
@@ -203,12 +203,12 @@ export const RepairReview: React.FC<RepairReviewProps> = ({
           {isSubmitting ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Submitting Request...</span>
+              <span>Sending Repair Request...</span>
             </>
           ) : (
             <>
               <CheckCircle2 className="w-4 h-4" />
-              <span>Submit Repair Request</span>
+              <span>Send Repair Request</span>
             </>
           )}
         </button>

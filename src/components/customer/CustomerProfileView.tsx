@@ -185,7 +185,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
             <span>Borrowed Phone Protection Active</span>
           </div>
           <p className="text-[11px] text-amber-800 leading-relaxed">
-            You are logged into Fix Hub from a temporary/borrowed device. Your token will expire quickly and will not persist locally.
+            You are logged into Fixhub from a temporary/borrowed device. Your token will expire quickly and will not persist locally.
           </p>
           <button
             onClick={logout}
@@ -303,7 +303,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
           className="w-full py-3.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
         >
           <LogOut className="w-4 h-4" />
-          <span>Log Out of Fix Hub</span>
+          <span>Log Out of Fixhub</span>
         </button>
       </div>
 
@@ -624,7 +624,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
                   <HelpCircle className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-white">Fix Hub Help & Support</h3>
+                  <h3 className="font-bold text-base text-white">Fixhub Help & Support</h3>
                   <p className="text-xs text-slate-400">Everything you need to know about secure repairs</p>
                 </div>
               </div>
@@ -643,7 +643,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
                   <span>How Paystack Escrow Protects Your Money</span>
                 </div>
                 <p className="text-blue-800 text-[11px] leading-relaxed">
-                  Your repair payment is held securely in escrow by Fix Hub. The technician is NOT paid until you physically inspect your device and share your 4-digit pickup code!
+                  Your repair payment is held securely in escrow by Fixhub. The technician is NOT paid until you physically inspect your device and share your 4-digit pickup code!
                 </p>
               </div>
 

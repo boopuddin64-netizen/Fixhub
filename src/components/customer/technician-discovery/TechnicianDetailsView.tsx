@@ -139,7 +139,7 @@ export const TechnicianDetailsView: React.FC<TechnicianDetailsViewProps> = ({
             </div>
             <div className="p-3 bg-emerald-50 text-emerald-800 rounded-xl font-semibold flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Fix Hub Verified Warranty Available on All Repairs</span>
+              <span>Fixhub Verified Warranty Available on All Repairs</span>
             </div>
           </div>
         </div>

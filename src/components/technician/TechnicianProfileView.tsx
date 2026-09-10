@@ -227,7 +227,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
         <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          <span>Fix Hub Verified Technician Credentials</span>
+          <span>Fixhub Verified Technician Credentials</span>
         </h3>
 
         <div className="space-y-2">

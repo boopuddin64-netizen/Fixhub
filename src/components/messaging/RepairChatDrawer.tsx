@@ -99,7 +99,7 @@ export const RepairChatDrawer: React.FC<RepairChatDrawerProps> = ({
         {/* Security / Escrow Protection Subheader */}
         <div className="bg-emerald-50 px-4 py-2 border-b border-emerald-100 flex items-center gap-2 text-[11px] text-emerald-900">
           <Lock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-          <span>Keep all conversations here. Fix Hub records ensure buyer protection.</span>
+          <span>Keep all conversations here. Fixhub records ensure buyer protection.</span>
         </div>
 
         {/* Message Log */}

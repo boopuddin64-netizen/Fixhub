@@ -666,7 +666,7 @@ export const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({
               <span className="font-extrabold text-emerald-400 text-base">₦{totalAmount.toLocaleString()}</span>
             </div>
             <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
-              <span>Fix Hub Fee (8.5%): ₦{platformFee.toLocaleString()}</span>
+              <span>Fixhub Fee (8.5%): ₦{platformFee.toLocaleString()}</span>
               <span className="font-bold text-emerald-300">Your Net Payout: ₦{netEarnings.toLocaleString()}</span>
             </div>
           </div>

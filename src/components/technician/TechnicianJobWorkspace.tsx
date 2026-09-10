@@ -58,6 +58,10 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
   const [partPrice, setPartPrice] = useState<number>(45000);
   const [partSerial, setPartSerial] = useState('SN-IP13-OLED-9821');
 
+  // Drop-off Verification
+  const [enteredDropOffCode, setEnteredDropOffCode] = useState('');
+  const [dropOffSuccess, setDropOffSuccess] = useState(false);
+
   // Pickup Verification
   const [enteredPickupCode, setEnteredPickupCode] = useState('');
   const [codeSuccess, setCodeSuccess] = useState(false);
@@ -141,6 +145,24 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
     }
   };
 
+  const handleVerifyDropOffCode = async () => {
+    if (!enteredDropOffCode.trim()) {
+      setErrorMsg('Please enter the customer drop-off code.');
+      return;
+    }
+    setIsUpdating(true);
+    setErrorMsg(null);
+    try {
+      await ApiClient.verifyDropOff(job.id, enteredDropOffCode.trim().toUpperCase());
+      setDropOffSuccess(true);
+      onRefresh();
+    } catch (err: any) {
+      setErrorMsg(err.message || `Invalid code. Enter customer drop-off code (Demo: ${job.dropOffCode})`);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   const handleVerifyPickupCode = async () => {
     if (!enteredPickupCode.trim()) {
       setErrorMsg('Please enter the customer pickup code.');
@@ -206,8 +228,15 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
         </h3>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Step 1: Intake Check-in */}
-          {['BOOKED', 'PAYMENT_CONFIRMED', 'DEVICE_DROPPED_OFF'].includes(job.status) && !job.conditionReport && (
+          {/* Step 1: Drop-off code required notice */}
+          {job.status === 'BOOKED' && (
+            <span className="text-xs font-medium text-blue-700 bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-200">
+              Drop-off Code verification required below before recording intake check-in
+            </span>
+          )}
+
+          {/* Step 1: Intake Check-in (after drop-off code verified) */}
+          {job.status === 'DEVICE_DROPPED_OFF' && !job.conditionReport && (
             <button
               id="tech-intake-device-btn"
               onClick={() => setShowIntakeModal(true)}
@@ -215,7 +244,7 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
               className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <Camera className="w-4 h-4" />
-              <span>Record Device Intake Checklist</span>
+              <span>Record Device Intake Checklist & Check In</span>
             </button>
           )}
 
@@ -288,6 +317,45 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
           )}
         </div>
       </div>
+
+      {/* DROP-OFF CODE VERIFICATION BOX (REQUIRED BEFORE CHECK-IN) */}
+      {job.status === 'BOOKED' && (
+        <div className="p-5 bg-blue-50 border-2 border-blue-300 rounded-2xl space-y-3 animate-fadeIn">
+          <div className="flex items-center justify-between">
+            <h4 className="font-bold text-sm text-blue-900 flex items-center gap-2">
+              <QrCode className="w-4 h-4 text-blue-700" />
+              <span>Customer Drop-off Verification</span>
+            </h4>
+            <span className="text-xs font-bold text-blue-800">Counter Drop Off Required</span>
+          </div>
+          <p className="text-xs text-blue-800">
+            Ask the customer for their 6-digit Drop-off Code to verify device handover at the shop counter before recording check-in.
+          </p>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="text"
+              value={enteredDropOffCode}
+              onChange={(e) => setEnteredDropOffCode(e.target.value.toUpperCase())}
+              placeholder={`e.g. ${job.dropOffCode}`}
+              maxLength={7}
+              className="p-2.5 bg-white border border-blue-300 rounded-xl text-base font-mono font-bold text-slate-900 tracking-wider max-w-[180px] text-center focus:ring-2 focus:ring-blue-500 uppercase"
+            />
+            <button
+              onClick={handleVerifyDropOffCode}
+              disabled={isUpdating}
+              className="px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold rounded-xl cursor-pointer disabled:opacity-50"
+            >
+              Verify Drop-off Code
+            </button>
+            {dropOffSuccess && (
+              <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                <CheckCircle2 className="w-4 h-4" /> Drop-off verified! Status updated to Drop Off.
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* PICKED UP STATUS BANNER */}
       {job.status === 'PICKED_UP' && (

@@ -46,28 +46,32 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md', s
       Icon = DollarSign;
       break;
     case 'PAYMENT_CONFIRMED':
-    case 'BOOKED':
       label = 'Payment Confirmed';
       bg = 'bg-emerald-50 text-emerald-800 border-emerald-200';
       Icon = ShieldCheck;
       break;
+    case 'BOOKED':
+      label = 'Booked';
+      bg = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+      Icon = ShieldCheck;
+      break;
     case 'DEVICE_DROPPED_OFF':
-      label = 'Dropped Off at Shop';
+      label = 'Drop Off';
       bg = 'bg-purple-50 text-purple-700 border-purple-200';
       Icon = Truck;
       break;
     case 'DEVICE_RECEIVED':
-      label = 'Checked In at Shop';
+      label = 'Checked In';
       bg = 'bg-blue-50 text-blue-800 border-blue-200';
       Icon = PackageCheck;
       break;
     case 'DIAGNOSING':
-      label = 'Diagnostic Scan';
+      label = 'Diagnosis';
       bg = 'bg-sky-50 text-sky-800 border-sky-200';
       Icon = Wrench;
       break;
     case 'REPAIR_IN_PROGRESS':
-      label = 'Repair in Progress';
+      label = 'Repair';
       bg = 'bg-indigo-50 text-indigo-800 border-indigo-200';
       Icon = Wrench;
       break;
@@ -82,12 +86,12 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md', s
       Icon = CheckCircle2;
       break;
     case 'PICKED_UP':
-      label = 'Phone Picked Up';
+      label = 'Picked Up';
       bg = 'bg-slate-100 text-slate-800 border-slate-300';
       Icon = CheckCircle2;
       break;
     case 'COMPLETED':
-      label = 'Repair Complete & Warranty Active';
+      label = 'Completed';
       bg = 'bg-emerald-100 text-emerald-900 border-emerald-300 font-medium';
       Icon = ShieldCheck;
       break;

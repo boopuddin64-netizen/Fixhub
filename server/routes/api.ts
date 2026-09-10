@@ -2028,6 +2028,25 @@ apiRouter.post('/jobs/:id/additional-diagnosis/respond', requireAuth, requireRol
   return res.json(result);
 });
 
+apiRouter.post('/jobs/:id/verify-dropoff', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
+  const { dropOffCode } = req.body;
+  if (!isNonEmptyString(dropOffCode)) {
+    return res.status(400).json({ error: 'Customer drop-off code is required.' });
+  }
+
+  const result = RepairWorkflowService.verifyDropOff({
+    jobId: req.params.id,
+    technicianId: req.user!.id,
+    dropOffCode: sanitizeString(dropOffCode, 30),
+  });
+
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+
+  return res.json(result);
+});
+
 apiRouter.post('/jobs/:id/verify-pickup', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
   const { pickupCode } = req.body;
   if (!isNonEmptyString(pickupCode)) {

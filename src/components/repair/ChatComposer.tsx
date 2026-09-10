@@ -205,7 +205,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
         {stage === 'location' && (
           <div className="flex items-center justify-between gap-3 animate-fadeIn">
             <div className="min-w-0">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Target Repair Hub</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Your Location</p>
               <p className="text-xs font-bold text-slate-800 truncate">
                 {location?.area || location?.city || location?.address || 'Choose repair area'}
               </p>
@@ -217,7 +217,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
               onClick={onAdvanceStage}
               className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs sm:text-sm font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed shrink-0"
             >
-              <span>Confirm Location</span>
+              <span>Set your location</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -228,7 +228,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
           <div className="flex items-center justify-between gap-3 animate-fadeIn">
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span className="hidden sm:inline">Protected by Fix Hub Escrow</span>
+              <span className="hidden sm:inline">Protected by Fixhub Escrow</span>
               <span className="sm:hidden">Escrow Protected</span>
             </div>
 
@@ -241,12 +241,12 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Submitting...</span>
+                  <span>Sending Request...</span>
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Submit Request</span>
+                  <span>Send Repair Request</span>
                 </>
               )}
             </button>
@@ -257,7 +257,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
         {stage === 'submitting' && (
           <div className="flex items-center justify-center gap-2 py-1 text-xs text-slate-500 animate-pulse">
             <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-            <span>Broadcasting request to verified local repair labs...</span>
+            <span>Notifying verified local repair technicians...</span>
           </div>
         )}
 

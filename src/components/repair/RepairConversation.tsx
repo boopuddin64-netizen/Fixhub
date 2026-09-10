@@ -382,35 +382,24 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight">
-                  Fix Hub Repair Assistant
+                  Fixhub Repair Assistant
                 </h2>
                 <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" title="Verified Assistant" />
               </div>
               <p className="text-[11px] text-slate-500 font-medium">
                 {stage === 'review'
-                  ? 'Final review before dispatch'
+                  ? 'Review your repair request'
                   : stage === 'submitting'
                   ? 'Submitting request...'
                   : stage === 'submitted'
                   ? 'Request confirmed'
-                  : 'Guided phone repair intake'}
+                  : 'Repair request intake'}
               </p>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Quick Return to Review if user was previously at review and jumped back to edit */}
-          {hasVisitedReview && stage !== 'review' && stage !== 'submitting' && stage !== 'submitted' && (
-            <button
-              type="button"
-              onClick={() => setStage('review')}
-              className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl transition-colors cursor-pointer border border-blue-200"
-            >
-              <span>Return to Review →</span>
-            </button>
-          )}
-
           <button
             type="button"
             onClick={onCancel}
@@ -434,7 +423,7 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
           {/* ========================================================= */}
           <RepairMessage
             sender="assistant"
-            summaryText="Hello! Welcome to Fix Hub. Which device needs repair today?"
+            summaryText="Hello! Welcome to Fixhub. Which device needs repair today?"
           />
 
           {/* If actively editing or on device step */}
@@ -501,9 +490,9 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
               {stage !== 'issues' && selectedIssueIds.length > 0 && (
                 <RepairMessage
                   sender="customer"
-                  title="Reported Problems"
+                  title="Problem"
                   type="issues"
-                  summaryText={`${selectedIssueIds.length} problem${selectedIssueIds.length > 1 ? 's' : ''} diagnosed`}
+                  summaryText={`${selectedIssueIds.length} problem${selectedIssueIds.length > 1 ? 's' : ''} reported`}
                   badges={selectedIssuesBadges}
                   onEdit={() => setStage('issues')}
                 />
@@ -519,7 +508,7 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
             <>
               <RepairMessage
                 sender="assistant"
-                summaryText="Anything else happening? Provide any extra details about the symptoms or how the damage occurred."
+                summaryText="Anything else happening? Provide any extra details about how the damage occurred or what is happening."
               />
 
               {stage === 'description' && (
@@ -535,11 +524,11 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
               {stage !== 'description' && isStagePast('issues') && (
                 <RepairMessage
                   sender="customer"
-                  title="Symptom Details"
+                  title="Description"
                   type="description"
                   summaryText={
                     description.trim() ||
-                    (otherDescription ? `Other: ${otherDescription}` : 'No additional symptoms reported')
+                    (otherDescription ? `Other: ${otherDescription}` : 'No additional description reported')
                   }
                   onEdit={() => setStage('description')}
                 />
@@ -577,7 +566,7 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
               {stage !== 'evidence' && isStagePast('description') && (
                 <RepairMessage
                   sender="customer"
-                  title="Attached Evidence"
+                  title="Photos & Voice Note"
                   type="evidence"
                   summaryText={
                     photos.length > 0 || voiceNoteUrl
@@ -601,7 +590,7 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
             <>
               <RepairMessage
                 sender="assistant"
-                summaryText="Where will you take the device for repair? We'll match you with verified repair labs closest to you."
+                summaryText="Where will you take the device for repair? We'll match you with verified repair shops closest to you."
               />
 
               {stage === 'location' && (
@@ -617,7 +606,7 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
               {stage !== 'location' && location && isStagePast('evidence') && (
                 <RepairMessage
                   sender="customer"
-                  title="Repair Location"
+                  title="Your Location"
                   type="location"
                   summaryText={location.address || location.area || location.city || 'Location confirmed'}
                   locationDetails={{
@@ -669,7 +658,7 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
             <div ref={activeStepRef}>
               <RepairMessage
                 sender="assistant"
-                summaryText="Connecting to Fix Hub repair network..."
+                summaryText="Connecting to Fixhub repair network..."
               >
                 <div className="mt-2">
                   <RepairSubmitting />

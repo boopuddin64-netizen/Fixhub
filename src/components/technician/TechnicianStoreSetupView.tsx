@@ -203,7 +203,7 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
         </div>
 
         <h1 className="text-xl sm:text-2xl font-black text-white">
-          Configure Your Fix Hub Workshop & Parts Catalog
+          Configure Your Fixhub Workshop & Parts Catalog
         </h1>
         <p className="text-xs sm:text-sm text-indigo-200/80 max-w-2xl leading-relaxed">
           Set up your operating hours, verify your bank account for repair payouts, and list your stock to start receiving nearby repair requests.

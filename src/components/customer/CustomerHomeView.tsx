@@ -564,7 +564,7 @@ export const CustomerHomeView: React.FC<CustomerHomeViewProps> = ({
         </div>
       </div>
 
-      {/* Fix Hub Trust Pillars */}
+      {/* Fixhub Trust Pillars */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-1.5">
           <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">

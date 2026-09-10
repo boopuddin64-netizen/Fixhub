@@ -484,6 +484,13 @@ export class ApiClient {
     });
   }
 
+  public static verifyDropOff(jobId: string, dropOffCode: string) {
+    return this.request<{ success: boolean; job?: any; error?: string }>(`/jobs/${jobId}/verify-dropoff`, {
+      method: 'POST',
+      body: JSON.stringify({ dropOffCode }),
+    });
+  }
+
   public static verifyPickup(jobId: string, pickupCode: string) {
     return this.request<{ success: boolean; job?: any; error?: string }>(`/jobs/${jobId}/verify-pickup`, {
       method: 'POST',

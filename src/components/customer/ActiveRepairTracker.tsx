@@ -44,12 +44,74 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
   const [actionError, setActionError] = useState<string | null>(null);
 
   const steps = [
-    { label: 'Request & Quote', done: true },
-    { label: 'Payment Confirmed', done: job.status !== 'REQUESTED' && job.status !== 'QUOTING' && job.status !== 'QUOTE_ACCEPTED' && job.status !== 'PAYMENT_PENDING' },
-    { label: 'Device Intake', done: ['DEVICE_RECEIVED', 'DIAGNOSING', 'REPAIR_IN_PROGRESS', 'ADDITIONAL_DIAGNOSIS', 'READY_FOR_PICKUP', 'PICKED_UP', 'COMPLETED'].includes(job.status) },
-    { label: 'Repair & Parts', done: ['REPAIR_IN_PROGRESS', 'READY_FOR_PICKUP', 'PICKED_UP', 'COMPLETED'].includes(job.status) },
-    { label: 'Ready for Pickup', done: ['READY_FOR_PICKUP', 'PICKED_UP', 'COMPLETED'].includes(job.status) },
-    { label: 'Complete & Warranty', done: job.status === 'COMPLETED' },
+    {
+      label: 'Booked',
+      done: [
+        'BOOKED',
+        'DEVICE_DROPPED_OFF',
+        'DEVICE_RECEIVED',
+        'DIAGNOSING',
+        'REPAIR_IN_PROGRESS',
+        'ADDITIONAL_DIAGNOSIS',
+        'READY_FOR_PICKUP',
+        'PICKED_UP',
+        'COMPLETED',
+      ].includes(job.status),
+    },
+    {
+      label: 'Drop Off',
+      done: [
+        'DEVICE_DROPPED_OFF',
+        'DEVICE_RECEIVED',
+        'DIAGNOSING',
+        'REPAIR_IN_PROGRESS',
+        'ADDITIONAL_DIAGNOSIS',
+        'READY_FOR_PICKUP',
+        'PICKED_UP',
+        'COMPLETED',
+      ].includes(job.status),
+    },
+    {
+      label: 'Checked In',
+      done: [
+        'DEVICE_RECEIVED',
+        'DIAGNOSING',
+        'REPAIR_IN_PROGRESS',
+        'ADDITIONAL_DIAGNOSIS',
+        'READY_FOR_PICKUP',
+        'PICKED_UP',
+        'COMPLETED',
+      ].includes(job.status),
+    },
+    {
+      label: 'Diagnosis & Repair',
+      done: [
+        'REPAIR_IN_PROGRESS',
+        'ADDITIONAL_DIAGNOSIS',
+        'READY_FOR_PICKUP',
+        'PICKED_UP',
+        'COMPLETED',
+      ].includes(job.status),
+    },
+    {
+      label: 'Ready for Pickup',
+      done: [
+        'READY_FOR_PICKUP',
+        'PICKED_UP',
+        'COMPLETED',
+      ].includes(job.status),
+    },
+    {
+      label: 'Picked Up',
+      done: [
+        'PICKED_UP',
+        'COMPLETED',
+      ].includes(job.status),
+    },
+    {
+      label: 'Warranty',
+      done: job.status === 'COMPLETED',
+    },
   ];
 
   const handleAdditionalDiagnosisResponse = async (approved: boolean) => {
@@ -110,26 +172,30 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
               className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl text-xs font-bold border border-slate-700 transition-colors cursor-pointer"
             >
               <QrCode className="w-4 h-4 text-cyan-400" />
-              <span>Handoff QR / Code</span>
+              <span>
+                {job.status === 'READY_FOR_PICKUP' || job.status === 'PICKED_UP'
+                  ? 'Pickup Code'
+                  : 'Drop-off Code'}
+              </span>
             </button>
             <button
               onClick={onOpenChat}
               className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 transition-colors cursor-pointer"
             >
               <MessageSquare className="w-4 h-4" />
-              <span>Chat Tech</span>
+              <span>Chat</span>
             </button>
           </div>
         </div>
 
         {/* Multi-step Visual Tracker */}
         <div className="pt-3 border-t border-slate-800">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3">Live Progression</p>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center text-xs">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3">Repair Progress</p>
+          <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 text-center text-xs">
             {steps.map((s, idx) => (
               <div
                 key={idx}
-                className={`p-2.5 rounded-xl border transition-all ${
+                className={`p-2 rounded-xl border transition-all ${
                   s.done
                     ? 'border-cyan-500/40 bg-cyan-950/40 text-cyan-300 font-semibold'
                     : 'border-slate-800 bg-slate-900/60 text-slate-500 font-normal'
@@ -137,12 +203,12 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
               >
                 <div className="flex items-center justify-center mb-1">
                   {s.done ? (
-                    <CheckCircle2 className="w-4 h-4 text-cyan-400" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
                   ) : (
-                    <div className="w-3 h-3 rounded-full border border-slate-600" />
+                    <div className="w-2.5 h-2.5 rounded-full border border-slate-600" />
                   )}
                 </div>
-                <span className="text-[10px] leading-tight block">{s.label}</span>
+                <span className="text-[9px] sm:text-[10px] leading-tight block">{s.label}</span>
               </div>
             ))}
           </div>
@@ -153,6 +219,42 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
         <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>{actionError}</span>
+        </div>
+      )}
+
+      {/* DROP-OFF BANNER (WHEN JOB IS BOOKED) */}
+      {job.status === 'BOOKED' && (
+        <div className="p-6 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-xl space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <span className="inline-block px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[11px] font-bold uppercase tracking-wider mb-1">
+                Drop Off Required
+              </span>
+              <h3 className="text-lg font-extrabold text-white">
+                Deliver Your Device to the Shop
+              </h3>
+              <p className="text-xs text-blue-100 mt-1 max-w-lg leading-relaxed">
+                Take your phone to {technician?.businessName || 'the shop'}. Show your 6-digit Drop-off Code at the counter so the technician can verify receipt before check-in.
+              </p>
+            </div>
+            <div className="bg-white/10 p-3.5 rounded-xl text-center border border-white/20 shrink-0">
+              <span className="text-[10px] uppercase font-bold text-blue-100 block">Drop-off Code</span>
+              <span className="text-xl font-mono font-black text-white tracking-wider">{job.dropOffCode}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DEVICE DROPPED OFF BANNER */}
+      {job.status === 'DEVICE_DROPPED_OFF' && (
+        <div className="p-5 rounded-2xl bg-purple-50 border-2 border-purple-200 text-purple-950 space-y-2">
+          <div className="flex items-center gap-2 text-purple-900 font-bold text-sm">
+            <CheckCircle2 className="w-5 h-5 text-purple-600" />
+            <span>Drop Off Verified</span>
+          </div>
+          <p className="text-xs text-purple-800 leading-relaxed">
+            Your device was handed over and the technician verified your Drop-off Code. Technician check-in and condition assessment is starting shortly.
+          </p>
         </div>
       )}
 
@@ -194,28 +296,43 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
         </div>
       )}
 
-      {/* READY FOR PICKUP / PICKED UP BANNER & ACTION */}
-      {(job.status === 'READY_FOR_PICKUP' || job.status === 'PICKED_UP') && (
-        <div className="p-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-xl space-y-4">
+      {/* READY FOR PICKUP BANNER */}
+      {job.status === 'READY_FOR_PICKUP' && (
+        <div className="p-6 rounded-2xl bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <span className="inline-block px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[11px] font-bold uppercase tracking-wider mb-1">
+                Ready for Pickup
+              </span>
+              <h3 className="text-lg font-extrabold text-white">
+                Your Device is Ready for Pickup!
+              </h3>
+              <p className="text-xs text-teal-100 mt-1 max-w-lg leading-relaxed">
+                Visit {technician?.businessName || 'the shop'} to test and collect your device. Present your Pickup Code to the technician at the counter.
+              </p>
+            </div>
+            <div className="bg-white/10 p-3.5 rounded-xl text-center border border-white/20 shrink-0">
+              <span className="text-[10px] uppercase font-bold text-teal-100 block">Pickup Code</span>
+              <span className="text-xl font-mono font-black text-white tracking-wider">{job.pickupCode}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PICKED UP BANNER & CONFIRM REPAIR ACTION */}
+      {job.status === 'PICKED_UP' && (
+        <div className="p-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-xl space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <span className="inline-block px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[11px] font-bold uppercase tracking-wider mb-1">
-                {job.status === 'PICKED_UP' ? 'Device Picked Up' : 'Ready for Pickup'}
+                Picked Up
               </span>
               <h3 className="text-lg font-extrabold text-white">
-                {job.status === 'PICKED_UP'
-                  ? 'Verify Repair & Complete'
-                  : 'Your Device is Ready for Pickup!'}
+                Inspect Device & Confirm Repair
               </h3>
               <p className="text-xs text-emerald-100 mt-1 max-w-lg leading-relaxed">
-                {job.status === 'PICKED_UP'
-                  ? 'Your device was handed over. Confirm repair completion below to release payment to the technician and activate your official warranty passport.'
-                  : `Visit the shop, present your Pickup Code (${job.pickupCode}), test your device, and tap below to complete and activate your warranty.`}
+                Your device has been handed over by the technician. Please test your screen, camera, and device functions. Tap Confirm Repair below to release payment to the technician and activate your official 90-day warranty.
               </p>
-            </div>
-            <div className="bg-white/10 p-3 rounded-xl text-center border border-white/20 shrink-0">
-              <span className="text-[10px] uppercase font-bold text-emerald-100 block">Pickup Code</span>
-              <span className="text-lg font-mono font-black text-white">{job.pickupCode}</span>
             </div>
           </div>
 
@@ -226,7 +343,7 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
             className="w-full py-3.5 bg-white hover:bg-slate-100 text-emerald-900 font-extrabold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
             <ShieldCheck className="w-5 h-5 text-emerald-600" />
-            <span>{isConfirmingPickup ? 'Releasing Payment & Activating Warranty...' : 'Confirm Completion & Activate Warranty'}</span>
+            <span>{isConfirmingPickup ? 'Releasing Payment & Activating Warranty...' : 'Confirm Repair'}</span>
           </button>
         </div>
       )}
@@ -238,7 +355,7 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
           <div className="flex items-center justify-between">
             <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
               <Camera className="w-4 h-4 text-blue-600" />
-              <span>Digital Intake & Condition Scan</span>
+              <span>Checked In Condition Report</span>
             </h4>
             {job.conditionReport && (
               <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
@@ -270,13 +387,13 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
 
               {job.conditionReport.technicianNotes && (
                 <p className="text-[11px] text-slate-500 italic bg-blue-50/50 p-2 rounded-lg">
-                  Tech Notes: {job.conditionReport.technicianNotes}
+                  Technician Remarks: {job.conditionReport.technicianNotes}
                 </p>
               )}
             </div>
           ) : (
             <p className="text-xs text-slate-400 py-3 text-center">
-              A physical condition scan will be logged when you drop off the device at the shop.
+              A physical condition report will be recorded when you drop off the device at the shop.
             </p>
           )}
         </div>
@@ -354,12 +471,12 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
         </div>
       )}
 
-      {/* Handoff QR & Short Codes Modal */}
+      {/* Drop-off & Pickup Verification Modal */}
       {showQrModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 text-center shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-base text-slate-900">Secure Handoff Verification</h3>
+              <h3 className="font-bold text-base text-slate-900">Verification Codes</h3>
               <button onClick={() => setShowQrModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
             </div>
 
@@ -383,7 +500,7 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
             </div>
 
             <p className="text-[11px] text-slate-500">
-              Present this screen or provide your 6-digit code to the technician during physical handoff.
+              Provide your Drop-off Code when delivering your device, and your Pickup Code when collecting your device.
             </p>
           </div>
         </div>

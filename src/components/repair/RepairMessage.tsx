@@ -40,14 +40,14 @@ export const RepairMessage: React.FC<RepairMessageProps> = ({
   if (sender === 'assistant') {
     return (
       <div className="flex items-start gap-3 max-w-[95%] sm:max-w-[88%] mr-auto animate-fadeIn">
-        {/* Fix Hub Assistant Avatar */}
+        {/* Fixhub Assistant Avatar */}
         <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5 border border-slate-800">
           <Shield className="w-4 h-4 text-cyan-400" />
         </div>
 
         <div className="space-y-1.5 flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-slate-800 tracking-tight">Fix Hub Assistant</span>
+            <span className="text-[11px] font-bold text-slate-800 tracking-tight">Fixhub Assistant</span>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" title="Online" />
             {timestamp && <span className="text-[10px] text-slate-400">{timestamp}</span>}
           </div>
