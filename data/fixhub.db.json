@@ -25,7 +25,7 @@
       "id": "usr_tech_1",
       "email": "technician@test.fixhub.local",
       "phone": "+234 802 555 0101",
-      "name": "Emeka Okafor",
+      "name": "Emeka Phone Labs & Micro-Soldering",
       "role": "technician",
       "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
       "createdAt": "2026-08-07T08:21:11.684Z",
@@ -65,8 +65,8 @@
   "customerProfiles": [
     {
       "userId": "usr_customer_1",
-      "totalRepairsCount": 2,
-      "activeRepairsCount": 1,
+      "totalRepairsCount": 3,
+      "activeRepairsCount": 0,
       "emergencyContactPhone": "+234 809 999 8888",
       "savedLocations": [
         {
@@ -121,8 +121,8 @@
       "businessName": "Emeka Phone Labs & Micro-Soldering",
       "bio": "Apple Certified & Samsung Master Technician with 8+ years specializing in micro-soldering, motherboard recovery, and OLED screen calibration.",
       "shopLocation": {
-        "lat": 6.5982,
-        "lng": 3.3438,
+        "lat": 6.5355,
+        "lng": 3.3644,
         "address": "Shop B12, Medical Road, Computer Village, Ikeja",
         "landmark": "Near Slot Building",
         "area": "Computer Village, Ikeja",
@@ -155,10 +155,10 @@
         "body_glass_damage"
       ],
       "availability": "AVAILABLE",
-      "rating": 4.9,
-      "reviewCount": 128,
-      "completedJobs": 214,
-      "quoteAccuracyScore": 98.4,
+      "rating": 5,
+      "reviewCount": 3,
+      "completedJobs": 215,
+      "quoteAccuracyScore": 99,
       "cancellationRate": 1.2,
       "averageResponseMinutes": 12,
       "trustScore": 96,
@@ -171,9 +171,9 @@
         "payoutVerified": true
       },
       "bankDetails": {
-        "bankName": "Guaranty Trust Bank (GTBank)",
-        "accountNumber": "0123456789",
-        "accountName": "Emeka Okafor Engineering Ltd",
+        "bankName": "OPay",
+        "accountNumber": "8076379368",
+        "accountName": "Promise Ledum Pagbara",
         "verified": true
       }
     },
@@ -7526,21 +7526,13 @@
       "canonicalIssueId": "other"
     }
   ],
-  "drafts": [
+  "drafts": [],
+  "repairRequests": [
     {
-      "id": "draft_1788701271740_1utm",
+      "id": "req_1789025632781_ga6x",
       "customerId": "usr_customer_1",
-      "updatedAt": "2026-09-06T15:50:19.960Z",
-      "deviceBrand": "Apple",
-      "deviceModel": "iPhone X",
-      "deviceModelId": "model_ipx",
-      "deviceType": "PHONE",
-      "catalogMatch": true,
-      "issues": [],
-      "otherDescription": "",
-      "description": "",
-      "photos": [],
-      "step": 1,
+      "customerName": "Tunde Adebayo",
+      "customerPhone": "+234 803 123 4567",
       "customerLocation": {
         "lat": 6.5964,
         "lng": 3.3421,
@@ -7548,11 +7540,106 @@
         "landmark": "Opposite Oshopey Plaza",
         "area": "Ikeja",
         "city": "Lagos",
-        "state": "Lagos State"
-      }
-    }
-  ],
-  "repairRequests": [
+        "state": "Lagos State",
+        "country": "Nigeria",
+        "source": "GPS"
+      },
+      "deviceBrand": "Apple",
+      "deviceModel": "iPhone 13",
+      "deviceModelId": "model_ip13",
+      "deviceType": "PHONE",
+      "catalogMatch": true,
+      "issues": [
+        "issue_screen_cracked",
+        "issue_screen_broken"
+      ],
+      "description": "Touch stops responding, screen flickers / lines, screen flickers / lines",
+      "photos": [
+        "https://images.unsplash.com/photo-1596742578443-7682ef5251cd?w=600&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1596742578443-7682ef5251cd?w=600&auto=format&fit=crop&q=80"
+      ],
+      "attachments": [],
+      "status": "BOOKED",
+      "quotesCount": 1,
+      "submittedAt": "2026-09-10T07:33:52.781Z",
+      "createdAt": "2026-09-10T07:33:52.781Z",
+      "updatedAt": "2026-09-10T07:38:00.826Z",
+      "selectedQuoteId": "quote_1789025816703_bgq7",
+      "selectedTechnicianId": "usr_tech_1"
+    },
+    {
+      "id": "req_1789025319816_4eai",
+      "customerId": "usr_customer_1",
+      "customerName": "Tunde Adebayo",
+      "customerPhone": "+234 803 123 4567",
+      "customerLocation": {
+        "lat": 6.5964,
+        "lng": 3.3421,
+        "address": "14 Allen Avenue, Ikeja",
+        "landmark": "Opposite Oshopey Plaza",
+        "area": "Ikeja",
+        "city": "Lagos",
+        "state": "Lagos State",
+        "country": "Nigeria",
+        "source": "GPS"
+      },
+      "deviceBrand": "Apple",
+      "deviceModel": "iPhone 13",
+      "deviceModelId": "model_ip13",
+      "deviceType": "PHONE",
+      "catalogMatch": true,
+      "issues": [
+        "issue_wont_turn_on",
+        "issue_battery_drains_quickly"
+      ],
+      "description": "Touch stops responding, screen flickers / lines, speaker crackles / no sound",
+      "photos": [
+        "https://images.unsplash.com/photo-1596742578443-7682ef5251cd?w=600&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1588508065123-287b28e013da?w=600&auto=format&fit=crop&q=80"
+      ],
+      "attachments": [],
+      "voiceNoteUrl": "/api/repairs/attachments/att_1789025305633_c6zcl.m4a",
+      "status": "MATCHING",
+      "quotesCount": 0,
+      "submittedAt": "2026-09-10T07:28:39.816Z",
+      "createdAt": "2026-09-10T07:28:39.816Z",
+      "updatedAt": "2026-09-10T07:29:39.563Z"
+    },
+    {
+      "id": "req_1789024779059_tt1c",
+      "customerId": "usr_customer_1",
+      "customerName": "Tunde Adebayo",
+      "customerPhone": "+234 803 123 4567",
+      "customerLocation": {
+        "lat": 6.5964,
+        "lng": 3.3421,
+        "address": "14 Allen Avenue, Ikeja",
+        "landmark": "Opposite Oshopey Plaza",
+        "area": "Ikeja",
+        "city": "Lagos",
+        "state": "Lagos State",
+        "country": "Nigeria",
+        "source": "GPS"
+      },
+      "deviceBrand": "Apple",
+      "deviceModel": "iPhone X",
+      "deviceModelId": "model_ipx",
+      "deviceType": "PHONE",
+      "catalogMatch": true,
+      "issues": [
+        "issue_screen_cracked",
+        "issue_screen_broken"
+      ],
+      "description": "Repair needed",
+      "photos": [],
+      "attachments": [],
+      "voiceNoteUrl": "/api/repairs/attachments/att_1789022427479_48qcf.m4a",
+      "status": "MATCHING",
+      "quotesCount": 0,
+      "submittedAt": "2026-09-10T07:19:39.059Z",
+      "createdAt": "2026-09-10T07:19:39.059Z",
+      "updatedAt": "2026-09-10T07:19:59.020Z"
+    },
     {
       "id": "req_1788701262954_n9jh",
       "customerId": "usr_customer_1",
@@ -7853,6 +7940,52 @@
       "notes": "Original Samsung Galaxy battery replacement with thermal pad reapplication.",
       "status": "ACCEPTED",
       "createdAt": "2026-08-07T08:21:11.684Z"
+    },
+    {
+      "id": "quote_1789025816703_bgq7",
+      "requestId": "req_1789025632781_ga6x",
+      "technicianId": "usr_tech_1",
+      "technicianName": "Emeka Phone Labs & Micro-Soldering",
+      "businessName": "Emeka Phone Labs & Micro-Soldering",
+      "technicianPhone": "+234 802 555 0101",
+      "technicianAvatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
+      "technicianRating": 4.9,
+      "technicianReviewsCount": 128,
+      "distanceKm": 7.2,
+      "items": [
+        {
+          "id": "qli_1789025816702_5d6y",
+          "inventoryItemId": "part_1",
+          "partNameSnapshot": "iPhone 13 OLED Display Panel (Original OEM)",
+          "qualitySnapshot": "ORIGINAL_OEM",
+          "unitPriceSnapshot": 75000,
+          "priceVersion": 1,
+          "quantity": 1,
+          "subtotal": 75000,
+          "skuSnapshot": "SKU-APPL-TKFO",
+          "brandSnapshot": "Apple",
+          "warrantyDaysSnapshot": 90
+        }
+      ],
+      "partsCost": 75000,
+      "laborCost": 12000,
+      "diagnosticCost": 0,
+      "otherCost": 0,
+      "totalAmount": 87000,
+      "estimatedTimeHours": 2,
+      "warrantyDays": 90,
+      "partsQuality": "ORIGINAL_OEM",
+      "notes": "Certified repair for Apple iPhone 13 with genuine bench testing and warranty protection.",
+      "limitationsOrConditions": "",
+      "expiresAt": "2026-09-17T07:36:56.703Z",
+      "status": "ACCEPTED",
+      "priceAuditMetadata": {
+        "requestCreatedAt": "2026-09-10T07:33:52.781Z",
+        "quoteCreatedAt": "2026-09-10T07:36:56.703Z",
+        "flaggedForPriceManipulation": false
+      },
+      "createdAt": "2026-09-10T07:36:56.703Z",
+      "updatedAt": "2026-09-10T07:37:35.411Z"
     }
   ],
   "repairJobs": [
@@ -7960,7 +8093,7 @@
       "issues": [
         "screen_damaged"
       ],
-      "status": "REPAIR_IN_PROGRESS",
+      "status": "READY_FOR_PICKUP",
       "dropOffCode": "FX-8492",
       "pickupCode": "PK-9314",
       "handoffQrToken": "tok_fixhub_hand_8492091",
@@ -8047,8 +8180,15 @@
           "timestamp": "2026-09-06T08:21:11.684Z",
           "actorRole": "technician",
           "note": "Installing Premium Hard OLED and water-seal gasket"
+        },
+        {
+          "status": "READY_FOR_PICKUP",
+          "timestamp": "2026-09-10T08:39:31.217Z",
+          "actorRole": "technician",
+          "note": "Device reassembled, tested, and ready for pickup"
         }
-      ]
+      ],
+      "readyForPickupAt": "2026-09-10T08:39:31.217Z"
     },
     {
       "id": "job_demo_completed",
@@ -8202,6 +8342,161 @@
           "actorRole": "customer"
         }
       ]
+    },
+    {
+      "id": "job_1789025855411_ba4f",
+      "bookingRef": "FH-817167",
+      "requestId": "req_1789025632781_ga6x",
+      "quoteId": "quote_1789025816703_bgq7",
+      "customerId": "usr_customer_1",
+      "technicianId": "usr_tech_1",
+      "deviceBrand": "Apple",
+      "deviceModel": "iPhone 13",
+      "issues": [
+        "issue_screen_cracked",
+        "issue_screen_broken"
+      ],
+      "status": "COMPLETED",
+      "dropOffCode": "FX-9802",
+      "pickupCode": "PK-5484",
+      "handoffQrToken": "tok_fixhub_1789025855411_8fzxph",
+      "originalQuoteAmount": 87000,
+      "finalAmount": 87000,
+      "platformFeeAmount": 7395,
+      "technicianPayoutAmount": 79605,
+      "partsUsed": [
+        {
+          "id": "partrec_1789025980872_zc38",
+          "partName": "iPhone 13 OLED Assembly (Hard OLED)",
+          "deviceModel": "Standard",
+          "quality": "PREMIUM_AFTERMARKET",
+          "priceNaira": 45000,
+          "warrantyDays": 90,
+          "installationTimestamp": "2026-09-10T07:39:40.872Z"
+        }
+      ],
+      "createdAt": "2026-09-10T07:37:35.411Z",
+      "statusHistory": [
+        {
+          "status": "REQUESTED",
+          "timestamp": "2026-09-10T07:33:52.781Z",
+          "actorRole": "customer"
+        },
+        {
+          "status": "QUOTING",
+          "timestamp": "2026-09-10T07:36:56.703Z",
+          "actorRole": "technician"
+        },
+        {
+          "status": "QUOTE_ACCEPTED",
+          "timestamp": "2026-09-10T07:37:35.411Z",
+          "actorRole": "customer",
+          "note": "Accepted quote from Emeka Phone Labs & Micro-Soldering (₦87,000)"
+        },
+        {
+          "status": "PAYMENT_PENDING",
+          "timestamp": "2026-09-10T07:37:35.411Z",
+          "actorRole": "customer"
+        },
+        {
+          "status": "PAYMENT_CONFIRMED",
+          "timestamp": "2026-09-10T07:38:00.826Z",
+          "actorRole": "customer",
+          "note": "Payment of ₦87,000 confirmed via Paystack (Ref: FXP-1789025864972-ZBVT80)."
+        },
+        {
+          "status": "BOOKED",
+          "timestamp": "2026-09-10T07:38:00.826Z",
+          "actorRole": "customer",
+          "note": "Repair booking confirmed. Awaiting physical device check-in."
+        },
+        {
+          "status": "DEVICE_DROPPED_OFF",
+          "timestamp": "2026-09-10T07:38:50.684Z",
+          "actorRole": "technician",
+          "note": "Customer drop-off code verified at shop counter. Device dropped off."
+        },
+        {
+          "status": "DEVICE_RECEIVED",
+          "timestamp": "2026-09-10T07:39:02.132Z",
+          "actorRole": "technician",
+          "note": "Device checked in and physical intake condition report recorded."
+        },
+        {
+          "status": "DIAGNOSING",
+          "timestamp": "2026-09-10T07:39:12.288Z",
+          "actorRole": "technician",
+          "note": "Started initial disassembly and diagnostic scan"
+        },
+        {
+          "status": "REPAIR_IN_PROGRESS",
+          "timestamp": "2026-09-10T07:39:30.589Z",
+          "actorRole": "technician",
+          "note": "Bench repair commenced"
+        },
+        {
+          "status": "READY_FOR_PICKUP",
+          "timestamp": "2026-09-10T07:40:09.381Z",
+          "actorRole": "technician",
+          "note": "Device reassembled, tested, and ready for pickup"
+        },
+        {
+          "status": "PICKED_UP",
+          "timestamp": "2026-09-10T07:41:28.814Z",
+          "actorRole": "technician",
+          "note": "Customer pickup code verified at shop counter. Device handed over to customer."
+        },
+        {
+          "status": "COMPLETED",
+          "timestamp": "2026-09-10T07:42:32.646Z",
+          "actorRole": "customer",
+          "note": "Customer inspected device and confirmed repair completion."
+        }
+      ],
+      "bookedAt": "2026-09-10T07:38:00.826Z",
+      "dropOffVerifiedAt": "2026-09-10T07:38:50.684Z",
+      "conditionReport": {
+        "timestamp": "2026-09-10T07:39:02.132Z",
+        "frontCondition": "CRACKED",
+        "backCondition": "MINOR_SCRATCHES",
+        "frameCondition": "PRISTINE",
+        "screenPowersOn": true,
+        "touchResponsive": true,
+        "cameraWorking": true,
+        "existingDamageNotes": "Intake confirmed in shop.",
+        "accessoriesReceived": [
+          "Phone only",
+          "Protective case"
+        ],
+        "photos": [
+          "https://images.unsplash.com/photo-1596742578443-7682ef5251cd?w=600&auto=format&fit=crop&q=80"
+        ],
+        "technicianNotes": "Intake confirmed in shop.",
+        "confirmedByCustomer": false
+      },
+      "receivedAt": "2026-09-10T07:39:02.132Z",
+      "repairStartedAt": "2026-09-10T07:39:30.589Z",
+      "readyForPickupAt": "2026-09-10T07:40:09.381Z",
+      "pickupVerifiedAt": "2026-09-10T07:41:28.814Z",
+      "completedAt": "2026-09-10T07:42:32.646Z",
+      "warranty": {
+        "id": "war_1789026152647_e7ds",
+        "repairJobId": "job_1789025855411_ba4f",
+        "deviceBrand": "Apple",
+        "deviceModel": "iPhone 13",
+        "coveredRepair": "issue_screen_cracked, issue_screen_broken",
+        "coveredRepairs": [
+          "issue_screen_cracked",
+          "issue_screen_broken"
+        ],
+        "technicianId": "usr_tech_1",
+        "technicianName": "Emeka Phone Labs & Micro-Soldering",
+        "periodDays": 90,
+        "startDate": "2026-09-10T07:42:32.646Z",
+        "endDate": "2026-12-09T07:42:32.647Z",
+        "terms": "Covers parts and workmanship defects for 90 days. Excludes physical drop impact or water immersion after repair date.",
+        "status": "ACTIVE"
+      }
     }
   ],
   "technicianParts": [
@@ -8215,7 +8510,30 @@
       "priceNaira": 75000,
       "inStockCount": 4,
       "warrantyDays": 90,
-      "photoUrl": "https://images.unsplash.com/photo-1588508065123-287b28e013da?w=400&auto=format&fit=crop&q=80"
+      "photoUrl": "https://images.unsplash.com/photo-1588508065123-287b28e013da?w=400&auto=format&fit=crop&q=80",
+      "unitPriceNaira": 75000,
+      "quantityOnHand": 4,
+      "stockQuantity": 4,
+      "quantityReserved": 1,
+      "quantityAvailable": 3,
+      "status": "IN_STOCK",
+      "priceVersion": 1,
+      "priceHistory": [
+        {
+          "priceNaira": 75000,
+          "version": 1,
+          "changedAt": "2026-09-10T06:31:32.950Z",
+          "reason": "Initial inventory registration"
+        }
+      ],
+      "compatibleModels": [
+        "iPhone 13"
+      ],
+      "brand": "Apple",
+      "partName": "iPhone 13 OLED Display Panel (Original OEM)",
+      "sku": "SKU-APPL-TKFO",
+      "currency": "NGN",
+      "updatedAt": "2026-09-10T07:37:35.411Z"
     },
     {
       "id": "part_2",
@@ -8226,7 +8544,29 @@
       "quality": "PREMIUM_AFTERMARKET",
       "priceNaira": 48000,
       "inStockCount": 8,
-      "warrantyDays": 60
+      "warrantyDays": 60,
+      "unitPriceNaira": 48000,
+      "quantityOnHand": 8,
+      "stockQuantity": 8,
+      "quantityReserved": 0,
+      "quantityAvailable": 8,
+      "status": "IN_STOCK",
+      "priceVersion": 1,
+      "priceHistory": [
+        {
+          "priceNaira": 48000,
+          "version": 1,
+          "changedAt": "2026-09-10T06:31:32.950Z",
+          "reason": "Initial inventory registration"
+        }
+      ],
+      "compatibleModels": [
+        "iPhone 13"
+      ],
+      "brand": "Apple",
+      "partName": "iPhone 13 Premium Hard OLED Screen",
+      "sku": "SKU-APPL-NYFM",
+      "currency": "NGN"
     },
     {
       "id": "part_3",
@@ -8237,7 +8577,29 @@
       "quality": "ORIGINAL_OEM",
       "priceNaira": 24000,
       "inStockCount": 6,
-      "warrantyDays": 90
+      "warrantyDays": 90,
+      "unitPriceNaira": 24000,
+      "quantityOnHand": 6,
+      "stockQuantity": 6,
+      "quantityReserved": 0,
+      "quantityAvailable": 6,
+      "status": "IN_STOCK",
+      "priceVersion": 1,
+      "priceHistory": [
+        {
+          "priceNaira": 24000,
+          "version": 1,
+          "changedAt": "2026-09-10T06:31:32.950Z",
+          "reason": "Initial inventory registration"
+        }
+      ],
+      "compatibleModels": [
+        "iPhone 13"
+      ],
+      "brand": "Apple",
+      "partName": "iPhone 13 Original Capacity Battery (3240 mAh)",
+      "sku": "SKU-APPL-I0O8",
+      "currency": "NGN"
     },
     {
       "id": "part_4",
@@ -8248,7 +8610,29 @@
       "quality": "ORIGINAL_OEM",
       "priceNaira": 88000,
       "inStockCount": 3,
-      "warrantyDays": 90
+      "warrantyDays": 90,
+      "unitPriceNaira": 88000,
+      "quantityOnHand": 3,
+      "stockQuantity": 3,
+      "quantityReserved": 0,
+      "quantityAvailable": 3,
+      "status": "IN_STOCK",
+      "priceVersion": 1,
+      "priceHistory": [
+        {
+          "priceNaira": 88000,
+          "version": 1,
+          "changedAt": "2026-09-10T06:31:32.950Z",
+          "reason": "Initial inventory registration"
+        }
+      ],
+      "compatibleModels": [
+        "Galaxy S23"
+      ],
+      "brand": "Samsung",
+      "partName": "Galaxy S23 Dynamic AMOLED 2X Screen Assembly",
+      "sku": "SKU-SAMS-AN15",
+      "currency": "NGN"
     },
     {
       "id": "part_5",
@@ -8322,6 +8706,30 @@
       "paymentMethod": "BANK_TRANSFER",
       "paidAt": "2026-08-07T08:21:11.684Z",
       "releasedAt": "2026-09-01T08:21:11.684Z"
+    },
+    {
+      "id": "pay_1789025864972_q84i9",
+      "repairId": "job_1789025855411_ba4f",
+      "customerId": "usr_customer_1",
+      "technicianId": "usr_tech_1",
+      "quoteId": "quote_1789025816703_bgq7",
+      "amountNaira": 87000,
+      "platformFeeNaira": 7395,
+      "technicianPayoutNaira": 79605,
+      "currency": "NGN",
+      "provider": "PAYSTACK_SANDBOX",
+      "status": "RELEASED_TO_TECHNICIAN",
+      "transactionRef": "FXP-1789025864972-ZBVT80",
+      "providerReference": "FXP-1789025864972-ZBVT80",
+      "idempotencyKey": "idemp_pay_1789025864509_3grsr1",
+      "paymentMethod": "BANK_TRANSFER",
+      "authorizationUrl": "https://ais-dev-hltfdaanjtt6gdh7jqic64-110028292431.europe-west1.run.app/payment/checkout?reference=FXP-1789025864972-ZBVT80&amount=8700000",
+      "accessCode": "acc_fxp1789025864972zbvt80",
+      "createdAt": "2026-09-10T07:37:44.972Z",
+      "updatedAt": "2026-09-10T07:38:00.826Z",
+      "paidAt": "2026-09-10T07:38:00.826Z",
+      "channel": "card",
+      "releasedAt": "2026-09-10T07:42:32.647Z"
     }
   ],
   "warranties": [
@@ -8340,6 +8748,24 @@
       "startDate": "2026-09-01T08:21:11.684Z",
       "endDate": "2026-11-30T08:21:11.685Z",
       "terms": "Covers battery failure, abnormal discharge, or swelling. Excludes water damage or physical puncture.",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "war_1789026152647_e7ds",
+      "repairJobId": "job_1789025855411_ba4f",
+      "deviceBrand": "Apple",
+      "deviceModel": "iPhone 13",
+      "coveredRepair": "issue_screen_cracked, issue_screen_broken",
+      "coveredRepairs": [
+        "issue_screen_cracked",
+        "issue_screen_broken"
+      ],
+      "technicianId": "usr_tech_1",
+      "technicianName": "Emeka Phone Labs & Micro-Soldering",
+      "periodDays": 90,
+      "startDate": "2026-09-10T07:42:32.646Z",
+      "endDate": "2026-12-09T07:42:32.647Z",
+      "terms": "Covers parts and workmanship defects for 90 days. Excludes physical drop impact or water immersion after repair date.",
       "status": "ACTIVE"
     }
   ],
@@ -8367,6 +8793,18 @@
       "verifiedPurchase": true,
       "repairSummary": "iPhone 12 Screen Replacement",
       "createdAt": "2026-08-07T08:21:11.684Z"
+    },
+    {
+      "id": "rev_1789026160267_e1p0",
+      "repairId": "job_1789025855411_ba4f",
+      "customerId": "usr_customer_1",
+      "customerName": "Tunde Adebayo",
+      "technicianId": "usr_tech_1",
+      "rating": 5,
+      "comment": "",
+      "verifiedPurchase": true,
+      "repairSummary": "Apple iPhone 13 (issue_screen_cracked, issue_screen_broken)",
+      "createdAt": "2026-09-10T07:42:40.267Z"
     }
   ],
   "auditLogs": [
@@ -8471,9 +8909,652 @@
       },
       "ipAddress": "127.0.0.1",
       "timestamp": "2026-09-06T13:27:42.955Z"
+    },
+    {
+      "id": "audit_1789024779059_ccg5z",
+      "actorId": "usr_customer_1",
+      "actorRole": "customer",
+      "action": "REPAIR_REQUEST_CREATED",
+      "resourceType": "REPAIR_REQUEST",
+      "resourceId": "req_1789024779059_tt1c",
+      "details": {
+        "deviceBrand": "Apple",
+        "deviceModel": "iPhone X",
+        "issuesCount": 2
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:19:39.059Z"
+    },
+    {
+      "id": "audit_1789024799021_5idr8",
+      "actorId": "usr_customer_1",
+      "actorRole": "customer",
+      "action": "TECHNICIAN_DISCOVERY_TRIGGERED",
+      "resourceType": "REPAIR_REQUEST",
+      "resourceId": "req_1789024779059_tt1c",
+      "details": {
+        "matchedCount": 3
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:19:59.021Z"
+    },
+    {
+      "id": "audit_1789024813676_a8zvn",
+      "actorId": "usr_customer_1",
+      "actorRole": "customer",
+      "action": "TECHNICIAN_DISCOVERY_TRIGGERED",
+      "resourceType": "REPAIR_REQUEST",
+      "resourceId": "req_1789024779059_tt1c",
+      "details": {
+        "matchedCount": 3
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:20:13.676Z"
+    },
+    {
+      "id": "audit_1789024820653_ef6ei",
+      "actorId": "usr_customer_1",
+      "actorRole": "customer",
+      "action": "TECHNICIAN_DISCOVERY_TRIGGERED",
+      "resourceType": "REPAIR_REQUEST",
+      "resourceId": "req_1789024779059_tt1c",
+      "details": {
+        "matchedCount": 3
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:20:20.653Z"
+    },
+    {
+      "id": "audit_1789024836482_vofyz",
+      "actorId": "usr_customer_1",
+      "actorRole": "customer",
+      "action": "TECHNICIAN_DISCOVERY_TRIGGERED",
+      "resourceType": "REPAIR_REQUEST",
+      "resourceId": "req_1789024779059_tt1c",
+      "details": {
+        "matchedCount": 3
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:20:36.482Z"
+    },
+    {
+      "id": "audit_1789025319816_wugg5",
+      "actorId": "usr_customer_1",
+      "actorRole": "customer",
+      "action": "REPAIR_REQUEST_CREATED",
+      "resourceType": "REPAIR_REQUEST",
+      "resourceId": "req_1789025319816_4eai",
+      "details": {
+        "deviceBrand": "Apple",
+        "deviceModel": "iPhone 13",
+        "issuesCount": 2
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:28:39.816Z"
+    },
+    {
+      "id": "audit_1789025379563_a59xv",
+      "actorId": "usr_customer_1",
+      "actorRole": "customer",
+      "action": "TECHNICIAN_DISCOVERY_TRIGGERED",
+      "resourceType": "REPAIR_REQUEST",
+      "resourceId": "req_1789025319816_4eai",
+      "details": {
+        "matchedCount": 3
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:29:39.563Z"
+    },
+    {
+      "id": "audit_1789025632781_hnw33",
+      "actorId": "usr_customer_1",
+      "actorRole": "customer",
+      "action": "REPAIR_REQUEST_CREATED",
+      "resourceType": "REPAIR_REQUEST",
+      "resourceId": "req_1789025632781_ga6x",
+      "details": {
+        "deviceBrand": "Apple",
+        "deviceModel": "iPhone 13",
+        "issuesCount": 2
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:33:52.781Z"
+    },
+    {
+      "id": "audit_1789025645013_zqpne",
+      "actorId": "usr_customer_1",
+      "actorRole": "customer",
+      "action": "TECHNICIAN_DISCOVERY_TRIGGERED",
+      "resourceType": "REPAIR_REQUEST",
+      "resourceId": "req_1789025632781_ga6x",
+      "details": {
+        "matchedCount": 3
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:34:05.013Z"
+    },
+    {
+      "id": "audit_1789025816717_c9cr4",
+      "actorId": "usr_tech_1",
+      "actorRole": "technician",
+      "action": "QUOTE_SUBMITTED",
+      "resourceType": "REPAIR_QUOTE",
+      "resourceId": "quote_1789025816703_bgq7",
+      "details": {
+        "requestId": "req_1789025632781_ga6x",
+        "totalAmount": 87000,
+        "partsCost": 75000,
+        "laborCost": 12000,
+        "partsQuality": "ORIGINAL_OEM",
+        "lineItemsCount": 1
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:36:56.717Z"
+    },
+    {
+      "id": "audit_1789025855411_e4j4x",
+      "actorId": "usr_tech_1",
+      "actorRole": "technician",
+      "action": "INVENTORY_RESERVED",
+      "resourceType": "TECHNICIAN_INVENTORY",
+      "resourceId": "part_1",
+      "details": {
+        "jobId": "job_1789025855411_ba4f",
+        "quoteId": "quote_1789025816703_bgq7",
+        "sku": "SKU-APPL-TKFO",
+        "partName": "iPhone 13 OLED Display Panel (Original OEM)",
+        "reservedQuantity": 1,
+        "totalReserved": 1,
+        "remainingAvailable": 3
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:37:35.411Z"
+    },
+    {
+      "id": "audit_1789025855411_4828a",
+      "actorId": "usr_customer_1",
+      "actorRole": "customer",
+      "action": "QUOTE_ACCEPTED",
+      "resourceType": "REPAIR_JOB",
+      "resourceId": "job_1789025855411_ba4f",
+      "details": {
+        "quoteId": "quote_1789025816703_bgq7",
+        "totalAmount": 87000,
+        "bookingRef": "FH-817167"
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:37:35.411Z"
+    },
+    {
+      "id": "audit_1789025865241_29yh2",
+      "actorId": "usr_customer_1",
+      "actorRole": "customer",
+      "action": "PAYMENT_INITIALIZED",
+      "resourceType": "PAYMENT",
+      "resourceId": "pay_1789025864972_q84i9",
+      "details": {
+        "amountNaira": 87000,
+        "platformFeeNaira": 7395,
+        "technicianPayoutNaira": 79605,
+        "repairJobId": "job_1789025855411_ba4f",
+        "reference": "FXP-1789025864972-ZBVT80"
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:37:45.241Z"
+    },
+    {
+      "id": "audit_1789025880826_4fe1v",
+      "actorId": "usr_customer_1",
+      "actorRole": "customer",
+      "action": "PAYMENT_VERIFIED",
+      "resourceType": "PAYMENT",
+      "resourceId": "pay_1789025864972_q84i9",
+      "details": {
+        "amountNaira": 87000,
+        "platformFeeNaira": 7395,
+        "technicianPayoutNaira": 79605,
+        "providerReference": "FXP-1789025864972-ZBVT80",
+        "status": "SUCCESS"
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:38:00.826Z"
+    },
+    {
+      "id": "audit_1789025880827_st67m",
+      "actorId": "system",
+      "actorRole": "admin",
+      "action": "EARNINGS_CREATED",
+      "resourceType": "EARNINGS",
+      "resourceId": "earn_1789025880826_1n70v",
+      "details": {
+        "technicianId": "usr_tech_1",
+        "netEarningsNaira": 79605,
+        "status": "HELD"
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:38:00.827Z"
+    },
+    {
+      "id": "audit_1789025930684_lw709",
+      "actorId": "usr_tech_1",
+      "actorRole": "technician",
+      "action": "DEVICE_DROPPED_OFF",
+      "resourceType": "REPAIR_JOB",
+      "resourceId": "job_1789025855411_ba4f",
+      "details": {
+        "verifiedCode": "FX-9802"
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:38:50.684Z"
+    },
+    {
+      "id": "audit_1789025942132_ltx6u",
+      "actorId": "usr_tech_1",
+      "actorRole": "technician",
+      "action": "DEVICE_CHECKED_IN",
+      "resourceType": "REPAIR_JOB",
+      "resourceId": "job_1789025855411_ba4f",
+      "details": {
+        "previousStatus": "DEVICE_DROPPED_OFF",
+        "newStatus": "DEVICE_RECEIVED",
+        "frontCondition": "CRACKED",
+        "backCondition": "MINOR_SCRATCHES",
+        "frameCondition": "PRISTINE",
+        "screenPowersOn": true,
+        "intakeTimestamp": "2026-09-10T07:39:02.132Z"
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:39:02.132Z"
+    },
+    {
+      "id": "audit_1789025952288_88cjo",
+      "actorId": "usr_tech_1",
+      "actorRole": "technician",
+      "action": "STATUS_CHANGED_DIAGNOSING",
+      "resourceType": "REPAIR_JOB",
+      "resourceId": "job_1789025855411_ba4f",
+      "details": {
+        "previousStatus": "DEVICE_RECEIVED",
+        "newStatus": "DIAGNOSING",
+        "note": "Started initial disassembly and diagnostic scan"
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:39:12.288Z"
+    },
+    {
+      "id": "audit_1789025970589_47int",
+      "actorId": "usr_tech_1",
+      "actorRole": "technician",
+      "action": "STATUS_CHANGED_REPAIR_IN_PROGRESS",
+      "resourceType": "REPAIR_JOB",
+      "resourceId": "job_1789025855411_ba4f",
+      "details": {
+        "previousStatus": "DIAGNOSING",
+        "newStatus": "REPAIR_IN_PROGRESS",
+        "note": "Bench repair commenced"
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:39:30.589Z"
+    },
+    {
+      "id": "audit_1789025980872_cwppf",
+      "actorId": "usr_tech_1",
+      "actorRole": "technician",
+      "action": "PART_RECORDED",
+      "resourceType": "REPAIR_JOB",
+      "resourceId": "job_1789025855411_ba4f",
+      "details": {
+        "partName": "iPhone 13 OLED Assembly (Hard OLED)",
+        "quality": "PREMIUM_AFTERMARKET",
+        "priceNaira": 45000
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:39:40.872Z"
+    },
+    {
+      "id": "audit_1789026009381_a9xx6",
+      "actorId": "usr_tech_1",
+      "actorRole": "technician",
+      "action": "STATUS_CHANGED_READY_FOR_PICKUP",
+      "resourceType": "REPAIR_JOB",
+      "resourceId": "job_1789025855411_ba4f",
+      "details": {
+        "previousStatus": "REPAIR_IN_PROGRESS",
+        "newStatus": "READY_FOR_PICKUP",
+        "note": "Device reassembled, tested, and ready for pickup"
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:40:09.381Z"
+    },
+    {
+      "id": "audit_1789026088814_sx9di",
+      "actorId": "usr_tech_1",
+      "actorRole": "technician",
+      "action": "PICKUP_VERIFIED",
+      "resourceType": "REPAIR_JOB",
+      "resourceId": "job_1789025855411_ba4f",
+      "details": {
+        "pickupCodeEntered": "PK-5484"
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:41:28.814Z"
+    },
+    {
+      "id": "audit_1789026152647_kjvh3",
+      "actorId": "usr_customer_1",
+      "actorRole": "customer",
+      "action": "EARNINGS_MADE_ELIGIBLE_FOR_PAYOUT",
+      "resourceType": "PAYMENT",
+      "resourceId": "pay_1789025864972_q84i9",
+      "details": {
+        "totalAmountNaira": 87000,
+        "platformFeeNaira": 7395,
+        "payoutAmountNaira": 79605
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:42:32.647Z"
+    },
+    {
+      "id": "audit_1789026152647_8x42b",
+      "actorId": "system",
+      "actorRole": "admin",
+      "action": "QUOTE_ACCURACY_RECALCULATED",
+      "resourceType": "TECHNICIAN_PROFILE",
+      "resourceId": "usr_tech_1",
+      "details": {
+        "originalQuoteAmount": 87000,
+        "finalAmount": 87000,
+        "newAccuracyScore": 99,
+        "trustLevel": "HIGHLY_TRUSTED"
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:42:32.647Z"
+    },
+    {
+      "id": "audit_1789026152647_jd0rt",
+      "actorId": "usr_customer_1",
+      "actorRole": "customer",
+      "action": "REPAIR_COMPLETED_AND_CONFIRMED",
+      "resourceType": "REPAIR_JOB",
+      "resourceId": "job_1789025855411_ba4f",
+      "details": {
+        "warrantyId": "war_1789026152647_e7ds",
+        "finalAmount": 87000
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:42:32.647Z"
+    },
+    {
+      "id": "audit_1789026160267_fmrn5",
+      "actorId": "usr_customer_1",
+      "actorRole": "customer",
+      "action": "REVIEW_SUBMITTED",
+      "resourceType": "REVIEW",
+      "resourceId": "rev_1789026160267_e1p0",
+      "details": {
+        "rating": 5,
+        "technicianId": "usr_tech_1"
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T07:42:40.267Z"
+    },
+    {
+      "id": "audit_1789029571217_ssuyn",
+      "actorId": "usr_tech_1",
+      "actorRole": "technician",
+      "action": "STATUS_CHANGED_READY_FOR_PICKUP",
+      "resourceType": "REPAIR_JOB",
+      "resourceId": "job_demo_active",
+      "details": {
+        "previousStatus": "REPAIR_IN_PROGRESS",
+        "newStatus": "READY_FOR_PICKUP",
+        "note": "Device reassembled, tested, and ready for pickup"
+      },
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-09-10T08:39:31.217Z"
     }
   ],
   "notifications": [
+    {
+      "id": "notif_1789029571217_lwm2",
+      "userId": "usr_customer_1",
+      "title": "Your Phone is Ready for Pickup!",
+      "message": "Repairs on your Apple iPhone 13 are complete. Bring your pickup code (PK-9314) to the shop.",
+      "type": "STATUS_CHANGE",
+      "repairId": "job_demo_active",
+      "read": false,
+      "createdAt": "2026-09-10T08:39:31.217Z"
+    },
+    {
+      "id": "notif_1789026160267_oy8z",
+      "userId": "usr_tech_1",
+      "title": "New Customer Review!",
+      "message": "Tunde Adebayo rated your service 5 stars: \"Great job!\"",
+      "type": "STATUS_CHANGE",
+      "repairId": "job_1789025855411_ba4f",
+      "read": false,
+      "createdAt": "2026-09-10T07:42:40.267Z"
+    },
+    {
+      "id": "notif_1789026152647_dqqk",
+      "userId": "usr_customer_1",
+      "title": "Warranty Activated & Repair Complete!",
+      "message": "Your 90-day Fix Hub Warranty for Apple iPhone 13 is now active. You can rate your technician.",
+      "type": "WARRANTY",
+      "repairId": "job_1789025855411_ba4f",
+      "read": true,
+      "createdAt": "2026-09-10T07:42:32.647Z"
+    },
+    {
+      "id": "notif_1789026152647_1aew",
+      "userId": "usr_tech_1",
+      "title": "Earnings Eligible for Payout",
+      "message": "₦79,605 is now eligible for payout for repair #job_1789025855411_ba4f.",
+      "type": "PAYMENT",
+      "repairId": "job_1789025855411_ba4f",
+      "read": false,
+      "createdAt": "2026-09-10T07:42:32.647Z"
+    },
+    {
+      "id": "notif_1789026088814_upyx",
+      "userId": "usr_customer_1",
+      "title": "Device Handed Over / Picked Up",
+      "message": "Your Apple iPhone 13 was handed over at the shop. Please inspect your device and confirm completion in the app to activate your warranty.",
+      "type": "STATUS_CHANGE",
+      "repairId": "job_1789025855411_ba4f",
+      "read": true,
+      "createdAt": "2026-09-10T07:41:28.814Z"
+    },
+    {
+      "id": "notif_1789026009381_8hlj",
+      "userId": "usr_customer_1",
+      "title": "Your Phone is Ready for Pickup!",
+      "message": "Repairs on your Apple iPhone 13 are complete. Bring your pickup code (PK-5484) to the shop.",
+      "type": "STATUS_CHANGE",
+      "repairId": "job_1789025855411_ba4f",
+      "read": true,
+      "createdAt": "2026-09-10T07:40:09.381Z"
+    },
+    {
+      "id": "notif_1789025942132_6efm",
+      "userId": "usr_customer_1",
+      "title": "Phone Checked In at Shop",
+      "message": "Your Apple iPhone 13 has been received and verified by the technician. Digital check-in report is ready to view.",
+      "type": "STATUS_CHANGE",
+      "repairId": "job_1789025855411_ba4f",
+      "read": true,
+      "createdAt": "2026-09-10T07:39:02.132Z"
+    },
+    {
+      "id": "notif_1789025930684_69n1",
+      "userId": "usr_customer_1",
+      "title": "Device Dropped Off",
+      "message": "Your drop-off code has been verified by the technician. Your device is now dropped off at the shop.",
+      "type": "STATUS_CHANGE",
+      "repairId": "job_1789025855411_ba4f",
+      "read": true,
+      "createdAt": "2026-09-10T07:38:50.684Z"
+    },
+    {
+      "id": "notif_1789025880827_1gvx",
+      "userId": "usr_tech_1",
+      "title": "Repair Booking Confirmed",
+      "message": "Customer confirmed payment of ₦87,000 for Apple iPhone 13. Estimated net earnings: ₦79,605 (Held pending completion).",
+      "type": "PAYMENT",
+      "repairId": "job_1789025855411_ba4f",
+      "read": false,
+      "createdAt": "2026-09-10T07:38:00.827Z"
+    },
+    {
+      "id": "notif_1789025880827_iag6",
+      "userId": "usr_customer_1",
+      "title": "Payment Confirmed",
+      "message": "Your payment of ₦87,000 is confirmed. Your booking (Ref: FH-817167) is active.",
+      "type": "PAYMENT",
+      "repairId": "job_1789025855411_ba4f",
+      "read": true,
+      "createdAt": "2026-09-10T07:38:00.827Z"
+    },
+    {
+      "id": "notif_1789025865241_6p1g",
+      "userId": "usr_customer_1",
+      "title": "Payment Initialized",
+      "message": "Payment of ₦87,000 initiated for Apple iPhone 13 repair.",
+      "type": "PAYMENT",
+      "repairId": "job_1789025855411_ba4f",
+      "read": true,
+      "createdAt": "2026-09-10T07:37:45.241Z"
+    },
+    {
+      "id": "notif_1789025855411_nuya",
+      "userId": "usr_customer_1",
+      "title": "Booking Created!",
+      "message": "Your booking (Ref: FH-817167) with Emeka Phone Labs & Micro-Soldering has been created for ₦87,000. Next step: Secure escrow payment.",
+      "type": "STATUS_CHANGE",
+      "repairId": "job_1789025855411_ba4f",
+      "read": true,
+      "createdAt": "2026-09-10T07:37:35.411Z"
+    },
+    {
+      "id": "notif_1789025855411_o5g6",
+      "userId": "usr_tech_1",
+      "title": "Quote Accepted!",
+      "message": "Tunde Adebayo accepted your quote of ₦87,000 for Apple iPhone 13. Waiting for escrow payment.",
+      "type": "QUOTE",
+      "repairId": "job_1789025855411_ba4f",
+      "read": false,
+      "createdAt": "2026-09-10T07:37:35.411Z"
+    },
+    {
+      "id": "notif_1789025816717_l38l",
+      "userId": "usr_tech_1",
+      "title": "Quote Submitted Successfully",
+      "message": "Your quote of ₦87,000 for Apple iPhone 13 has been sent to the customer.",
+      "type": "QUOTE",
+      "repairId": "req_1789025632781_ga6x",
+      "read": false,
+      "createdAt": "2026-09-10T07:36:56.717Z"
+    },
+    {
+      "id": "notif_1789025816717_4a5t",
+      "userId": "usr_customer_1",
+      "title": "New Quote Received!",
+      "message": "Emeka Phone Labs & Micro-Soldering submitted a quote of ₦87,000 (90 days warranty) for your Apple iPhone 13.",
+      "type": "QUOTE",
+      "repairId": "req_1789025632781_ga6x",
+      "read": true,
+      "createdAt": "2026-09-10T07:36:56.717Z"
+    },
+    {
+      "id": "notif_1789025645013_junf",
+      "userId": "usr_tech_4",
+      "title": "New Nearby Repair Request",
+      "message": "New repair request: Apple iPhone 13 (issue_screen_cracked, issue_screen_broken) in Ikeja (~10.7 km). Submit a quote!",
+      "type": "QUOTE",
+      "repairId": "req_1789025632781_ga6x",
+      "read": false,
+      "createdAt": "2026-09-10T07:34:05.013Z"
+    },
+    {
+      "id": "notif_1789025645013_nkkx",
+      "userId": "usr_tech_3",
+      "title": "New Nearby Repair Request",
+      "message": "New repair request: Apple iPhone 13 (issue_screen_cracked, issue_screen_broken) in Ikeja (~9.5 km). Submit a quote!",
+      "type": "QUOTE",
+      "repairId": "req_1789025632781_ga6x",
+      "read": false,
+      "createdAt": "2026-09-10T07:34:05.013Z"
+    },
+    {
+      "id": "notif_1789025645013_myfj",
+      "userId": "usr_tech_1",
+      "title": "New Nearby Repair Request",
+      "message": "New repair request: Apple iPhone 13 (issue_screen_cracked, issue_screen_broken) in Ikeja (~7.2 km). Submit a quote!",
+      "type": "QUOTE",
+      "repairId": "req_1789025632781_ga6x",
+      "read": false,
+      "createdAt": "2026-09-10T07:34:05.013Z"
+    },
+    {
+      "id": "notif_1789025379563_hzdj",
+      "userId": "usr_tech_4",
+      "title": "New Nearby Repair Request",
+      "message": "New repair request: Apple iPhone 13 (issue_wont_turn_on, issue_battery_drains_quickly) in Ikeja (~10.7 km). Submit a quote!",
+      "type": "QUOTE",
+      "repairId": "req_1789025319816_4eai",
+      "read": false,
+      "createdAt": "2026-09-10T07:29:39.563Z"
+    },
+    {
+      "id": "notif_1789025379563_i5c6",
+      "userId": "usr_tech_3",
+      "title": "New Nearby Repair Request",
+      "message": "New repair request: Apple iPhone 13 (issue_wont_turn_on, issue_battery_drains_quickly) in Ikeja (~9.5 km). Submit a quote!",
+      "type": "QUOTE",
+      "repairId": "req_1789025319816_4eai",
+      "read": false,
+      "createdAt": "2026-09-10T07:29:39.563Z"
+    },
+    {
+      "id": "notif_1789025379563_v8s0",
+      "userId": "usr_tech_1",
+      "title": "New Nearby Repair Request",
+      "message": "New repair request: Apple iPhone 13 (issue_wont_turn_on, issue_battery_drains_quickly) in Ikeja (~7.2 km). Submit a quote!",
+      "type": "QUOTE",
+      "repairId": "req_1789025319816_4eai",
+      "read": false,
+      "createdAt": "2026-09-10T07:29:39.563Z"
+    },
+    {
+      "id": "notif_1789024799021_0443",
+      "userId": "usr_tech_4",
+      "title": "New Nearby Repair Request",
+      "message": "New repair request: Apple iPhone X (issue_screen_cracked, issue_screen_broken) in Ikeja (~10.7 km). Submit a quote!",
+      "type": "QUOTE",
+      "repairId": "req_1789024779059_tt1c",
+      "read": false,
+      "createdAt": "2026-09-10T07:19:59.021Z"
+    },
+    {
+      "id": "notif_1789024799021_fo0f",
+      "userId": "usr_tech_3",
+      "title": "New Nearby Repair Request",
+      "message": "New repair request: Apple iPhone X (issue_screen_cracked, issue_screen_broken) in Ikeja (~9.5 km). Submit a quote!",
+      "type": "QUOTE",
+      "repairId": "req_1789024779059_tt1c",
+      "read": false,
+      "createdAt": "2026-09-10T07:19:59.021Z"
+    },
+    {
+      "id": "notif_1789024799021_uau0",
+      "userId": "usr_tech_1",
+      "title": "New Nearby Repair Request",
+      "message": "New repair request: Apple iPhone X (issue_screen_cracked, issue_screen_broken) in Ikeja (~7.2 km). Submit a quote!",
+      "type": "QUOTE",
+      "repairId": "req_1789024779059_tt1c",
+      "read": false,
+      "createdAt": "2026-09-10T07:19:59.021Z"
+    },
     {
       "id": "notif_1788682871797_vemg",
       "userId": "usr_customer_1",
@@ -8481,7 +9562,7 @@
       "message": "Your Apple iPhone 13 has been received and verified by the technician. Digital check-in report is ready to view.",
       "type": "STATUS_CHANGE",
       "repairId": "job_demo_booked",
-      "read": false,
+      "read": true,
       "createdAt": "2026-09-06T08:21:11.797Z"
     },
     {
@@ -8491,7 +9572,7 @@
       "message": "Your payment of ₦55,000 is safely held in escrow. Take your phone to the technician to begin repair.",
       "type": "PAYMENT",
       "repairId": "job_demo_booked",
-      "read": false,
+      "read": true,
       "createdAt": "2026-09-06T08:21:11.796Z"
     },
     {
@@ -8521,7 +9602,7 @@
       "message": "Emeka Phone Labs has started installing parts for your iPhone 13.",
       "type": "STATUS_CHANGE",
       "repairId": "job_demo_active",
-      "read": false,
+      "read": true,
       "createdAt": "2026-09-06T08:21:11.684Z"
     },
     {
@@ -8555,5 +9636,46 @@
       "createdAt": "2026-09-01T08:21:11.684Z"
     }
   ],
-  "riskEvents": []
+  "riskEvents": [],
+  "technicianEarnings": [
+    {
+      "id": "earn_1789025880826_1n70v",
+      "technicianId": "usr_tech_1",
+      "repairId": "job_1789025855411_ba4f",
+      "paymentId": "pay_1789025864972_q84i9",
+      "grossAmountNaira": 87000,
+      "platformFeeNaira": 7395,
+      "netEarningsNaira": 79605,
+      "commissionPercent": 8.5,
+      "status": "ELIGIBLE_FOR_PAYOUT",
+      "createdAt": "2026-09-10T07:38:00.826Z",
+      "updatedAt": "2026-09-10T07:42:32.647Z",
+      "releasedAt": "2026-09-10T07:42:32.647Z"
+    }
+  ],
+  "payouts": [],
+  "refunds": [],
+  "webhookEvents": [],
+  "uploadedAttachments": [
+    {
+      "id": "att_1789022427479_48qcf",
+      "type": "AUDIO",
+      "url": "/api/repairs/attachments/att_1789022427479_48qcf.m4a",
+      "mimeType": "audio/mp4",
+      "size": 225645,
+      "createdAt": "2026-09-10T06:40:27.480Z",
+      "durationSeconds": 9,
+      "ownerId": "usr_customer_1"
+    },
+    {
+      "id": "att_1789025305633_c6zcl",
+      "type": "AUDIO",
+      "url": "/api/repairs/attachments/att_1789025305633_c6zcl.m4a",
+      "mimeType": "audio/mp4",
+      "size": 236188,
+      "createdAt": "2026-09-10T07:28:25.634Z",
+      "durationSeconds": 10,
+      "ownerId": "usr_customer_1"
+    }
+  ]
 }

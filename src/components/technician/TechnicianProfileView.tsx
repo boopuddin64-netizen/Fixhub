@@ -47,17 +47,49 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
   const [serviceRadiusKm, setServiceRadiusKm] = useState<number>(technicianProfile?.serviceRadiusKm || 15);
   const [address, setAddress] = useState<string>(technicianProfile?.shopLocation?.address || '');
   const [landmark, setLandmark] = useState<string>(technicianProfile?.shopLocation?.landmark || '');
-  const [area, setArea] = useState<string>(technicianProfile?.shopLocation?.area || 'Computer Village');
-  const [city, setCity] = useState<string>(technicianProfile?.shopLocation?.city || 'Ikeja');
-  const [state, setState] = useState<string>(technicianProfile?.shopLocation?.state || 'Lagos State');
+  const [area, setArea] = useState<string>(technicianProfile?.shopLocation?.area || 'Port Harcourt');
+  const [city, setCity] = useState<string>(technicianProfile?.shopLocation?.city || 'Port Harcourt');
+  const [state, setState] = useState<string>(technicianProfile?.shopLocation?.state || 'Rivers State');
   const [savingProfile, setSavingProfile] = useState<boolean>(false);
   const [profileMsg, setProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Bank Form State
-  const [bankName, setBankName] = useState<string>(technicianProfile?.bankDetails?.bankName || 'Providus Bank');
+  const [bankName, setBankName] = useState<string>(technicianProfile?.bankDetails?.bankName || '');
   const [accountNumber, setAccountNumber] = useState<string>(technicianProfile?.bankDetails?.accountNumber || '');
   const [accountName, setAccountName] = useState<string>(technicianProfile?.bankDetails?.accountName || technicianProfile?.businessName || '');
   const [savingBank, setSavingBank] = useState<boolean>(false);
+
+  // Live Financial Data State
+  const [financesData, setFinancesData] = useState<{
+    summary: {
+      heldEarningsNaira: number;
+      availablePayoutNaira: number;
+      lockedInProcessingNaira: number;
+      totalCompletedPayoutsNaira: number;
+      commissionRatePercent: number;
+    };
+    earnings: any[];
+    payouts: any[];
+  } | null>(null);
+  const [loadingFinances, setLoadingFinances] = useState(false);
+
+  const fetchFinances = async () => {
+    setLoadingFinances(true);
+    try {
+      const data = await ApiClient.getTechnicianEarnings();
+      if (data) setFinancesData(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingFinances(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showFinances) {
+      fetchFinances();
+    }
+  }, [showFinances]);
 
   useEffect(() => {
     if (technicianProfile) {
@@ -322,7 +354,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
             </div>
             <div>
               <p className="font-bold text-slate-900">Financial Earnings & Payout Ledger</p>
-              <p className="text-slate-500 text-[11px]">View pending escrow releases & completed payouts</p>
+              <p className="text-slate-500 text-[11px]">View held earnings, eligible balances & completed payouts</p>
             </div>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-400" />
@@ -619,8 +651,8 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
                   <DollarSign className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-white">Technician Payout Ledger</h3>
-                  <p className="text-xs text-slate-400">Escrow balances and completed transfers</p>
+                  <h3 className="font-bold text-base text-white">Technician Earnings & Payouts</h3>
+                  <p className="text-xs text-slate-400">Authoritative Fixhub financial ledger</p>
                 </div>
               </div>
               <button
@@ -632,43 +664,58 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
             </div>
 
             <div className="p-5 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-1">
-                  <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">
-                    Total Revenue
-                  </span>
-                  <span className="text-xl font-extrabold text-emerald-950">
-                    ₦{(technicianProfile?.completedJobs || 214) * 24500}
-                  </span>
+              {loadingFinances ? (
+                <div className="p-8 text-center text-slate-500 flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                  <span>Loading authoritative ledger...</span>
                 </div>
-
-                <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 space-y-1">
-                  <span className="text-[10px] font-bold text-blue-800 uppercase tracking-wider block">
-                    Escrow Holding
-                  </span>
-                  <span className="text-xl font-extrabold text-blue-950">₦45,000</span>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                <h4 className="font-bold text-slate-900 text-xs">Recent Payout Settlements</h4>
-                <div className="space-y-2 text-[11px] divide-y divide-slate-200/80">
-                  <div className="pt-2 flex items-center justify-between">
-                    <div>
-                      <p className="font-bold text-slate-800">Job #job_demo_active Settlement</p>
-                      <p className="text-slate-500 text-[10px]">Providus Bank • 0129849201</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-1">
+                      <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">
+                        Eligible for Payout
+                      </span>
+                      <span className="text-xl font-extrabold text-emerald-950">
+                        ₦{(financesData?.summary?.availablePayoutNaira ?? 0).toLocaleString()}
+                      </span>
                     </div>
-                    <span className="font-extrabold text-emerald-600">+₦35,000</span>
-                  </div>
-                  <div className="pt-2 flex items-center justify-between">
-                    <div>
-                      <p className="font-bold text-slate-800">Job #job_prev_091 Settlement</p>
-                      <p className="text-slate-500 text-[10px]">Providus Bank • 0129849201</p>
+
+                    <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-1">
+                      <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">
+                        Earnings Held
+                      </span>
+                      <span className="text-xl font-extrabold text-amber-950">
+                        ₦{(financesData?.summary?.heldEarningsNaira ?? 0).toLocaleString()}
+                      </span>
                     </div>
-                    <span className="font-extrabold text-emerald-600">+₦18,500</span>
                   </div>
-                </div>
-              </div>
+
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-bold text-slate-900 text-xs">Recent Earnings</h4>
+                      <span className="text-[10px] text-slate-500">Platform Fee: 8.5%</span>
+                    </div>
+                    {(!financesData?.earnings || financesData.earnings.length === 0) ? (
+                      <p className="text-slate-400 text-[11px] py-2 text-center">No earnings recorded yet.</p>
+                    ) : (
+                      <div className="space-y-2 text-[11px] divide-y divide-slate-200/80 max-h-48 overflow-y-auto">
+                        {financesData.earnings.slice(0, 5).map((e: any) => (
+                          <div key={e.id} className="pt-2 flex items-center justify-between">
+                            <div>
+                              <p className="font-bold text-slate-800">Job #{e.repairId}</p>
+                              <p className="text-slate-500 text-[10px]">
+                                Gross: ₦{e.grossAmountNaira.toLocaleString()} • Status: {e.status === 'HELD' ? 'Held' : e.status === 'ELIGIBLE_FOR_PAYOUT' ? 'Eligible' : e.status}
+                              </p>
+                            </div>
+                            <span className="font-extrabold text-emerald-600">+₦{e.netEarningsNaira.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

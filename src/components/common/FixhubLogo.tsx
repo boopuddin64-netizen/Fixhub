@@ -123,7 +123,7 @@ export const FixhubLogo: React.FC<FixhubLogoProps> = ({
             <rect x="56" y="42" width="2.5" height="24" rx="1.25" fill="#475569" opacity="0.5" />
           </g>
 
-          {/* Green Escrow Shield */}
+          {/* Green Protection Shield */}
           <g transform="translate(62, 57)">
             <path
               d="M 22 2 L 42 8 C 42 27 29 41 22 46 C 15 41 2 27 2 8 Z"

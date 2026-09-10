@@ -275,7 +275,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
             </div>
             <div>
               <p className="text-sm font-bold text-slate-900">Help & Support Center</p>
-              <p className="text-xs text-slate-500">Escrow protection rules, pickup codes & FAQs</p>
+              <p className="text-xs text-slate-500">Payment security rules, pickup codes & FAQs</p>
             </div>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-400" />
@@ -498,8 +498,8 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
 
                 <div className="flex items-center justify-between pt-2 border-t border-slate-200">
                   <div>
-                    <p className="text-xs font-bold text-slate-900">Payment & Escrow Alerts</p>
-                    <p className="text-[11px] text-slate-500">Deposit confirmations & payout releases</p>
+                    <p className="text-xs font-bold text-slate-900">Payment & Order Alerts</p>
+                    <p className="text-[11px] text-slate-500">Payment confirmations & repair status updates</p>
                   </div>
                   <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase tracking-wide">
                     Transactional (Mandatory)
@@ -640,10 +640,10 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
               <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 space-y-2">
                 <div className="flex items-center gap-2 font-bold text-blue-900">
                   <Lock className="w-4 h-4 text-blue-600" />
-                  <span>How Paystack Escrow Protects Your Money</span>
+                  <span>How Fixhub Payment Protection Works</span>
                 </div>
                 <p className="text-blue-800 text-[11px] leading-relaxed">
-                  Your repair payment is held securely in escrow by Fixhub. The technician is NOT paid until you physically inspect your device and share your 4-digit pickup code!
+                  Your repair payment is held securely in Fixhub until repair completion. The technician is only eligible for payout after your device is verified and completed at pickup.
                 </p>
               </div>
 
@@ -663,7 +663,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
                   <p className="font-bold text-slate-900">Where do I drop off my device?</p>
                   <p className="text-slate-600 text-[11px]">
-                    Once your quote deposit is confirmed, drop off your phone directly at the technician's verified shop in Garrison/Computer Village or use our verified courier pickup.
+                    Once your payment is confirmed, drop off your phone directly at the technician's verified shop or use our verified courier pickup.
                   </p>
                 </div>
 

@@ -191,7 +191,7 @@ export const RepairReview: React.FC<RepairReviewProps> = ({
       <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>Fixhub Escrow Protected • Verified Technicians Only</span>
+          <span>Fixhub Guarantee • Verified Technicians Only</span>
         </div>
 
         <button

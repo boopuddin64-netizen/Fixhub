@@ -191,11 +191,11 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
 
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Port Harcourt & Rivers State • 100% Escrow Protection</span>
+          <span>Port Harcourt & Rivers State • Verified Repair Platform</span>
         </div>
 
         <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
-          Connect with verified local phone technicians. Your money is protected in escrow until you inspect and test your device.
+          Connect with verified local phone technicians. Your payment is protected until you inspect and test your device at pickup.
         </p>
 
         {onOpenIntro && (
@@ -314,8 +314,8 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
                 </h3>
                 <p className="text-[11px] text-slate-400">
                   {selectedRole === 'customer'
-                    ? 'Log in to track repairs, approve quotes & view escrow warranty passports'
-                    : 'Log in to manage your Computer Village workshop workbench & payouts'}
+                    ? 'Log in to track repairs, approve quotes & view warranty passports'
+                    : 'Log in to manage your workshop workbench & payouts'}
                 </p>
               </div>
 
@@ -411,7 +411,7 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <div>
                 <h3 className="font-extrabold text-sm text-white">Create Customer Account</h3>
-                <p className="text-[11px] text-slate-400">Join the safe escrow repair network</p>
+                <p className="text-[11px] text-slate-400">Join the trusted repair network</p>
               </div>
 
               <button

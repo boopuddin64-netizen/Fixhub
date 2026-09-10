@@ -228,8 +228,8 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
           <div className="flex items-center justify-between gap-3 animate-fadeIn">
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span className="hidden sm:inline">Protected by Fixhub Escrow</span>
-              <span className="sm:hidden">Escrow Protected</span>
+              <span className="hidden sm:inline">Protected by Fixhub Guarantee</span>
+              <span className="sm:hidden">Fixhub Protected</span>
             </div>
 
             <button

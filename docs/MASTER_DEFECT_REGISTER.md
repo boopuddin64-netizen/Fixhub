@@ -514,3 +514,76 @@
   - **Status**: RESOLVED
   - **Verification**: `src/tests/defect_remediation_part1.test.ts` (Module 5)
 
+---
+
+## Defect Remediation Part 2 — Final Payment Integration & Pre-Live Audit Gate
+
+- **ID**: DEF-REM2-001
+  - **Phase**: Final Payment & Pre-Live
+  - **Severity**: CRITICAL
+  - **Area**: Authoritative Server-Side Payment Verification & HMAC Webhook Processing
+  - **Description**: Frontend must never declare a payment successful. All payment verification must be authoritatively verified against Paystack API or HMAC SHA512 signed webhooks.
+  - **Remediation**: Hardened `PaymentService.initializePayment`, `verifyPayment`, and `processPaystackWebhook` with authoritative server-side verification, transaction existence verification, and idempotency guards preventing duplicate earnings allocation.
+  - **Status**: RESOLVED
+  - **Verification**: `src/tests/phase5_payment.test.ts`, `src/tests/order_flow_real_person.test.ts`
+
+- **ID**: DEF-REM2-002
+  - **Phase**: Final Payment & Pre-Live
+  - **Severity**: CRITICAL
+  - **Area**: Immutable Server-Side Parts Price Snapshots & Quote Calculation
+  - **Description**: Technicians must not be able to type arbitrary part prices into quotes to bypass inventory records or manipulate totals.
+  - **Remediation**: Enforced server-authoritative inventory lookups in `InventoryService.validateAndBuildQuoteLineItems`. All part line items snapshot the exact catalog unit price, price version, and SKU from the technician's registered inventory. Total quote price is computed strictly on the backend as `partsTotalNaira + laborFeeNaira`.
+  - **Status**: RESOLVED
+  - **Verification**: `src/tests/order_flow_real_person.test.ts`
+
+- **ID**: DEF-REM2-003
+  - **Phase**: Final Payment & Pre-Live
+  - **Severity**: HIGH
+  - **Area**: Platform Commission Calculation & Technician Earnings Ledger
+  - **Description**: Platform commission must strictly follow the business rate (8.5%) and be recorded in an immutable ledger with full status transitions (`HELD` → `ELIGIBLE_FOR_PAYOUT` → `PAID_OUT`).
+  - **Remediation**: Implemented `recordRepairEarnings`, `updateEarningsStatus`, and `requestPayout` in `PaymentService`. Platform fee is computed authoritatively as `Math.round(grossAmountNaira * 0.085)`. Net technician earnings are recorded and held until counter pickup verification, at which point earnings transition to `ELIGIBLE_FOR_PAYOUT`.
+  - **Status**: RESOLVED
+  - **Verification**: `src/tests/phase5_payment.test.ts`, `src/tests/order_flow_real_person.test.ts`
+
+- **ID**: DEF-REM2-004
+  - **Phase**: Final Payment & Pre-Live
+  - **Severity**: MEDIUM
+  - **Area**: Escrow Terminology & Misleading UI Claims Sweep
+  - **Description**: Remove all remaining legacy escrow terminology, fake static balance modals, and misleading promises across customer and technician screens.
+  - **Remediation**: Replaced escrow phrasing across customer profiles, technician dashboards, intro screens, chat composers, and review flows with accurate Fixhub terminology: "Payment Confirmed", "Earnings Held", "Eligible for Payout", "Completed Payouts", "Protected by Fixhub Guarantee". Replaced mock hardcoded modals with live queries to `ApiClient.getTechnicianEarnings()`.
+  - **Status**: RESOLVED
+  - **Verification**: Full frontend and backend codebase audit
+
+- **ID**: DEF-REM2-005
+  - **Phase**: Final Payment & Pre-Live
+  - **Severity**: MEDIUM
+  - **Area**: Test Inventory Scope Constraint
+  - **Description**: Only seed inventory for ONE designated test technician (`usr_tech_1`) with iPhone and Samsung test parts.
+  - **Remediation**: Cleaned seed database (`server/db.ts`) to attach test inventory exclusively to `usr_tech_1`. Inventory items feature realistic SKU, compatibility, OEM quality, stock count, and test pricing for iPhone 11/12/13 (displays, batteries, charging ports) and Samsung Galaxy A12/A13/A14 (displays, batteries, charging ports).
+  - **Status**: RESOLVED
+  - **Verification**: `server/db.ts` audit, `src/tests/run_all_tests.ts`
+
+- **ID**: DEF-REM2-006
+  - **Phase**: Final Payment & Pre-Live
+  - **Severity**: CRITICAL
+  - **Area**: Full 14-Stage Real-Person Order Lifecycle E2E Test Suite
+  - **Description**: Need an end-to-end test suite simulating a complete real-person repair journey from customer booking to technician payout.
+  - **Remediation**: Built `src/tests/order_flow_real_person.test.ts` covering:
+    1. Customer creates repair request for iPhone 13 cracked OLED screen
+    2. Lead routing to eligible technician `usr_tech_1`
+    3. Technician builds quote with authoritatively snapshotted inventory part (`part_ip13_scr`) and reserves stock
+    4. Customer accepts quote and initializes payment (₦95,000)
+    5. Paystack webhook authoritatively confirms payment and records held earnings (₦86,925 net after 8.5% fee)
+    6. Customer drops off device and technician checks in device with physical condition report
+    7. Technician runs bench diagnosis and submits additional diagnosis with photo evidence (unswollen battery, ₦24,000)
+    8. Customer reviews and approves additional diagnosis quote
+    9. Technician installs parts, deducting from inventory with serial numbers recorded
+    10. Technician completes repair and customer receives 4-digit pickup code
+    11. Device inspected at counter, pickup code verified, and Digital Repair Passport generated
+    12. Technician earnings transition from `HELD` to `ELIGIBLE_FOR_PAYOUT`
+    13. Technician requests payout to registered bank account
+    14. Customer submits 5-star verified review and warranty status is validated
+  - **Status**: RESOLVED
+  - **Verification**: `src/tests/order_flow_real_person.test.ts` (All 14 stages passing)
+
+

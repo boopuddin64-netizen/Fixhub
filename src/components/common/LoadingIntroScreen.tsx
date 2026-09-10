@@ -11,7 +11,7 @@ export const LoadingIntroScreen: React.FC<LoadingIntroScreenProps> = ({
   minDurationMs = 2000,
 }) => {
   const [progress, setProgress] = useState<number>(0);
-  const [phase, setPhase] = useState<'booting' | 'diagnostics' | 'escrow' | 'ready'>('booting');
+  const [phase, setPhase] = useState<'booting' | 'diagnostics' | 'security' | 'ready'>('booting');
   const [isFadingOut, setIsFadingOut] = useState<boolean>(false);
 
   const handleSkip = () => {
@@ -33,7 +33,7 @@ export const LoadingIntroScreen: React.FC<LoadingIntroScreenProps> = ({
       } else if (pct < 65) {
         setPhase('diagnostics');
       } else if (pct < 95) {
-        setPhase('escrow');
+        setPhase('security');
       } else {
         setPhase('ready');
       }
@@ -250,7 +250,7 @@ export const LoadingIntroScreen: React.FC<LoadingIntroScreenProps> = ({
           <p className="text-xs text-slate-300 font-medium tracking-normal transition-opacity duration-200">
             {phase === 'booting' && 'Powering device diagnostics...'}
             {phase === 'diagnostics' && 'Connecting to verified repair hubs...'}
-            {phase === 'escrow' && 'Securing Paystack payment guarantee...'}
+            {phase === 'security' && 'Securing Paystack payment protection...'}
             {phase === 'ready' && 'Find. Fix. Done.'}
           </p>
         </div>

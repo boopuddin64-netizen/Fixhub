@@ -56,8 +56,8 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
   const [earningsList, setEarningsList] = useState<any[]>([]);
   const [payoutList, setPayoutList] = useState<any[]>([]);
   const [payoutAmountInput, setPayoutAmountInput] = useState<string>('');
-  const [payoutBank, setPayoutBank] = useState<string>('Access Bank');
-  const [payoutAccountNum, setPayoutAccountNum] = useState<string>('0123456789');
+  const [payoutBank, setPayoutBank] = useState<string>(technicianProfile?.bankDetails?.bankName || '');
+  const [payoutAccountNum, setPayoutAccountNum] = useState<string>(technicianProfile?.bankDetails?.accountNumber || '');
   const [isRequestingPayout, setIsRequestingPayout] = useState(false);
   const [payoutMsg, setPayoutMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -556,8 +556,8 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <h3 className="text-base font-bold text-slate-900">Request Bank Settlement</h3>
-                <p className="text-xs text-slate-500">Withdraw available cleared earnings directly to your bank account.</p>
+                <h3 className="text-base font-bold text-slate-900">Request Payout</h3>
+                <p className="text-xs text-slate-500">Withdraw available eligible earnings directly to your verified bank account.</p>
               </div>
               <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 w-fit">
                 Eligible Balance: ₦{financials.availablePayoutNaira.toLocaleString()}

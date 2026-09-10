@@ -12,6 +12,7 @@ import { runGoogleMapsIntegrationTests } from './google_maps_integration.test';
 import { runPhase5PaymentTests } from './phase5_payment.test';
 import { runPhase8AccountRetentionTests } from './phase8_account_retention.test';
 import { runDefectRemediationPart1Tests } from './defect_remediation_part1.test';
+import { runRealPersonOrderFlowTest } from './order_flow_real_person.test';
 import {
   validateNumber,
   isValidCoordinates,
@@ -788,6 +789,11 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   const remediation1Results = await runDefectRemediationPart1Tests();
   passed += remediation1Results.passed;
   failed += remediation1Results.failed;
+
+  // Run Real-Person End-to-End Order Flow simulation test
+  const realPersonResults = await runRealPersonOrderFlowTest();
+  passed += realPersonResults.passed;
+  failed += realPersonResults.failed;
 
   console.log('\n===============================================================');
   console.log(`   GLOBAL TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);
