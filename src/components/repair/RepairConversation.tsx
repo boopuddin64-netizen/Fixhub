@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, X } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { ArrowLeft, X, Shield, Sparkles, CheckCircle2 } from 'lucide-react';
 import { ApiClient } from '../../api/client';
 import { DeviceType, LocationCoordinates, RepairIssue } from '../../types';
 import { RepairMessage } from './RepairMessage';
@@ -11,6 +11,8 @@ import { LocationStep } from './LocationStep';
 import { RepairReview } from './RepairReview';
 import { RepairSubmitting } from './RepairSubmitting';
 import { RepairSuccess } from './RepairSuccess';
+import { ChatComposer } from './ChatComposer';
+import { DeviceSelectorModal } from '../customer/repair-flow/DeviceSelectorModal';
 
 export type RepairStage =
   | 'device'
@@ -40,6 +42,7 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
   preselectedIssue,
 }) => {
   const [stage, setStage] = useState<RepairStage>('device');
+  const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
 
   // Device state
   const [deviceBrand, setDeviceBrand] = useState<string>(preselectedBrand || '');
@@ -64,6 +67,9 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
   // Location
   const [location, setLocation] = useState<LocationCoordinates | null>(null);
 
+  // Highest stage reached to support seamless jumping back to review after editing
+  const [hasVisitedReview, setHasVisitedReview] = useState(false);
+
   // Async & submission
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -71,6 +77,7 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
 
   const saveTimeoutRef = useRef<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const activeStepRef = useRef<HTMLDivElement>(null);
 
   // Load draft on mount
   useEffect(() => {
@@ -91,6 +98,7 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
             const loadedStage = stages[draft.step - 1];
             if (loadedStage && loadedStage !== 'submitted' && loadedStage !== 'submitting') {
               setStage(loadedStage);
+              if (loadedStage === 'review') setHasVisitedReview(true);
             }
           }
           if (draft.deviceBrand) setDeviceBrand(draft.deviceBrand);
@@ -146,7 +154,15 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
       if (stage === 'submitted' || stage === 'submitting') {
         return;
       }
-      if (!deviceBrand && !deviceModel && selectedIssueIds.length === 0 && !description && !voiceNoteUrl && photos.length === 0 && !location) {
+      if (
+        !deviceBrand &&
+        !deviceModel &&
+        selectedIssueIds.length === 0 &&
+        !description &&
+        !voiceNoteUrl &&
+        photos.length === 0 &&
+        !location
+      ) {
         return;
       }
       const stages: RepairStage[] = [
@@ -193,9 +209,24 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
     location,
   ]);
 
+  // Keep track of visited review stage
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    if (stage === 'review') {
+      setHasVisitedReview(true);
+    }
   }, [stage]);
+
+  // Auto-scroll on stage changes or content updates
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (activeStepRef.current) {
+        activeStepRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } else if (scrollRef.current) {
+        scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+      }
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [stage, selectedIssueIds.length, photos.length, Boolean(voiceNoteUrl), Boolean(location)]);
 
   const handleSubmitRequest = async () => {
     if (saveTimeoutRef.current) {
@@ -224,6 +255,8 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
       const created = await ApiClient.createRepairRequest(requestPayload);
       setCreatedRequestId(created.id);
       setStage('submitted');
+      // Clean up server-side draft after successful submission
+      ApiClient.deleteRepairDraft().catch(() => {});
     } catch (err: any) {
       console.error('Failed to create repair request:', err);
       setSubmitError(
@@ -258,7 +291,7 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
     }
   };
 
-  // Support swipe-right gesture navigation across wizard stages
+  // Support swipe-right gesture navigation across stages
   useEffect(() => {
     const handleGestureBack = (e: Event) => {
       if (stage !== 'device' && stage !== 'submitted' && stage !== 'submitting') {
@@ -270,33 +303,64 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
     return () => window.removeEventListener('fixhub:navigate-back', handleGestureBack);
   }, [stage, handleBack]);
 
+  const stages: RepairStage[] = [
+    'device',
+    'issues',
+    'description',
+    'evidence',
+    'location',
+    'review',
+    'submitting',
+    'submitted',
+  ];
+
+  const currentStageIndex = stages.indexOf(stage);
+
   const isStagePast = (checkStage: RepairStage): boolean => {
-    const stages: RepairStage[] = [
-      'device',
-      'issues',
-      'description',
-      'evidence',
-      'location',
-      'review',
-      'submitting',
-      'submitted',
-    ];
-    return stages.indexOf(stage) > stages.indexOf(checkStage);
+    return currentStageIndex > stages.indexOf(checkStage);
   };
 
-  const selectedIssuesBadges = selectedIssueIds.map((id) => issueDict[id] || id);
-  if (otherDescription) selectedIssuesBadges.push(otherDescription);
+  const selectedIssuesBadges = useMemo(() => {
+    const list = selectedIssueIds.map((id) => issueDict[id] || id);
+    if (otherDescription) list.push(otherDescription);
+    return list;
+  }, [selectedIssueIds, issueDict, otherDescription]);
+
+  // Advance to next stage from bottom composer or inline continue
+  const advanceToNextStage = () => {
+    switch (stage) {
+      case 'device':
+        if (deviceBrand && deviceModel) setStage('issues');
+        break;
+      case 'issues':
+        if (selectedIssueIds.length > 0) setStage('description');
+        break;
+      case 'description':
+        setStage('evidence');
+        break;
+      case 'evidence':
+        setStage('location');
+        break;
+      case 'location':
+        if (location) setStage('review');
+        break;
+      case 'review':
+        handleSubmitRequest();
+        break;
+    }
+  };
 
   return (
-    <div className="flex flex-col h-[85vh] max-h-[820px] bg-slate-50/80 rounded-3xl overflow-hidden shadow-2xl relative border border-slate-200/80">
+    <div className="flex flex-col h-[88vh] max-h-[860px] bg-slate-50/90 rounded-3xl overflow-hidden shadow-2xl relative border border-slate-200/90">
       {/* Top Header */}
-      <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-2xs z-10">
+      <div className="p-3.5 sm:p-4 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-2xs z-10">
         <div className="flex items-center gap-3">
           {stage !== 'device' && stage !== 'submitted' ? (
             <button
               type="button"
               onClick={handleBack}
-              className="p-2 -ml-2 rounded-full hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer"
+              className="p-2 -ml-2 rounded-xl hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer"
+              title="Go back one step"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
@@ -304,164 +368,381 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
             <button
               type="button"
               onClick={onCancel}
-              className="p-2 -ml-2 rounded-full hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer"
+              className="p-2 -ml-2 rounded-xl hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer"
+              title="Close"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
           )}
-          <div>
-            <h2 className="text-base sm:text-lg font-bold text-slate-900">Request Phone Repair</h2>
-            <p className="text-[11px] text-slate-500 hidden sm:block">Fix Hub Guided Service Request</p>
+
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center border border-slate-800 shadow-xs">
+              <Shield className="w-4 h-4 text-cyan-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight">
+                  Fix Hub Repair Assistant
+                </h2>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" title="Verified Assistant" />
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium">
+                {stage === 'review'
+                  ? 'Final review before dispatch'
+                  : stage === 'submitting'
+                  ? 'Submitting request...'
+                  : stage === 'submitted'
+                  ? 'Request confirmed'
+                  : 'Guided phone repair intake'}
+              </p>
+            </div>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
-        >
-          <X className="w-5 h-5" />
-        </button>
+
+        <div className="flex items-center gap-2">
+          {/* Quick Return to Review if user was previously at review and jumped back to edit */}
+          {hasVisitedReview && stage !== 'review' && stage !== 'submitting' && stage !== 'submitted' && (
+            <button
+              type="button"
+              onClick={() => setStage('review')}
+              className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl transition-colors cursor-pointer border border-blue-200"
+            >
+              <span>Return to Review →</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onCancel}
+            className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+            title="Cancel request"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
-      {/* Main Conversation & Step Container */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 pb-28" ref={scrollRef}>
-        <div className="max-w-lg mx-auto space-y-4">
-          {/* Progressive Completed Answer Thread */}
-          {stage !== 'review' && isStagePast('device') && deviceBrand && deviceModel && (
+      {/* Progressive Continuous Chat Scroll Container */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-5"
+        style={{ paddingBottom: '7rem' }}
+      >
+        <div className="max-w-2xl mx-auto space-y-4 sm:space-y-5">
+          {/* ========================================================= */}
+          {/* QUESTION 1: DEVICE                                        */}
+          {/* ========================================================= */}
+          <RepairMessage
+            sender="assistant"
+            summaryText="Hello! Welcome to Fix Hub. Which device needs repair today?"
+          />
+
+          {/* If actively editing or on device step */}
+          {stage === 'device' && (
+            <div ref={activeStepRef} className="ml-11 max-w-[95%]">
+              <DeviceStep
+                currentBrand={deviceBrand}
+                currentModel={deviceModel}
+                currentDeviceType={deviceType}
+                onSelectDevice={(d) => {
+                  setDeviceBrand(d.brandName);
+                  setDeviceModel(d.modelName);
+                  setDeviceModelId(d.deviceModelId);
+                  setDeviceType(d.deviceType);
+                  setCatalogMatch(d.catalogMatch);
+                }}
+                onContinue={() => setStage('issues')}
+              />
+            </div>
+          )}
+
+          {/* Once device is selected and user is past or editing elsewhere */}
+          {stage !== 'device' && deviceBrand && deviceModel && (
             <RepairMessage
-              title="Selected Device"
+              sender="customer"
+              title="Device"
+              subtitle={deviceType}
+              type="device"
               summaryText={`${deviceBrand} ${deviceModel}`}
               onEdit={() => setStage('device')}
             />
           )}
 
-          {stage !== 'review' && isStagePast('issues') && selectedIssueIds.length > 0 && (
-            <RepairMessage
-              title="Reported Problems"
-              summaryText={`${selectedIssueIds.length} issue${selectedIssueIds.length > 1 ? 's' : ''} selected`}
-              badges={selectedIssuesBadges}
-              onEdit={() => setStage('issues')}
-            />
+          {/* ========================================================= */}
+          {/* QUESTION 2: ISSUES                                        */}
+          {/* (Visible once device has been chosen or stage is issues+) */}
+          {/* ========================================================= */}
+          {(stage === 'issues' || isStagePast('device') || (deviceBrand && deviceModel && stage !== 'device')) && (
+            <>
+              <RepairMessage
+                sender="assistant"
+                summaryText={`Got it, ${deviceBrand} ${deviceModel}. What seems to be wrong with it?`}
+              />
+
+              {stage === 'issues' && (
+                <div ref={activeStepRef} className="ml-11 max-w-[95%]">
+                  <IssueStep
+                    deviceBrand={deviceBrand}
+                    deviceModel={deviceModel}
+                    selectedIssueIds={selectedIssueIds}
+                    otherDescription={otherDescription}
+                    onChangeSelectedIssues={setSelectedIssueIds}
+                    onChangeOtherDescription={setOtherDescription}
+                    onIssuesLoaded={(issues) => {
+                      const dict: Record<string, string> = {};
+                      issues.forEach((i) => (dict[i.id] = i.name));
+                      setIssueDict(dict);
+                    }}
+                    onContinue={() => setStage('description')}
+                  />
+                </div>
+              )}
+
+              {stage !== 'issues' && selectedIssueIds.length > 0 && (
+                <RepairMessage
+                  sender="customer"
+                  title="Reported Problems"
+                  type="issues"
+                  summaryText={`${selectedIssueIds.length} problem${selectedIssueIds.length > 1 ? 's' : ''} diagnosed`}
+                  badges={selectedIssuesBadges}
+                  onEdit={() => setStage('issues')}
+                />
+              )}
+            </>
           )}
 
-          {stage !== 'review' && isStagePast('description') && (description || otherDescription) && (
-            <RepairMessage
-              title="Problem Description"
-              summaryText={description || otherDescription || 'Details added'}
-              onEdit={() => setStage('description')}
-            />
+          {/* ========================================================= */}
+          {/* QUESTION 3: DESCRIPTION                                   */}
+          {/* (Visible once issues have been chosen or stage is desc+)   */}
+          {/* ========================================================= */}
+          {(stage === 'description' || isStagePast('issues')) && (
+            <>
+              <RepairMessage
+                sender="assistant"
+                summaryText="Anything else happening? Provide any extra details about the symptoms or how the damage occurred."
+              />
+
+              {stage === 'description' && (
+                <div ref={activeStepRef} className="ml-11 max-w-[95%]">
+                  <DescriptionStep
+                    description={description}
+                    onChangeDescription={setDescription}
+                    onContinue={() => setStage('evidence')}
+                  />
+                </div>
+              )}
+
+              {stage !== 'description' && isStagePast('issues') && (
+                <RepairMessage
+                  sender="customer"
+                  title="Symptom Details"
+                  type="description"
+                  summaryText={
+                    description.trim() ||
+                    (otherDescription ? `Other: ${otherDescription}` : 'No additional symptoms reported')
+                  }
+                  onEdit={() => setStage('description')}
+                />
+              )}
+            </>
           )}
 
-          {stage !== 'review' && isStagePast('evidence') && (photos.length > 0 || voiceNoteUrl) && (
-            <RepairMessage
-              title="Evidence Attached"
-              summaryText={`${photos.length} photo${photos.length !== 1 ? 's' : ''}${voiceNoteUrl ? ' • 1 Voice Note' : ''}`}
-              onEdit={() => setStage('evidence')}
-            />
+          {/* ========================================================= */}
+          {/* QUESTION 4: EVIDENCE                                      */}
+          {/* (Visible once description has been answered or stage+)     */}
+          {/* ========================================================= */}
+          {(stage === 'evidence' || isStagePast('description')) && (
+            <>
+              <RepairMessage
+                sender="assistant"
+                summaryText="Can you show or explain the damage? Clear photos and voice notes help technicians diagnose the issue and give exact quotes faster."
+              />
+
+              {stage === 'evidence' && (
+                <div ref={activeStepRef} className="ml-11 max-w-[95%]">
+                  <EvidenceStep
+                    photos={photos}
+                    onChangePhotos={setPhotos}
+                    voiceNoteUrl={voiceNoteUrl}
+                    voiceNoteDuration={voiceNoteDuration}
+                    onChangeVoiceNote={(url, dur) => {
+                      setVoiceNoteUrl(url);
+                      setVoiceNoteDuration(dur);
+                    }}
+                    onContinue={() => setStage('location')}
+                  />
+                </div>
+              )}
+
+              {stage !== 'evidence' && isStagePast('description') && (
+                <RepairMessage
+                  sender="customer"
+                  title="Attached Evidence"
+                  type="evidence"
+                  summaryText={
+                    photos.length > 0 || voiceNoteUrl
+                      ? `${photos.length} photo${photos.length !== 1 ? 's' : ''}${voiceNoteUrl ? ' • 1 Voice Note' : ''}`
+                      : 'No photos or voice note attached'
+                  }
+                  photos={photos}
+                  voiceNoteUrl={voiceNoteUrl}
+                  voiceNoteDuration={voiceNoteDuration}
+                  onEdit={() => setStage('evidence')}
+                />
+              )}
+            </>
           )}
 
-          {stage !== 'review' && isStagePast('location') && location && (
-            <RepairMessage
-              title="Repair Location"
-              summaryText={location.address || location.area || location.city || 'Location confirmed'}
-              onEdit={() => setStage('location')}
-            />
+          {/* ========================================================= */}
+          {/* QUESTION 5: LOCATION                                      */}
+          {/* (Visible once evidence has been answered or stage+)       */}
+          {/* ========================================================= */}
+          {(stage === 'location' || isStagePast('evidence')) && (
+            <>
+              <RepairMessage
+                sender="assistant"
+                summaryText="Where will you take the device for repair? We'll match you with verified repair labs closest to you."
+              />
+
+              {stage === 'location' && (
+                <div ref={activeStepRef} className="ml-11 max-w-[95%]">
+                  <LocationStep
+                    location={location}
+                    onChangeLocation={setLocation}
+                    onContinue={() => setStage('review')}
+                  />
+                </div>
+              )}
+
+              {stage !== 'location' && location && isStagePast('evidence') && (
+                <RepairMessage
+                  sender="customer"
+                  title="Repair Location"
+                  type="location"
+                  summaryText={location.address || location.area || location.city || 'Location confirmed'}
+                  locationDetails={{
+                    address: location.address,
+                    area: location.area,
+                    city: location.city,
+                    state: location.state,
+                  }}
+                  onEdit={() => setStage('location')}
+                />
+              )}
+            </>
           )}
 
-          {/* Active Step Cards */}
-          {stage === 'device' && (
-            <DeviceStep
-              currentBrand={deviceBrand}
-              currentModel={deviceModel}
-              currentDeviceType={deviceType}
-              onSelectDevice={(d) => {
-                setDeviceBrand(d.brandName);
-                setDeviceModel(d.modelName);
-                setDeviceModelId(d.deviceModelId);
-                setDeviceType(d.deviceType);
-                setCatalogMatch(d.catalogMatch);
-              }}
-              onContinue={() => setStage('issues')}
-            />
-          )}
-
-          {stage === 'issues' && (
-            <IssueStep
-              deviceBrand={deviceBrand}
-              deviceModel={deviceModel}
-              selectedIssueIds={selectedIssueIds}
-              otherDescription={otherDescription}
-              onChangeSelectedIssues={setSelectedIssueIds}
-              onChangeOtherDescription={setOtherDescription}
-              onIssuesLoaded={(issues) => {
-                const dict: Record<string, string> = {};
-                issues.forEach((i) => (dict[i.id] = i.name));
-                setIssueDict(dict);
-              }}
-              onContinue={() => setStage('description')}
-            />
-          )}
-
-          {stage === 'description' && (
-            <DescriptionStep
-              description={description}
-              onChangeDescription={setDescription}
-              onContinue={() => setStage('evidence')}
-            />
-          )}
-
-          {stage === 'evidence' && (
-            <EvidenceStep
-              photos={photos}
-              onChangePhotos={setPhotos}
-              voiceNoteUrl={voiceNoteUrl}
-              voiceNoteDuration={voiceNoteDuration}
-              onChangeVoiceNote={(url, dur) => {
-                setVoiceNoteUrl(url);
-                setVoiceNoteDuration(dur);
-              }}
-              onContinue={() => setStage('location')}
-            />
-          )}
-
-          {stage === 'location' && (
-            <LocationStep
-              location={location}
-              onChangeLocation={setLocation}
-              onContinue={() => setStage('review')}
-            />
-          )}
-
+          {/* ========================================================= */}
+          {/* QUESTION 6: REVIEW & SUMMARY                              */}
+          {/* ========================================================= */}
           {stage === 'review' && (
-            <RepairReview
-              deviceBrand={deviceBrand}
-              deviceModel={deviceModel}
-              selectedIssueIds={selectedIssueIds}
-              issueDict={issueDict}
-              otherDescription={otherDescription}
-              description={description}
-              photos={photos}
-              voiceNoteUrl={voiceNoteUrl}
-              location={location}
-              submitError={submitError}
-              isSubmitting={isSubmitting}
-              onEditSection={(sec) => setStage(sec)}
-              onSubmit={handleSubmitRequest}
-            />
+            <div ref={activeStepRef}>
+              <RepairMessage
+                sender="assistant"
+                summaryText="Here is your complete repair request summary. Review every detail before we notify verified local repair shops."
+              >
+                <div className="mt-3">
+                  <RepairReview
+                    deviceBrand={deviceBrand}
+                    deviceModel={deviceModel}
+                    selectedIssueIds={selectedIssueIds}
+                    issueDict={issueDict}
+                    otherDescription={otherDescription}
+                    description={description}
+                    photos={photos}
+                    voiceNoteUrl={voiceNoteUrl}
+                    location={location}
+                    submitError={submitError}
+                    isSubmitting={isSubmitting}
+                    onEditSection={(sec) => setStage(sec)}
+                    onSubmit={handleSubmitRequest}
+                  />
+                </div>
+              </RepairMessage>
+            </div>
           )}
 
-          {stage === 'submitting' && <RepairSubmitting />}
+          {/* ========================================================= */}
+          {/* SUBMITTING STATE                                          */}
+          {/* ========================================================= */}
+          {stage === 'submitting' && (
+            <div ref={activeStepRef}>
+              <RepairMessage
+                sender="assistant"
+                summaryText="Connecting to Fix Hub repair network..."
+              >
+                <div className="mt-2">
+                  <RepairSubmitting />
+                </div>
+              </RepairMessage>
+            </div>
+          )}
 
+          {/* ========================================================= */}
+          {/* SUBMITTED SUCCESS STATE                                   */}
+          {/* ========================================================= */}
           {stage === 'submitted' && createdRequestId && (
-            <RepairSuccess
-              requestId={createdRequestId}
-              deviceBrand={deviceBrand}
-              deviceModel={deviceModel}
-              onFindTechnicians={() => onRequestCreated(createdRequestId)}
-            />
+            <div ref={activeStepRef}>
+              <RepairMessage
+                sender="assistant"
+                summaryText="Your repair request is live! Technicians in your area have been notified."
+              >
+                <div className="mt-3">
+                  <RepairSuccess
+                    requestId={createdRequestId}
+                    deviceBrand={deviceBrand}
+                    deviceModel={deviceModel}
+                    onFindTechnicians={() => onRequestCreated(createdRequestId)}
+                  />
+                </div>
+              </RepairMessage>
+            </div>
           )}
         </div>
       </div>
+
+      {/* ========================================================= */}
+      {/* FIXED BOTTOM COMPOSER                                     */}
+      {/* ========================================================= */}
+      {stage !== 'submitting' && stage !== 'submitted' && (
+        <ChatComposer
+          stage={stage}
+          deviceBrand={deviceBrand}
+          deviceModel={deviceModel}
+          selectedIssueIds={selectedIssueIds}
+          description={description}
+          onChangeDescription={setDescription}
+          onSendDescription={() => setStage('evidence')}
+          photos={photos}
+          voiceNoteUrl={voiceNoteUrl}
+          location={location}
+          isSubmitting={isSubmitting}
+          onAdvanceStage={advanceToNextStage}
+          onSubmit={handleSubmitRequest}
+          onOpenCatalog={() => setIsCatalogModalOpen(true)}
+          createdRequestId={createdRequestId || undefined}
+          onFindTechnicians={createdRequestId ? () => onRequestCreated(createdRequestId) : undefined}
+        />
+      )}
+
+      {/* Device Catalog Modal */}
+      {isCatalogModalOpen && (
+        <DeviceSelectorModal
+          isOpen={isCatalogModalOpen}
+          onClose={() => setIsCatalogModalOpen(false)}
+          currentBrand={deviceBrand}
+          currentModel={deviceModel}
+          onSelectDevice={(d) => {
+            setDeviceBrand(d.brandName);
+            setDeviceModel(d.modelName);
+            setDeviceModelId(d.deviceModelId);
+            setDeviceType(d.deviceType);
+            setCatalogMatch(d.catalogMatch);
+            setIsCatalogModalOpen(false);
+            setStage('issues');
+          }}
+        />
+      )}
     </div>
   );
 };

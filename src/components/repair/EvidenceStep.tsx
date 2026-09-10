@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, Mic } from 'lucide-react';
+import { Camera, Mic, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { PhotoEvidenceUploader } from '../customer/repair-flow/PhotoEvidenceUploader';
 import { VoiceNoteRecorder, VoiceNotePlayer } from '../customer/repair-flow/VoiceNoteRecorder';
 
@@ -20,36 +20,29 @@ export const EvidenceStep: React.FC<EvidenceStepProps> = ({
   onChangeVoiceNote,
   onContinue,
 }) => {
-  return (
-    <div className="space-y-5 animate-fadeIn">
-      <div>
-        <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">
-          Attach Photo & Voice Evidence
-        </h3>
-        <p className="text-xs sm:text-sm text-slate-500 mt-1">
-          Photos and voice notes help technicians give accurate quotes faster.
-        </p>
-      </div>
+  const hasEvidence = photos.length > 0 || Boolean(voiceNoteUrl);
 
-      {/* Photos Evidence Card */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3 shadow-2xs">
+  return (
+    <div className="space-y-3.5 animate-fadeIn">
+      {/* Photos Attachment Card */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 space-y-3 shadow-2xs">
         <div className="flex items-center justify-between">
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+          <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
             <Camera className="w-4 h-4 text-blue-600" />
-            <span>Photos (Max 3)</span>
+            <span>Device Damage Photos</span>
           </label>
-          <span className="text-[11px] font-medium text-slate-400">
-            {photos.length}/3 attached
+          <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+            {photos.length}/3 photos
           </span>
         </div>
-        <PhotoEvidenceUploader photos={photos} onChange={onChangePhotos} />
+        <PhotoEvidenceUploader photos={photos} onChange={onChangePhotos} maxPhotos={3} />
       </div>
 
-      {/* Voice Note Card */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3 shadow-2xs">
-        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-          <Mic className="w-4 h-4 text-blue-600" />
-          <span>Voice Note Attachment</span>
+      {/* Voice Note Attachment Card */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 space-y-3 shadow-2xs">
+        <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+          <Mic className="w-4 h-4 text-emerald-600" />
+          <span>Voice Explanation</span>
         </label>
         {voiceNoteUrl ? (
           <VoiceNotePlayer
@@ -66,14 +59,39 @@ export const EvidenceStep: React.FC<EvidenceStepProps> = ({
         )}
       </div>
 
-      <div className="flex justify-end pt-4">
-        <button
-          type="button"
-          onClick={onContinue}
-          className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm rounded-2xl transition-all shadow-md cursor-pointer"
-        >
-          Continue →
-        </button>
+      {/* Action Footer */}
+      <div className="flex items-center justify-between pt-1">
+        <span className="text-xs text-slate-500">
+          {hasEvidence ? (
+            <span className="text-emerald-700 font-medium flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Evidence attached ({photos.length} photo{photos.length !== 1 ? 's' : ''}{voiceNoteUrl ? ' + voice note' : ''})
+            </span>
+          ) : (
+            'Evidence is optional but highly recommended'
+          )}
+        </span>
+
+        <div className="flex items-center gap-2">
+          {!hasEvidence && (
+            <button
+              type="button"
+              onClick={onContinue}
+              className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+            >
+              Skip evidence
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onContinue}
+            className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>{hasEvidence ? 'Continue with Evidence' : 'Continue'}</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );
