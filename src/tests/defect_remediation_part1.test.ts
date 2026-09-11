@@ -26,6 +26,25 @@ export async function runDefectRemediationPart1Tests(): Promise<{ passed: number
   // Reset database to ensure isolated test environment
   db.resetToSeed();
 
+  if (db.repairRequests.length === 0) {
+    db.repairRequests.push({
+      id: 'req_defect_test',
+      customerId: 'usr_customer_1',
+      customerName: 'Test Customer',
+      customerPhone: '+2348000000000',
+      customerLocation: { lat: 6.5964, lng: 3.3421, address: 'Ikeja', city: 'Lagos', state: 'Lagos State' },
+      deviceBrand: 'Apple',
+      deviceModel: 'iPhone 13',
+      issues: ['screen_damaged'],
+      description: 'Test request',
+      photos: [],
+      status: 'QUOTING',
+      quotesCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
   const now = new Date().toISOString();
   const tech1Id = 'usr_tech_1';
   const tech2Id = 'usr_tech_2';

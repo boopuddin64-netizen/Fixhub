@@ -15,7 +15,7 @@ import { PaymentService } from './paymentService';
 import { QuoteAccuracyService } from './quoteAccuracyService';
 import { InventoryService } from './inventoryService';
 
-const ALLOWED_TRANSITIONS: Record<RepairLifecycleStatus, RepairLifecycleStatus[]> = {
+export const REPAIR_STATUS_TRANSITIONS: Record<RepairLifecycleStatus, RepairLifecycleStatus[]> = {
   DRAFT: ['SUBMITTED', 'CANCELLED'],
   SUBMITTED: ['MATCHING', 'QUOTING', 'CANCELLED'],
   MATCHING: ['TECHNICIANS_FOUND', 'QUOTING', 'CANCELLED'],
@@ -41,6 +41,9 @@ const ALLOWED_TRANSITIONS: Record<RepairLifecycleStatus, RepairLifecycleStatus[]
   CANCELLED: [],
   REFUNDED: [],
 };
+
+export const ALLOWED_TRANSITIONS = REPAIR_STATUS_TRANSITIONS;
+
 
 const activeAcceptLocks = new Set<string>();
 

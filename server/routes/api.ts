@@ -10,6 +10,7 @@ import { AuditService } from '../services/auditService';
 import { NotificationService } from '../services/notificationService';
 import { InventoryService } from '../services/inventoryService';
 import { calculateDistanceKm } from '../services/technicianMatchingService';
+import { authRateLimiter, paymentRateLimiter, webhookRateLimiter } from '../middleware/rateLimiters';
 import {
   UserRole,
   RepairLifecycleStatus,
@@ -148,7 +149,7 @@ export function requireRole(allowedRoles: UserRole[]) {
 /* -------------------------------------------------------------
  * 1. AUTHENTICATION & SESSIONS
  * ----------------------------------------------------------- */
-apiRouter.post('/auth/register-customer', (req: Request, res: Response) => {
+apiRouter.post('/auth/register-customer', authRateLimiter, (req: Request, res: Response) => {
   const { name, phone, email, password, address, landmark, city, state, isBorrowedDevice } = req.body;
   if (!isNonEmptyString(name) || !isNonEmptyString(phone) || !isNonEmptyString(email)) {
     return res.status(400).json({ error: 'Name, phone, and email are required.' });
@@ -173,7 +174,7 @@ apiRouter.post('/auth/register-customer', (req: Request, res: Response) => {
   return res.status(201).json(result);
 });
 
-apiRouter.post('/auth/register-technician', (req: Request, res: Response) => {
+apiRouter.post('/auth/register-technician', authRateLimiter, (req: Request, res: Response) => {
   const { name, phone, email, businessName, password, shopAddress, landmark, area, city, state, supportedBrands } = req.body;
   if (!isNonEmptyString(name) || !isNonEmptyString(phone) || !isNonEmptyString(email) || !isNonEmptyString(businessName) || !isNonEmptyString(shopAddress)) {
     return res.status(400).json({ error: 'Name, phone, email, business name, and shop address are required.' });
@@ -200,7 +201,7 @@ apiRouter.post('/auth/register-technician', (req: Request, res: Response) => {
   return res.status(201).json(result);
 });
 
-apiRouter.post('/auth/login', (req: Request, res: Response) => {
+apiRouter.post('/auth/login', authRateLimiter, (req: Request, res: Response) => {
   const { emailOrPhone, password, isBorrowedDevice } = req.body;
   if (!isNonEmptyString(emailOrPhone)) {
     return res.status(400).json({ error: 'Email or phone number is required.' });
@@ -1597,7 +1598,7 @@ apiRouter.post('/quotes/accept', requireAuth, requireRole(['customer']), (req: A
 /* -------------------------------------------------------------
  * 6. PAYMENTS & ESCROW (Server-Authoritative Amounts & Ownership)
  * ----------------------------------------------------------- */
-apiRouter.post('/payments/initialize', requireAuth, requireRole(['customer']), async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/payments/initialize', paymentRateLimiter, requireAuth, requireRole(['customer']), async (req: AuthenticatedRequest, res: Response) => {
   const { repairJobId, idempotencyKey, paymentMethod } = req.body;
   if (!isNonEmptyString(repairJobId) || !isNonEmptyString(idempotencyKey)) {
     return res.status(400).json({ error: 'Repair Job ID and Idempotency Key are required.' });
@@ -1621,7 +1622,7 @@ apiRouter.post('/payments/initialize', requireAuth, requireRole(['customer']), a
   return res.json(result);
 });
 
-apiRouter.post('/payments/verify', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/payments/verify', paymentRateLimiter, requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   const { reference, paymentId } = req.body;
   if (!reference && !paymentId) {
     return res.status(400).json({ error: 'Transaction Reference or Payment ID is required.' });
@@ -1641,7 +1642,7 @@ apiRouter.post('/payments/verify', requireAuth, async (req: AuthenticatedRequest
   return res.json(result);
 });
 
-apiRouter.post('/payments/webhook', async (req: Request, res: Response) => {
+apiRouter.post('/payments/webhook', webhookRateLimiter, async (req: Request, res: Response) => {
   const signatureHeader = req.headers['x-paystack-signature'] as string | undefined;
   const rawBody = (req as any).rawBody || JSON.stringify(req.body);
 
@@ -1652,6 +1653,14 @@ apiRouter.post('/payments/webhook', async (req: Request, res: Response) => {
   });
 
   return res.status(result.statusCode).json(result);
+});
+
+apiRouter.post('/payments/reconcile', requireAuth, requireRole(['admin']), async (req: AuthenticatedRequest, res: Response) => {
+  const { maxAgeHours } = req.body;
+  const result = await PaymentService.reconcilePendingPayments({
+    maxAgeHours: typeof maxAgeHours === 'number' && maxAgeHours > 0 ? maxAgeHours : 48,
+  });
+  return res.json(result);
 });
 
 apiRouter.post('/payments/refund', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
@@ -2474,9 +2483,12 @@ apiRouter.get('/audit-logs/repair/:id', requireAuth, (req: AuthenticatedRequest,
 });
 
 /* -------------------------------------------------------------
- * 12. DEMO / TEST RESET
+ * 12. DEMO / TEST RESET (Gated behind admin auth & excluded in production)
  * ----------------------------------------------------------- */
-apiRouter.post('/dev/reset-seed', (_req: Request, res: Response) => {
+apiRouter.post('/dev/reset-seed', requireAuth, requireRole(['admin']), (_req: AuthenticatedRequest, res: Response) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'Endpoint not available in production' });
+  }
   db.resetToSeed();
   return res.json({ success: true, message: 'Database reset to initial test seed data.' });
 });

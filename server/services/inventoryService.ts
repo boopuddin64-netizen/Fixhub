@@ -467,7 +467,7 @@ export class InventoryService {
     }> = [];
     let flaggedForPriceManipulation = false;
 
-    const reqCreatedTime = new Date(request.createdAt).getTime();
+    const reqCreatedTime = request?.createdAt ? new Date(request.createdAt).getTime() : Date.now();
 
     for (let i = 0; i < rawItems.length; i++) {
       const raw = rawItems[i];

@@ -41,6 +41,109 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   // Reset to fresh seed
   db.resetToSeed();
 
+  // Seed dynamic test records for test suite execution
+  if (!db.repairRequests.some((r) => r.id === 'req_demo_open')) {
+    db.repairRequests.push({
+      id: 'req_demo_open',
+      customerId: 'usr_customer_1',
+      customerName: 'Tunde Adebayo',
+      customerPhone: '+234 803 123 4567',
+      customerLocation: { lat: 6.5964, lng: 3.3421, address: '14 Allen Avenue, Ikeja', city: 'Lagos', state: 'Lagos State' },
+      deviceBrand: 'Apple',
+      deviceModel: 'iPhone 13',
+      issues: ['screen_damaged'],
+      description: 'Open test request',
+      photos: [],
+      status: 'QUOTING',
+      quotesCount: 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    db.repairQuotes.push({
+      id: 'quote_demo_open_1',
+      requestId: 'req_demo_open',
+      technicianId: 'usr_tech_1',
+      technicianName: 'Emeka Okafor',
+      businessName: 'Emeka Phone Labs',
+      technicianPhone: '+234 802 555 0101',
+      technicianAvatar: '',
+      technicianRating: 4.9,
+      technicianReviewsCount: 10,
+      distanceKm: 0.8,
+      partsCost: 45000,
+      laborCost: 10000,
+      otherCost: 0,
+      totalAmount: 55000,
+      estimatedTimeHours: 2,
+      warrantyDays: 60,
+      partsQuality: 'PREMIUM_AFTERMARKET',
+      notes: 'Test quote',
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+    });
+    db.repairJobs.push({
+      id: 'job_demo_active',
+      requestId: 'req_demo_open',
+      quoteId: 'quote_demo_open_1',
+      customerId: 'usr_customer_1',
+      technicianId: 'usr_tech_1',
+      deviceBrand: 'Apple',
+      deviceModel: 'iPhone 13',
+      issues: ['screen_damaged'],
+      status: 'REPAIR_IN_PROGRESS',
+      dropOffCode: 'FX-8492',
+      pickupCode: 'PK-9314',
+      handoffQrToken: 'tok_test',
+      originalQuoteAmount: 60000,
+      finalAmount: 60000,
+      platformFeeAmount: 5100,
+      technicianPayoutAmount: 54900,
+      partsUsed: [],
+      createdAt: new Date().toISOString(),
+      bookedAt: new Date().toISOString(),
+      statusHistory: [],
+    });
+    db.repairJobs.push({
+      id: 'job_demo_booked',
+      requestId: 'req_demo_open',
+      quoteId: 'quote_demo_open_1',
+      customerId: 'usr_customer_1',
+      technicianId: 'usr_tech_1',
+      deviceBrand: 'Apple',
+      deviceModel: 'iPhone 13',
+      issues: ['screen_damaged'],
+      status: 'BOOKED',
+      dropOffCode: 'FX-1102',
+      pickupCode: 'PK-4421',
+      handoffQrToken: 'tok_test2',
+      originalQuoteAmount: 55000,
+      finalAmount: 55000,
+      platformFeeAmount: 4675,
+      technicianPayoutAmount: 50325,
+      partsUsed: [],
+      createdAt: new Date().toISOString(),
+      bookedAt: new Date().toISOString(),
+      statusHistory: [],
+    });
+    db.payments.push({
+      id: 'pay_demo_pending_01',
+      repairId: 'job_demo_booked',
+      customerId: 'usr_customer_1',
+      technicianId: 'usr_tech_1',
+      amountNaira: 55000,
+      platformFeeNaira: 4675,
+      technicianPayoutNaira: 50325,
+      currency: 'NGN',
+      provider: 'PAYSTACK_SANDBOX',
+      status: 'INITIATED',
+      transactionRef: 'FIX-PAY-9918231-LAGOS',
+      idempotencyKey: 'idemp_pay_pending_001',
+      paymentMethod: 'CARD',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
   // Test 1: Authentication & Token Verification
   console.log('1. Authentication & Token Verification');
   const loginRes = AuthService.login('customer@test.fixhub.local', 'password123');
@@ -257,44 +360,42 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   });
   assert('error' in unauthAccept, 'Unauthorized customer CANNOT accept quote for another user’s request');
 
-  // Test 8: Escrow Payment Authorization & Anti-Tampering
-  console.log('\n8. Payment Escrow & IDOR Defense');
-  const legitPayment = PaymentService.createPaymentIntent({
+  // Test 8: Payment Authorization & Anti-Tampering
+  console.log('\n8. Payment Authorization & IDOR Defense');
+  const legitPayment = await PaymentService.initializePayment({
     repairJobId: 'job_demo_active',
     customerId: 'usr_customer_1',
     idempotencyKey: 'idemp_test_sec_01',
     paymentMethod: 'CARD',
   });
-  assert(!('error' in legitPayment), 'Customer can create payment intent for their own repair job');
-  if (!('error' in legitPayment)) {
+  assert(legitPayment.success === true, 'Customer can initialize payment for their own repair job');
+  if (legitPayment.success && legitPayment.payment) {
     assert(legitPayment.payment.amountNaira === 60000, 'Payment total strictly derived from server-side job record (₦60,000)');
     assert(legitPayment.payment.platformFeeNaira === 5100, 'Platform fee computed server-side (₦5,100)');
   }
 
   // Cross-account payment attempt
-  const crossAccountPay = PaymentService.createPaymentIntent({
+  const crossAccountPay = await PaymentService.initializePayment({
     repairJobId: 'job_demo_active',
     customerId: 'usr_customer_2',
     idempotencyKey: 'idemp_test_hack_01',
   });
-  assert('error' in crossAccountPay, 'Customer 2 CANNOT initiate payment on Customer 1’s repair job');
+  assert(crossAccountPay.success === false, 'Customer 2 CANNOT initiate payment on Customer 1’s repair job');
 
-  // Payment Escrow Verification Authorization
-  const legitVerify = PaymentService.verifyAndHoldInEscrow({
-    paymentId: 'pay_demo_pending_01',
-    transactionRef: 'FIX-PAY-9918231-LAGOS',
+  // Payment Verification Authorization
+  const legitVerify = await PaymentService.verifyPayment({
+    reference: 'FIX-PAY-9918231-LAGOS',
     actorId: 'usr_customer_1',
     actorRole: 'customer',
   });
-  assert(legitVerify.success === true, 'Owner customer can verify payment into escrow');
+  assert(legitVerify.success === true, 'Owner customer can verify payment');
 
-  const unauthVerify = PaymentService.verifyAndHoldInEscrow({
-    paymentId: 'pay_demo_pending_01',
-    transactionRef: 'FIX-PAY-9918231-LAGOS',
+  const unauthVerify = await PaymentService.verifyPayment({
+    reference: 'FIX-PAY-9918231-LAGOS',
     actorId: 'usr_customer_2', // Malicious customer
     actorRole: 'customer',
   });
-  assert(unauthVerify.success === false, 'Foreign customer CANNOT verify or manipulate payment escrow');
+  assert(unauthVerify.success === false, 'Foreign customer CANNOT verify or manipulate payment');
 
   // Test 9: Device Check-In & State Transition Security (Security Hardening Fix #2)
   console.log('\n9. Device Intake Check-In & State Transition Security');

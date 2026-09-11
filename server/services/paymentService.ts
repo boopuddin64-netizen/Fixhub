@@ -965,179 +965,6 @@ export class PaymentService {
   }
 
   /**
-   * Backwards-compatible mock intent creation for Phase 3/4 test suite.
-   */
-  public static createPaymentIntent(params: {
-    repairJobId: string;
-    customerId: string;
-    idempotencyKey: string;
-    paymentMethod?: 'CARD' | 'BANK_TRANSFER' | 'USSD';
-  }): { payment: PaymentTransaction; isExisting: boolean } | { error: string } {
-    const job = db.repairJobs.find((j) => j.id === params.repairJobId);
-    if (!job) {
-      return { error: 'Repair job not found.' };
-    }
-    if (job.customerId !== params.customerId) {
-      return { error: 'Unauthorized: You cannot pay for another customer’s repair.' };
-    }
-
-    const existing = db.payments.find(
-      (p) =>
-        p.idempotencyKey === params.idempotencyKey ||
-        (p.repairId === params.repairJobId && (p.status === 'ESCROW_HELD' || p.status === 'SUCCESS'))
-    );
-    if (existing) {
-      return { payment: existing, isExisting: true };
-    }
-
-    const totalAmount = job.finalAmount || job.originalQuoteAmount;
-    const platformFee = Math.round(totalAmount * this.COMMISSION_RATE);
-    const technicianPayout = totalAmount - platformFee;
-
-    const paymentId = `pay_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const txRef = `FIX-PAY-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    const payment: PaymentTransaction = {
-      id: paymentId,
-      repairId: params.repairJobId,
-      customerId: params.customerId,
-      technicianId: job.technicianId,
-      quoteId: job.quoteId,
-      amountNaira: totalAmount,
-      platformFeeNaira: platformFee,
-      technicianPayoutNaira: technicianPayout,
-      currency: 'NGN',
-      provider: 'PAYSTACK_SANDBOX',
-      status: 'INITIATED',
-      transactionRef: txRef,
-      providerReference: txRef,
-      idempotencyKey: params.idempotencyKey,
-      paymentMethod: params.paymentMethod || 'CARD',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    db.payments.push(payment);
-    db.save();
-
-    AuditService.log({
-      actorId: params.customerId,
-      actorRole: 'customer',
-      action: 'PAYMENT_INTENT_CREATED',
-      resourceType: 'PAYMENT',
-      resourceId: paymentId,
-      details: { amountNaira: totalAmount, repairJobId: params.repairJobId, txRef },
-    });
-
-    return { payment, isExisting: false };
-  }
-
-  /**
-   * Backwards-compatible verify mock / escrow holding for Phase 3/4 test suite.
-   */
-  public static verifyAndHoldInEscrow(params: {
-    paymentId: string;
-    transactionRef: string;
-    actorId: string;
-    actorRole: UserRole;
-  }): { success: boolean; payment?: PaymentTransaction; error?: string } {
-    const payment = db.payments.find(
-      (p) => p.id === params.paymentId || p.transactionRef === params.transactionRef
-    );
-    if (!payment) {
-      return { success: false, error: 'Payment record not found.' };
-    }
-
-    if (params.actorRole === 'customer' && payment.customerId !== params.actorId) {
-      return { success: false, error: 'Unauthorized: Payment does not belong to you.' };
-    }
-
-    const job = db.repairJobs.find((j) => j.id === payment.repairId);
-    if (!job) {
-      return { success: false, error: 'Associated repair job not found.' };
-    }
-
-    if (params.actorRole === 'customer' && job.customerId !== params.actorId) {
-      return { success: false, error: 'Unauthorized: Repair job does not belong to you.' };
-    }
-
-    if (payment.status === 'ESCROW_HELD' || payment.status === 'SUCCESS') {
-      return { success: true, payment };
-    }
-
-    payment.status = 'ESCROW_HELD';
-    payment.paidAt = new Date().toISOString();
-
-    job.status = 'BOOKED';
-    job.bookedAt = payment.paidAt;
-    job.statusHistory.push({
-      status: 'PAYMENT_CONFIRMED',
-      timestamp: payment.paidAt,
-      actorRole: 'customer',
-      note: `₦${payment.amountNaira.toLocaleString()} confirmed (Ref: ${payment.transactionRef})`,
-    });
-    job.statusHistory.push({
-      status: 'BOOKED',
-      timestamp: payment.paidAt,
-      actorRole: 'customer',
-      note: 'Repair job booked. Awaiting physical device check-in at shop.',
-    });
-
-    const request = db.repairRequests.find((r) => r.id === job.requestId);
-    if (request) {
-      request.status = 'BOOKED';
-      request.updatedAt = payment.paidAt;
-    }
-
-    // Record technician earnings
-    let earnings = db.technicianEarnings.find((e) => e.paymentId === payment.id);
-    if (!earnings) {
-      earnings = {
-        id: `earn_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        technicianId: job.technicianId,
-        repairId: job.id,
-        paymentId: payment.id,
-        grossAmountNaira: payment.amountNaira,
-        platformFeeNaira: payment.platformFeeNaira,
-        netEarningsNaira: payment.technicianPayoutNaira,
-        commissionPercent: Math.round(this.COMMISSION_RATE * 1000) / 10,
-        status: 'HELD',
-        createdAt: payment.paidAt,
-        updatedAt: payment.paidAt,
-      };
-      db.technicianEarnings.push(earnings);
-    }
-
-    NotificationService.send({
-      userId: job.technicianId,
-      title: 'Payment Confirmed',
-      message: `Payment of ₦${payment.amountNaira.toLocaleString()} for ${job.deviceBrand} ${job.deviceModel} is confirmed. Estimated earnings: ₦${payment.technicianPayoutNaira.toLocaleString()} (Held).`,
-      type: 'PAYMENT',
-      repairId: job.id,
-    });
-
-    NotificationService.send({
-      userId: job.customerId,
-      title: 'Payment Confirmed',
-      message: `Your payment of ₦${payment.amountNaira.toLocaleString()} is confirmed. Take your phone to the technician to begin repair.`,
-      type: 'PAYMENT',
-      repairId: job.id,
-    });
-
-    AuditService.log({
-      actorId: params.actorId,
-      actorRole: params.actorRole,
-      action: 'PAYMENT_ESCROW_CONFIRMED',
-      resourceType: 'PAYMENT',
-      resourceId: payment.id,
-      details: { amountNaira: payment.amountNaira, status: 'ESCROW_HELD' },
-    });
-
-    db.save();
-    return { success: true, payment };
-  }
-
-  /**
    * Releases held earnings to ELIGIBLE_FOR_PAYOUT upon completion of repair.
    */
   public static releaseFundsOnCompletion(
@@ -1205,4 +1032,83 @@ export class PaymentService {
     db.save();
     return { success: true };
   }
+
+  /**
+   * Reconciles unconfirmed / pending payments by querying Paystack for transaction status.
+   * Useful for handling missed webhooks or dropped network sessions.
+   */
+  public static async reconcilePendingPayments(options?: { maxAgeHours?: number }): Promise<{
+    checkedCount: number;
+    reconciledCount: number;
+    failedCount: number;
+    results: Array<{ paymentId: string; reference: string; status: string; outcome: string }>;
+  }> {
+    const maxAgeMs = (options?.maxAgeHours || 48) * 60 * 60 * 1000;
+    const now = Date.now();
+
+    // Find payments stuck in INITIATED state within the reconciliation window
+    const pendingPayments = db.payments.filter((p) => {
+      if (p.status !== 'INITIATED') return false;
+      const createdTime = new Date(p.createdAt || 0).getTime();
+      return now - createdTime <= maxAgeMs;
+    });
+
+    let reconciledCount = 0;
+    let failedCount = 0;
+    const results: Array<{ paymentId: string; reference: string; status: string; outcome: string }> = [];
+
+    for (const payment of pendingPayments) {
+      const ref = payment.providerReference || payment.transactionRef;
+      if (!ref) continue;
+
+      try {
+        const verifyRes = await this.verifyPayment({
+          reference: ref,
+          actorId: 'system_reconciliation',
+          actorRole: 'admin',
+        });
+
+        if (verifyRes.success) {
+          reconciledCount++;
+          results.push({
+            paymentId: payment.id,
+            reference: ref,
+            status: payment.status,
+            outcome: verifyRes.alreadyVerified ? 'ALREADY_VERIFIED' : 'RECONCILED_SUCCESS',
+          });
+        } else {
+          // If transaction is older than 24 hours and still unresolved, mark as expired
+          const ageHours = (now - new Date(payment.createdAt || 0).getTime()) / (1000 * 60 * 60);
+          if (ageHours > 24) {
+            payment.status = 'FAILED';
+            payment.failureReason = 'Payment session expired without completion.';
+            payment.failedAt = new Date().toISOString();
+            db.save();
+          }
+          failedCount++;
+          results.push({
+            paymentId: payment.id,
+            reference: ref,
+            status: payment.status,
+            outcome: verifyRes.error || 'UNRESOLVED',
+          });
+        }
+      } catch (err: any) {
+        results.push({
+          paymentId: payment.id,
+          reference: ref,
+          status: payment.status,
+          outcome: `ERROR: ${err?.message || 'Unknown error'}`,
+        });
+      }
+    }
+
+    return {
+      checkedCount: pendingPayments.length,
+      reconciledCount,
+      failedCount,
+      results,
+    };
+  }
 }
+

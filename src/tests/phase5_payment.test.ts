@@ -23,6 +23,53 @@ export async function runPhase5PaymentTests(): Promise<{ passed: number; failed:
 
   db.resetToSeed();
 
+  if (db.repairJobs.length === 0) {
+    db.repairQuotes.push({
+      id: 'quote_p5_test',
+      requestId: 'req_p5_test',
+      technicianId: 'usr_tech_1',
+      technicianName: 'Emeka Okafor',
+      businessName: 'Emeka Phone Labs',
+      technicianPhone: '+234 802 555 0101',
+      technicianAvatar: '',
+      technicianRating: 4.9,
+      technicianReviewsCount: 10,
+      distanceKm: 0.8,
+      partsCost: 45000,
+      laborCost: 15000,
+      otherCost: 0,
+      totalAmount: 60000,
+      estimatedTimeHours: 2,
+      warrantyDays: 60,
+      partsQuality: 'PREMIUM_AFTERMARKET',
+      notes: 'Test quote',
+      status: 'ACCEPTED',
+      createdAt: new Date().toISOString(),
+    });
+    db.repairJobs.push({
+      id: 'job_p5_test',
+      requestId: 'req_p5_test',
+      quoteId: 'quote_p5_test',
+      customerId: 'usr_customer_1',
+      technicianId: 'usr_tech_1',
+      deviceBrand: 'Apple',
+      deviceModel: 'iPhone 13',
+      issues: ['screen_damaged'],
+      status: 'PAYMENT_PENDING',
+      dropOffCode: 'FX-8492',
+      pickupCode: 'PK-9314',
+      handoffQrToken: 'tok_test',
+      originalQuoteAmount: 60000,
+      finalAmount: 60000,
+      platformFeeAmount: 5100,
+      technicianPayoutAmount: 54900,
+      partsUsed: [],
+      createdAt: new Date().toISOString(),
+      bookedAt: new Date().toISOString(),
+      statusHistory: [],
+    });
+  }
+
   // Test 1: Authoritative Amount Calculation & 8.5% Commission Integer Arithmetic
   console.log('1. Authoritative Amount Calculation & Fee Deduction');
   const job = db.repairJobs[0];

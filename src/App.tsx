@@ -49,7 +49,7 @@ function MainAppContent() {
     issue?: string;
   } | null>(null);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
-  const [selectedJobId, setSelectedJobId] = useState<string | null>('job_demo_active');
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [paymentTarget, setPaymentTarget] = useState<{ job: RepairJob; quote: RepairQuote } | null>(null);
 
   // Chat & Notifications Drawers
@@ -480,13 +480,13 @@ function MainAppContent() {
 
       {/* In-App Repair Chat Drawer */}
       <RepairChatDrawer
-        repairId={activeJob?.id || 'job_demo_active'}
+        repairId={activeJob?.id || selectedJobId || ''}
         isOpen={isChatOpen}
         onClose={() => setIsChatOpen(false)}
         otherPartyName={
           role === 'customer'
-            ? activeJobTech?.businessName || 'Emeka Phone Labs'
-            : 'Tunde Adebayo (Customer)'
+            ? activeJobTech?.businessName || 'Verified Technician'
+            : 'Customer'
         }
       />
 

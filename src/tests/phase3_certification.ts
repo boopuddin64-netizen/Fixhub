@@ -125,23 +125,22 @@ export async function runPhase3CertificationSuite(): Promise<{ passed: number; f
     assert(!!acceptRes.job.dropOffCode && !!acceptRes.job.pickupCode, 'Drop-off and Pickup security handoff verification codes exist');
   }
 
-  // F. Payment Intent & Escrow Holding
-  const paymentIntent = PaymentService.createPaymentIntent({
+  // F. Payment Initialization & Verification
+  const initPayment = await PaymentService.initializePayment({
     repairJobId: jobId,
     customerId,
     idempotencyKey: `idemp_p3_cert_${Date.now()}`,
   });
 
-  assert(!('error' in paymentIntent), 'Escrow Payment Intent successfully initialized');
-  if (!('error' in paymentIntent)) {
-    const holdRes = PaymentService.verifyAndHoldInEscrow({
-      paymentId: paymentIntent.payment.id,
-      transactionRef: paymentIntent.payment.transactionRef,
+  assert(initPayment.success === true, 'Payment successfully initialized via Paystack');
+  if (initPayment.success && initPayment.payment) {
+    const holdRes = await PaymentService.verifyPayment({
+      reference: initPayment.payment.transactionRef,
       actorId: customerId,
       actorRole: 'customer',
     });
 
-    assert(holdRes.success === true, 'Server-side payment verification succeeds and locks funds in escrow');
+    assert(holdRes.success === true, 'Server-side payment verification succeeds and locks funds');
     
     // G. Verify final state transitions
     const finalJob = db.repairJobs.find(j => j.id === jobId);
@@ -173,7 +172,7 @@ export async function runPhase3CertificationSuite(): Promise<{ passed: number; f
   // B. Quote Security Rules
   // B1. Accept non-existent / wrong request quote
   const badQuoteAccept = RepairWorkflowService.acceptQuote({
-    requestId: 'req_demo_open',
+    requestId: 'req_non_existent',
     quoteId: quoteId, // Quote belongs to different request
     customerId: 'usr_customer_1',
   });
@@ -202,31 +201,29 @@ export async function runPhase3CertificationSuite(): Promise<{ passed: number; f
   assert('error' in repeatedAccept, 'Quote Security: Repeating a quote acceptance on an already processed request is blocked');
 
   // C. Price Manipulation Guard
-  const tamperedIntent = PaymentService.createPaymentIntent({
+  const tamperedInit = await PaymentService.initializePayment({
     repairJobId: jobId,
     customerId,
     idempotencyKey: `tampered_${Date.now()}`,
   });
-  if (!('error' in tamperedIntent)) {
+  if (tamperedInit.success && tamperedInit.payment) {
     // Assert payment total matches trusted database, not a manipulated client value
-    assert(tamperedIntent.payment.amountNaira === 60000, 'Price Manipulation: Payment total is derived strictly from server-side quote state');
+    assert(tamperedInit.payment.amountNaira === 60000, 'Price Manipulation: Payment total is derived strictly from server-side quote state');
   }
 
-  // D. Payment Escrow Integrity
+  // D. Payment Integrity
   // D1. Malicious user verifies foreign payment
-  const hackVerify = PaymentService.verifyAndHoldInEscrow({
-    paymentId: `pay_p3_cert_${Date.now()}`,
-    transactionRef: 'FAKE_TX_123',
+  const hackVerify = await PaymentService.verifyPayment({
+    reference: 'FAKE_TX_123',
     actorId: foreignCustomerId,
     actorRole: 'customer',
   });
-  assert(hackVerify.success === false, 'Payment Security: Malicious customer cannot verify or manipulate another customer’s escrow payment');
+  assert(hackVerify.success === false, 'Payment Security: Malicious customer cannot verify or manipulate another customer’s payment');
 
   // D2. Payment verification idempotency
-  if (!('error' in paymentIntent)) {
-    const doubleHold = PaymentService.verifyAndHoldInEscrow({
-      paymentId: paymentIntent.payment.id,
-      transactionRef: paymentIntent.payment.transactionRef,
+  if (initPayment.success && initPayment.payment) {
+    const doubleHold = await PaymentService.verifyPayment({
+      reference: initPayment.payment.transactionRef,
       actorId: customerId,
       actorRole: 'customer',
     });
