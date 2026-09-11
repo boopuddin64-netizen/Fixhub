@@ -667,18 +667,23 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
           </div>
 
           {/* Payouts History Table */}
-          {payoutList.length > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-              <div className="p-4 border-b border-slate-200 bg-slate-50/70">
-                <h4 className="font-bold text-sm text-slate-900">Withdrawal History</h4>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-slate-200 bg-slate-50/70 flex items-center justify-between">
+              <h4 className="font-bold text-sm text-slate-900">Withdrawal & Payout History</h4>
+              <span className="text-xs text-slate-500 font-semibold">{payoutList.length} records</span>
+            </div>
+            {payoutList.length === 0 ? (
+              <div className="p-6 text-center text-xs text-slate-500">
+                No bank withdrawal requests yet. Payouts initiated above will appear here with live settlement status.
               </div>
+            ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
                     <tr>
                       <th className="p-3">Payout ID</th>
                       <th className="p-3">Amount</th>
-                      <th className="p-3">Destination</th>
+                      <th className="p-3">Destination Account</th>
                       <th className="p-3">Status</th>
                       <th className="p-3">Requested At</th>
                     </tr>
@@ -688,11 +693,19 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
                       <tr key={p.id} className="hover:bg-slate-50/80">
                         <td className="p-3 font-mono font-bold text-slate-800">{p.id}</td>
                         <td className="p-3 font-bold text-slate-900">₦{p.amountNaira.toLocaleString()}</td>
-                        <td className="p-3 text-slate-600">{p.destinationAccount?.bankName} ({p.destinationAccount?.accountNumber})</td>
+                        <td className="p-3 text-slate-600">
+                          {p.destinationAccount?.bankName} ({p.destinationAccount?.accountNumber})
+                        </td>
                         <td className="p-3">
-                          <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
-                            p.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
-                          }`}>
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                              p.status === 'COMPLETED'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : p.status === 'FAILED' || p.status === 'REVERSED'
+                                ? 'bg-rose-100 text-rose-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
                             {p.status}
                           </span>
                         </td>
@@ -702,8 +715,8 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
                   </tbody>
                 </table>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
 

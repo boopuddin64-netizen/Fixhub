@@ -186,7 +186,28 @@ export class PaymentService {
     };
 
     db.payments.push(payment);
-    db.save();
+    await db.query(
+      `INSERT INTO payments (id, repair_id, customer_id, quote_id, amount_naira, platform_fee_naira, technician_payout_naira, escrow_held, status, payment_method, transaction_ref, provider_reference, idempotency_key, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, updated_at = EXCLUDED.updated_at`,
+      [
+        payment.id,
+        payment.repairId,
+        payment.customerId,
+        payment.quoteId || null,
+        payment.amountNaira,
+        payment.platformFeeNaira,
+        payment.technicianPayoutNaira,
+        true,
+        payment.status,
+        payment.paymentMethod,
+        payment.transactionRef,
+        payment.providerReference || payment.transactionRef,
+        payment.idempotencyKey || null,
+        payment.createdAt,
+        payment.updatedAt,
+      ]
+    ).catch(() => {});
 
     AuditService.log({
       actorId: customerId,
@@ -350,55 +371,168 @@ export class PaymentService {
       return { success: false, error: 'Payment currency mismatch. Verification rejected.' };
     }
 
-    // 9. Payment Confirmation State Transitions
+    // 9. Payment Confirmation State Transitions wrapped in an atomic database transaction
     const paidAt = providerData.paid_at || new Date().toISOString();
-    payment.status = 'SUCCESS';
-    payment.paidAt = paidAt;
-    payment.channel = providerData.channel || payment.paymentMethod;
-    payment.updatedAt = paidAt;
+    const earningsId = `earn_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const earningsRecord: TechnicianEarnings = {
+      id: earningsId,
+      technicianId: job.technicianId,
+      repairId: job.id,
+      paymentId: payment.id,
+      grossAmountNaira: payment.amountNaira,
+      platformFeeNaira: payment.platformFeeNaira,
+      netEarningsNaira: payment.technicianPayoutNaira,
+      commissionPercent: Math.round(this.COMMISSION_RATE * 1000) / 10,
+      status: 'HELD',
+      createdAt: paidAt,
+      updatedAt: paidAt,
+    };
 
-    // Update Repair Job state to BOOKED with explicit history entry
-    job.status = 'BOOKED';
-    job.bookedAt = paidAt;
-    job.statusHistory.push({
-      status: 'PAYMENT_CONFIRMED',
-      timestamp: paidAt,
-      actorRole: 'customer',
-      note: `Payment of ₦${payment.amountNaira.toLocaleString()} confirmed via Paystack (Ref: ${payment.transactionRef}).`,
+    let earnings: TechnicianEarnings | undefined;
+
+    await db.transaction(async (tx) => {
+      payment.status = 'SUCCESS';
+      payment.paidAt = paidAt;
+      payment.channel = providerData.channel || payment.paymentMethod;
+      payment.updatedAt = paidAt;
+
+      // Update Repair Job state to BOOKED with explicit history entry
+      job.status = 'BOOKED';
+      job.bookedAt = paidAt;
+      job.statusHistory.push({
+        status: 'PAYMENT_CONFIRMED',
+        timestamp: paidAt,
+        actorRole: 'customer',
+        note: `Payment of ₦${payment.amountNaira.toLocaleString()} confirmed via Paystack (Ref: ${payment.transactionRef}).`,
+      });
+      job.statusHistory.push({
+        status: 'BOOKED',
+        timestamp: paidAt,
+        actorRole: 'customer',
+        note: 'Repair booking confirmed. Awaiting physical device check-in.',
+      });
+
+      // Ensure parent Repair Request exists
+      const request = db.repairRequests.find((r) => r.id === job.requestId);
+      if (request) {
+        request.status = 'BOOKED';
+        request.updatedAt = paidAt;
+      }
+      const reqId = job.requestId || `req_auto_${job.id}`;
+      await tx.query(
+        `INSERT INTO repair_requests (id, customer_id, device_brand, device_model, device_type, issue_description, status, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (id) DO UPDATE SET status = 'BOOKED', updated_at = $9`,
+        [
+          reqId,
+          request?.customerId || job.customerId,
+          request?.deviceBrand || job.deviceBrand,
+          request?.deviceModel || job.deviceModel,
+          request?.deviceType || 'PHONE',
+          request?.description || (Array.isArray((request as any)?.issues) ? (request as any).issues.join(', ') : 'Repair Service'),
+          'BOOKED',
+          request?.createdAt || paidAt,
+          paidAt,
+        ]
+      );
+
+      // Upsert Quote if present
+      const quote = db.repairQuotes.find((q) => q.id === job.quoteId) as any;
+      if (quote) {
+        const partsCost = quote.partsCostNaira ?? quote.partsCost ?? 0;
+        const laborCost = quote.laborCostNaira ?? quote.laborCost ?? 0;
+        const totalAmount = quote.totalAmountNaira ?? quote.totalAmount ?? (partsCost + laborCost);
+        await tx.query(
+          `INSERT INTO repair_quotes (id, request_id, technician_id, technician_name, parts_cost_naira, labor_cost_naira, total_amount_naira, estimated_completion_time, warranty_days, status, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           ON CONFLICT (id) DO NOTHING`,
+          [
+            quote.id,
+            reqId,
+            quote.technicianId || job.technicianId,
+            quote.technicianName || 'Technician',
+            partsCost,
+            laborCost,
+            totalAmount,
+            quote.estimatedCompletionTime || '1-2 days',
+            quote.warrantyDays || 90,
+            quote.status || 'ACCEPTED',
+            quote.createdAt || paidAt,
+          ]
+        );
+      }
+
+      // Upsert Repair Job
+      await tx.query(
+        `INSERT INTO repair_jobs (id, request_id, quote_id, customer_id, technician_id, device_brand, device_model, status, original_quote_amount, final_amount, status_history, created_at, booked_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         ON CONFLICT (id) DO UPDATE SET status = 'BOOKED', booked_at = $13, status_history = $11`,
+        [
+          job.id,
+          job.requestId,
+          job.quoteId,
+          job.customerId,
+          job.technicianId,
+          job.deviceBrand,
+          job.deviceModel,
+          'BOOKED',
+          job.originalQuoteAmount,
+          job.finalAmount,
+          JSON.stringify(job.statusHistory),
+          job.createdAt || paidAt,
+          paidAt,
+        ]
+      );
+
+      // Upsert payment record
+      await tx.query(
+        `INSERT INTO payments (id, repair_id, customer_id, quote_id, amount_naira, platform_fee_naira, technician_payout_naira, escrow_held, status, payment_method, transaction_ref, provider_reference, paid_at, channel, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+         ON CONFLICT (id) DO UPDATE SET status = 'SUCCESS', paid_at = $13, channel = $14, updated_at = $16`,
+        [
+          payment.id,
+          payment.repairId,
+          payment.customerId,
+          payment.quoteId || null,
+          payment.amountNaira,
+          payment.platformFeeNaira,
+          payment.technicianPayoutNaira,
+          true,
+          'SUCCESS',
+          payment.paymentMethod,
+          payment.transactionRef,
+          payment.providerReference || payment.transactionRef,
+          paidAt,
+          payment.channel,
+          payment.createdAt || paidAt,
+          paidAt,
+        ]
+      );
+
+      // 10. Financial Ledger: Create Technician Earnings record in HELD status
+      earnings = db.technicianEarnings.find((e) => e.paymentId === payment.id);
+      if (!earnings) {
+        earnings = earningsRecord;
+        db.technicianEarnings.push(earnings);
+        await tx.query(
+          `INSERT INTO technician_earnings (id, technician_id, repair_id, payment_id, gross_amount_naira, platform_fee_naira, net_earnings_naira, commission_percent, status, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          [
+            earnings.id,
+            earnings.technicianId,
+            earnings.repairId,
+            earnings.paymentId,
+            earnings.grossAmountNaira,
+            earnings.platformFeeNaira,
+            earnings.netEarningsNaira,
+            earnings.commissionPercent,
+            earnings.status,
+            earnings.createdAt,
+            earnings.updatedAt,
+          ]
+        );
+      }
     });
-    job.statusHistory.push({
-      status: 'BOOKED',
-      timestamp: paidAt,
-      actorRole: 'customer',
-      note: 'Repair booking confirmed. Awaiting physical device check-in.',
-    });
-
-    // Update parent Repair Request
-    const request = db.repairRequests.find((r) => r.id === job.requestId);
-    if (request) {
-      request.status = 'BOOKED';
-      request.updatedAt = paidAt;
-    }
-
-    // 10. Financial Ledger: Create Technician Earnings record in HELD status
-    let earnings = db.technicianEarnings.find((e) => e.paymentId === payment.id);
-    if (!earnings) {
-      const earningsId = `earn_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      earnings = {
-        id: earningsId,
-        technicianId: job.technicianId,
-        repairId: job.id,
-        paymentId: payment.id,
-        grossAmountNaira: payment.amountNaira,
-        platformFeeNaira: payment.platformFeeNaira,
-        netEarningsNaira: payment.technicianPayoutNaira,
-        commissionPercent: Math.round(this.COMMISSION_RATE * 1000) / 10,
-        status: 'HELD',
-        createdAt: paidAt,
-        updatedAt: paidAt,
-      };
-      db.technicianEarnings.push(earnings);
-    }
 
     // 11. Audit Logging
     AuditService.log({
@@ -486,7 +620,42 @@ export class PaymentService {
       return { success: false, statusCode: 400, message: 'Missing transaction reference in webhook.' };
     }
 
-    // 2. Webhook Idempotency: Check if this event was already processed
+    // 2. Webhook Idempotency & Database Constraint Check
+    const eventKey = `${eventName}:${reference}`;
+    const webhookId = `whk_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+    // Try inserting into database with UNIQUE constraint on event_key
+    try {
+      await db.query(
+        'INSERT INTO webhook_events (id, event_key, event, provider_reference, provider, payload_summary, processed_at, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+        [
+          webhookId,
+          eventKey,
+          eventName,
+          reference,
+          'PAYSTACK',
+          JSON.stringify(eventData),
+          new Date().toISOString(),
+          'PROCESSED',
+        ]
+      );
+    } catch (err: any) {
+      if (
+        err.message?.includes('duplicate key') ||
+        err.message?.includes('unique') ||
+        err.message?.includes('violates unique constraint') ||
+        err.code === '23505'
+      ) {
+        return {
+          success: true,
+          statusCode: 200,
+          message: 'Webhook event already processed (Database-level Idempotency).',
+          eventId: reference,
+        };
+      }
+      throw err;
+    }
+
     const existingEvent = db.webhookEvents.find(
       (w) => w.providerReference === reference && w.event === eventName
     );
@@ -509,130 +678,161 @@ export class PaymentService {
       details: { event: eventName },
     });
 
-    // 3. Process supported events
+    // 3. Process supported events inside database transaction
     let processSuccess = false;
-    if (eventName === 'charge.success') {
-      const verifyRes = await this.verifyPayment({ reference });
-      processSuccess = verifyRes.success;
-    } else if (eventName === 'charge.failed') {
-      const payment = db.payments.find(
-        (p) => p.providerReference === reference || p.transactionRef === reference
-      );
-      if (payment) {
-        payment.status = 'FAILED';
-        payment.failedAt = new Date().toISOString();
-        payment.failureReason = eventData.gateway_response || 'Charge failed at Paystack.';
-        db.save();
-      }
-      processSuccess = true;
-    } else if (eventName === 'transfer.success') {
-      // Handle successful Paystack technician transfer
-      const payout = db.payouts.find(
-        (p) => p.providerReference === reference || (eventData.transfer_code && p.providerReference === eventData.transfer_code)
-      );
-      if (payout) {
-        payout.status = 'COMPLETED';
-        payout.processedAt = new Date().toISOString();
-        payout.updatedAt = payout.processedAt;
-
-        // Mark associated technician earnings as PAID_OUT
-        const eligibleEarnings = db.technicianEarnings.filter(
-          (e) => e.technicianId === payout.technicianId && (e.status === 'ELIGIBLE_FOR_PAYOUT' || e.status === 'PAYOUT_INITIATED')
+    await db.transaction(async (tx) => {
+      if (eventName === 'charge.success') {
+        const verifyRes = await this.verifyPayment({ reference });
+        processSuccess = verifyRes.success;
+      } else if (eventName === 'charge.failed') {
+        const payment = db.payments.find(
+          (p) => p.providerReference === reference || p.transactionRef === reference
         );
-        let remainingToMark = payout.amountNaira;
-        for (const earn of eligibleEarnings) {
-          if (remainingToMark <= 0) break;
-          earn.status = 'PAID_OUT';
-          earn.paidOutAt = payout.processedAt;
-          earn.updatedAt = payout.processedAt;
-          remainingToMark -= earn.netEarningsNaira;
+        if (payment) {
+          payment.status = 'FAILED';
+          payment.failedAt = new Date().toISOString();
+          payment.failureReason = eventData.gateway_response || 'Charge failed at Paystack.';
+          await tx.query('UPDATE payments SET status = $1, failed_at = $2, failure_reason = $3 WHERE id = $4', [
+            'FAILED',
+            payment.failedAt,
+            payment.failureReason,
+            payment.id,
+          ]);
         }
+        processSuccess = true;
+      } else if (eventName === 'transfer.success') {
+        // Handle successful Paystack technician transfer
+        const payout = db.payouts.find(
+          (p) => p.providerReference === reference || (eventData.transfer_code && p.providerReference === eventData.transfer_code)
+        );
+        if (payout) {
+          payout.status = 'COMPLETED';
+          payout.processedAt = new Date().toISOString();
+          payout.updatedAt = payout.processedAt;
+          await tx.query('UPDATE payouts SET status = $1, processed_at = $2, updated_at = $2 WHERE id = $3', [
+            'COMPLETED',
+            payout.processedAt,
+            payout.id,
+          ]);
 
-        NotificationService.send({
-          userId: payout.technicianId,
-          title: 'Payout Delivered',
-          message: `Your transfer of ₦${payout.amountNaira.toLocaleString()} has been confirmed by your bank via Paystack.`,
-          type: 'PAYMENT',
-        });
+          // Mark associated technician earnings as PAID_OUT
+          const eligibleEarnings = db.technicianEarnings.filter(
+            (e) => e.technicianId === payout.technicianId && (e.status === 'ELIGIBLE_FOR_PAYOUT' || e.status === 'PAYOUT_INITIATED')
+          );
+          let remainingToMark = payout.amountNaira;
+          for (const earn of eligibleEarnings) {
+            if (remainingToMark <= 0) break;
+            earn.status = 'PAID_OUT';
+            earn.paidOutAt = payout.processedAt;
+            earn.updatedAt = payout.processedAt;
+            await tx.query('UPDATE technician_earnings SET status = $1, paid_out_at = $2, updated_at = $2 WHERE id = $3', [
+              'PAID_OUT',
+              payout.processedAt,
+              earn.id,
+            ]);
+            remainingToMark -= earn.netEarningsNaira;
+          }
 
-        AuditService.log({
-          actorId: 'paystack_webhook',
-          actorRole: 'admin',
-          action: 'PAYOUT_COMPLETED',
-          resourceType: 'PAYOUT',
-          resourceId: payout.id,
-          details: { amountNaira: payout.amountNaira, reference },
-        });
+          NotificationService.send({
+            userId: payout.technicianId,
+            title: 'Payout Delivered',
+            message: `Your transfer of ₦${payout.amountNaira.toLocaleString()} has been confirmed by your bank via Paystack.`,
+            type: 'PAYMENT',
+          });
 
-        db.save();
-      }
-      processSuccess = true;
-    } else if (eventName === 'transfer.failed' || eventName === 'transfer.reversed') {
-      // Handle failed or reversed Paystack technician transfer
-      const payout = db.payouts.find(
-        (p) => p.providerReference === reference || (eventData.transfer_code && p.providerReference === eventData.transfer_code)
-      );
-      if (payout) {
-        payout.status = 'FAILED';
-        payout.failureReason = eventData.gateway_response || eventData.reason || 'Transfer failed or reversed by bank.';
-        payout.updatedAt = new Date().toISOString();
-
-        NotificationService.send({
-          userId: payout.technicianId,
-          title: 'Payout Failed',
-          message: `Your transfer of ₦${payout.amountNaira.toLocaleString()} failed: ${payout.failureReason}. Your earnings remain eligible.`,
-          type: 'PAYMENT',
-        });
-
-        AuditService.log({
-          actorId: 'paystack_webhook',
-          actorRole: 'admin',
-          action: 'PAYOUT_FAILED',
-          resourceType: 'PAYOUT',
-          resourceId: payout.id,
-          details: { amountNaira: payout.amountNaira, reference, reason: payout.failureReason },
-        });
-
-        db.save();
-      }
-      processSuccess = true;
-    } else if (eventName === 'refund.processed') {
-      const payment = db.payments.find(
-        (p) => p.providerReference === reference || p.transactionRef === reference
-      );
-      if (payment) {
-        payment.status = 'REFUNDED';
-        payment.refundedAt = new Date().toISOString();
-        const earnings = db.technicianEarnings.find((e) => e.paymentId === payment.id);
-        if (earnings) {
-          earnings.status = 'REFUNDED';
-          earnings.updatedAt = payment.refundedAt;
+          AuditService.log({
+            actorId: 'paystack_webhook',
+            actorRole: 'admin',
+            action: 'PAYOUT_COMPLETED',
+            resourceType: 'PAYOUT',
+            resourceId: payout.id,
+            details: { amountNaira: payout.amountNaira, reference },
+          });
         }
+        processSuccess = true;
+      } else if (eventName === 'transfer.failed' || eventName === 'transfer.reversed') {
+        // Handle failed or reversed Paystack technician transfer
+        const payout = db.payouts.find(
+          (p) => p.providerReference === reference || (eventData.transfer_code && p.providerReference === eventData.transfer_code)
+        );
+        if (payout) {
+          payout.status = 'FAILED';
+          payout.failureReason = eventData.gateway_response || eventData.reason || 'Transfer failed or reversed by bank.';
+          payout.updatedAt = new Date().toISOString();
+          await tx.query('UPDATE payouts SET status = $1, failure_reason = $2, updated_at = $3 WHERE id = $4', [
+            'FAILED',
+            payout.failureReason,
+            payout.updatedAt,
+            payout.id,
+          ]);
 
-        const refund = db.refunds.find((r) => r.paymentId === payment.id);
+          NotificationService.send({
+            userId: payout.technicianId,
+            title: 'Payout Failed',
+            message: `Your transfer of ₦${payout.amountNaira.toLocaleString()} failed: ${payout.failureReason}. Your earnings remain eligible.`,
+            type: 'PAYMENT',
+          });
+
+          AuditService.log({
+            actorId: 'paystack_webhook',
+            actorRole: 'admin',
+            action: 'PAYOUT_FAILED',
+            resourceType: 'PAYOUT',
+            resourceId: payout.id,
+            details: { amountNaira: payout.amountNaira, reference, reason: payout.failureReason },
+          });
+        }
+        processSuccess = true;
+      } else if (eventName === 'refund.processed') {
+        const payment = db.payments.find(
+          (p) => p.providerReference === reference || p.transactionRef === reference
+        );
+        if (payment) {
+          payment.status = 'REFUNDED';
+          payment.refundedAt = new Date().toISOString();
+          await tx.query('UPDATE payments SET status = $1, updated_at = $2 WHERE id = $3', [
+            'REFUNDED',
+            payment.refundedAt,
+            payment.id,
+          ]);
+          const earnings = db.technicianEarnings.find((e) => e.paymentId === payment.id);
+          if (earnings) {
+            earnings.status = 'REFUNDED';
+            earnings.updatedAt = payment.refundedAt;
+            await tx.query('UPDATE technician_earnings SET status = $1, updated_at = $2 WHERE id = $3', [
+              'REFUNDED',
+              payment.refundedAt,
+              earnings.id,
+            ]);
+          }
+
+          const refund = db.refunds.find((r) => r.paymentId === payment.id);
+          if (refund) {
+            refund.status = 'COMPLETED';
+            refund.processedAt = payment.refundedAt;
+            await tx.query('UPDATE refunds SET status = $1, processed_at = $2 WHERE id = $3', [
+              'COMPLETED',
+              payment.refundedAt,
+              refund.id,
+            ]);
+          }
+        }
+        processSuccess = true;
+      } else if (eventName === 'refund.failed') {
+        const refund = db.refunds.find((r) => r.providerReference === reference);
         if (refund) {
-          refund.status = 'COMPLETED';
-          refund.processedAt = payment.refundedAt;
+          refund.status = 'FAILED';
+          await tx.query('UPDATE refunds SET status = $1 WHERE id = $2', ['FAILED', refund.id]);
         }
-
-        db.save();
+        processSuccess = true;
+      } else {
+        processSuccess = true;
       }
-      processSuccess = true;
-    } else if (eventName === 'refund.failed') {
-      const refund = db.refunds.find((r) => r.providerReference === reference);
-      if (refund) {
-        refund.status = 'FAILED';
-        db.save();
-      }
-      processSuccess = true;
-    } else {
-      // Other unhandled events: record as IGNORED
-      processSuccess = true;
-    }
+    });
 
     // 4. Record Webhook Event for Audit & Idempotency
     const webhookRecord: WebhookEventRecord = {
-      id: `whk_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: webhookId,
       event: eventName,
       providerReference: reference,
       provider: 'PAYSTACK',
@@ -646,7 +846,6 @@ export class PaymentService {
     };
 
     db.webhookEvents.push(webhookRecord);
-    db.save();
 
     AuditService.log({
       actorId: 'paystack_webhook',
@@ -924,21 +1123,59 @@ export class PaymentService {
       processedAt: isCompleted ? now : undefined,
     };
 
-    db.payouts.push(payout);
+    await db.transaction(async (tx) => {
+      // Ensure technician user exists in SQL users table
+      const techUser = db.users.find((u) => u.id === technicianId);
+      await tx.query(
+        `INSERT INTO users (id, email, phone, name, role, password_hash, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          technicianId,
+          techUser?.email || `${technicianId}@fixhub.local`,
+          techUser?.phone || '+2348000000000',
+          techUser?.name || 'Technician',
+          'technician',
+          techUser?.passwordHash || 'placeholder_hash',
+          techUser?.createdAt || now,
+        ]
+      );
 
-    // If completed immediately (e.g. sandbox or instant transfer), mark earnings
-    if (isCompleted) {
-      let remainingToMark = amountNaira;
-      for (const earn of eligibleEarnings) {
-        if (remainingToMark <= 0) break;
-        earn.status = 'PAID_OUT';
-        earn.paidOutAt = now;
-        earn.updatedAt = now;
-        remainingToMark -= earn.netEarningsNaira;
+      db.payouts.push(payout);
+      await tx.query(
+        `INSERT INTO payouts (id, technician_id, amount_naira, bank_code, account_number, account_name, provider_reference, status, created_at, updated_at, processed_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          payout.id,
+          payout.technicianId,
+          payout.amountNaira,
+          destinationAccount.bankCode,
+          destinationAccount.accountNumber,
+          destinationAccount.accountName,
+          payout.providerReference,
+          payout.status,
+          payout.createdAt,
+          payout.updatedAt,
+          payout.processedAt || null,
+        ]
+      );
+
+      // If completed immediately (e.g. sandbox or instant transfer), mark earnings
+      if (isCompleted) {
+        let remainingToMark = amountNaira;
+        for (const earn of eligibleEarnings) {
+          if (remainingToMark <= 0) break;
+          earn.status = 'PAID_OUT';
+          earn.paidOutAt = now;
+          earn.updatedAt = now;
+          await tx.query(
+            'UPDATE technician_earnings SET status = $1, paid_out_at = $2, updated_at = $2 WHERE id = $3',
+            ['PAID_OUT', now, earn.id]
+          );
+          remainingToMark -= earn.netEarningsNaira;
+        }
       }
-    }
-
-    db.save();
+    });
 
     AuditService.log({
       actorId: technicianId,

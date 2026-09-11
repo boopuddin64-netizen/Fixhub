@@ -504,6 +504,27 @@ export class ApiClient {
     });
   }
 
+  public static disputeJob(jobId: string, reason: string) {
+    return this.request<{ success: boolean; job?: any; error?: string }>(`/jobs/${jobId}/dispute`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  public static cancelJob(jobId: string, reason?: string) {
+    return this.request<{ success: boolean; job?: any; error?: string }>(`/jobs/${jobId}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  public static cancelRequest(requestId: string, reason?: string) {
+    return this.request<{ success: boolean; request?: any; error?: string }>(`/repairs/requests/${requestId}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
   // Reviews
   public static submitReview(data: { repairId: string; rating: number; comment: string }) {
     return this.request<any>('/reviews', {

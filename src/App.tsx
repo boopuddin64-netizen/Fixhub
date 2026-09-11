@@ -328,6 +328,10 @@ function MainAppContent() {
                 onOpenChat={() => setIsChatOpen(true)}
                 onOpenReviewModal={() => setShowReviewModal(true)}
                 onRefresh={loadData}
+                onPay={(jobToPay) => {
+                  setPaymentTarget({ job: jobToPay });
+                  setSelectedJobId(jobToPay.id);
+                }}
               />
             ) : currentTab === 'passport' ? (
               <WarrantyPassportView />

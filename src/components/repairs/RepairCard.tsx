@@ -10,6 +10,8 @@ interface RepairCardProps {
   request?: RepairRequest;
   onSelect: () => void;
   onOpenChat?: () => void;
+  onPay?: (job: RepairJob) => void;
+  onCancelRequest?: (requestId: string) => void;
 }
 
 export const RepairCard: React.FC<RepairCardProps> = ({
@@ -18,6 +20,8 @@ export const RepairCard: React.FC<RepairCardProps> = ({
   request,
   onSelect,
   onOpenChat,
+  onPay,
+  onCancelRequest,
 }) => {
   const isJob = type === 'job' && job;
   const isRequest = type === 'request' && request;
@@ -108,6 +112,31 @@ export const RepairCard: React.FC<RepairCardProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {isRequest && onCancelRequest && !['COMPLETED', 'CANCELLED', 'REFUNDED'].includes(request.status) && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCancelRequest(request.id);
+              }}
+              className="px-2.5 py-2 text-xs font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"
+            >
+              Cancel Request
+            </button>
+          )}
+          {isJob && job.status === 'PAYMENT_PENDING' && onPay && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPay(job);
+              }}
+              className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold px-3.5 py-2 rounded-xl transition-all shadow-xs cursor-pointer"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>Pay Now</span>
+            </button>
+          )}
           {isJob && onOpenChat && (
             <button
               type="button"

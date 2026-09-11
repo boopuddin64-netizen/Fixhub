@@ -16,6 +16,7 @@ interface CustomerRepairsViewProps {
   onOpenChat: () => void;
   onOpenReviewModal: () => void;
   onRefresh: () => void;
+  onPay?: (job: RepairJob) => void;
 }
 
 export const CustomerRepairsView: React.FC<CustomerRepairsViewProps> = ({
@@ -29,12 +30,25 @@ export const CustomerRepairsView: React.FC<CustomerRepairsViewProps> = ({
   onOpenChat,
   onOpenReviewModal,
   onRefresh,
+  onPay,
 }) => {
   const [filterTab, setFilterTab] = useState<'active' | 'history'>('active');
+  const [cancellingRequestId, setCancellingRequestId] = useState<string | null>(null);
 
   const safeJobs = Array.isArray(jobs) ? jobs : [];
   const safeRequests = Array.isArray(requests) ? requests : [];
   const safeTechnicians = Array.isArray(technicians) ? technicians : [];
+
+  const handleCancelRequest = async (requestId: string) => {
+    try {
+      await ApiClient.cancelRequest(requestId);
+      onRefresh();
+    } catch (err) {
+      console.error('Failed to cancel request:', err);
+    } finally {
+      setCancellingRequestId(null);
+    }
+  };
 
   const activeJobs = safeJobs.filter((j) => j.status !== 'COMPLETED' && j.status !== 'CANCELLED');
   const historyJobs = safeJobs.filter((j) => j.status === 'COMPLETED' || j.status === 'CANCELLED');
@@ -76,6 +90,7 @@ export const CustomerRepairsView: React.FC<CustomerRepairsViewProps> = ({
           onOpenChat={onOpenChat}
           onRefresh={onRefresh}
           onOpenReviewModal={onOpenReviewModal}
+          onPay={onPay}
         />
       </div>
     );
@@ -162,6 +177,7 @@ export const CustomerRepairsView: React.FC<CustomerRepairsViewProps> = ({
                   job={job}
                   onSelect={() => onSelectJob(job.id)}
                   onOpenChat={onOpenChat}
+                  onPay={onPay}
                 />
               ))}
 
@@ -172,6 +188,7 @@ export const CustomerRepairsView: React.FC<CustomerRepairsViewProps> = ({
                   type="request"
                   request={req}
                   onSelect={() => onOpenDiscovery(req.id)}
+                  onCancelRequest={handleCancelRequest}
                 />
               ))}
             </>

@@ -954,6 +954,21 @@ apiRouter.post('/repairs/requests/:id/match', requireAuth, requireRole(['custome
   return res.json({ request, matchedTechnicians: matched });
 });
 
+apiRouter.post('/repairs/requests/:id/cancel', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
+  const result = RepairWorkflowService.cancelRequest({
+    requestId: req.params.id,
+    actorId: req.user!.id,
+    actorRole: 'customer',
+    reason: req.body?.reason ? sanitizeString(req.body.reason, 500) : undefined,
+  });
+
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+
+  return res.json(result);
+});
+
 apiRouter.post('/repairs/requests', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
   const {
     customerLocation,
@@ -2079,6 +2094,42 @@ apiRouter.post('/jobs/:id/confirm-completion', requireAuth, requireRole(['custom
   const result = RepairWorkflowService.confirmCompletion({
     jobId: req.params.id,
     customerId: req.user!.id,
+  });
+
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+
+  return res.json(result);
+});
+
+apiRouter.post('/jobs/:id/dispute', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  const { reason } = req.body;
+  if (!reason || typeof reason !== 'string' || !reason.trim()) {
+    return res.status(400).json({ error: 'Dispute reason is required.' });
+  }
+
+  const result = RepairWorkflowService.disputeJob({
+    jobId: req.params.id,
+    actorId: req.user!.id,
+    actorRole: req.user!.role,
+    reason: sanitizeString(reason, 1000),
+  });
+
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+
+  return res.json(result);
+});
+
+apiRouter.post('/jobs/:id/cancel', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  const { reason } = req.body;
+  const result = RepairWorkflowService.cancelJob({
+    jobId: req.params.id,
+    actorId: req.user!.id,
+    actorRole: req.user!.role,
+    reason: reason ? sanitizeString(reason, 500) : undefined,
   });
 
   if (!result.success) {

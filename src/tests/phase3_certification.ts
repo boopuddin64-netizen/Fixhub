@@ -19,6 +19,8 @@ function assert(condition: boolean, testName: string, detail?: string) {
 }
 
 export async function runPhase3CertificationSuite(): Promise<{ passed: number; failed: number }> {
+  passed = 0;
+  failed = 0;
   console.log('\n===============================================================');
   console.log('   FIX HUB PHASE 3 — HARDENING & E2E SECURITY CERTIFICATION');
   console.log('===============================================================\n');

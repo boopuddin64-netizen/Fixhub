@@ -15,13 +15,11 @@ export const RepairTimeline: React.FC<RepairTimelineProps> = ({ status }) => {
         'DEVICE_DROPPED_OFF',
         'DEVICE_RECEIVED',
         'DIAGNOSING',
-        'IN_REPAIR',
         'REPAIR_IN_PROGRESS',
         'ADDITIONAL_DIAGNOSIS',
         'READY_FOR_PICKUP',
         'PICKED_UP',
         'COMPLETED',
-        'REPAIR_COMPLETED',
       ].includes(status),
     },
     {
@@ -30,13 +28,11 @@ export const RepairTimeline: React.FC<RepairTimelineProps> = ({ status }) => {
         'DEVICE_DROPPED_OFF',
         'DEVICE_RECEIVED',
         'DIAGNOSING',
-        'IN_REPAIR',
         'REPAIR_IN_PROGRESS',
         'ADDITIONAL_DIAGNOSIS',
         'READY_FOR_PICKUP',
         'PICKED_UP',
         'COMPLETED',
-        'REPAIR_COMPLETED',
       ].includes(status),
     },
     {
@@ -44,25 +40,21 @@ export const RepairTimeline: React.FC<RepairTimelineProps> = ({ status }) => {
       done: [
         'DEVICE_RECEIVED',
         'DIAGNOSING',
-        'IN_REPAIR',
         'REPAIR_IN_PROGRESS',
         'ADDITIONAL_DIAGNOSIS',
         'READY_FOR_PICKUP',
         'PICKED_UP',
         'COMPLETED',
-        'REPAIR_COMPLETED',
       ].includes(status),
     },
     {
       label: 'Diagnosis & Repair',
       done: [
-        'IN_REPAIR',
         'REPAIR_IN_PROGRESS',
         'ADDITIONAL_DIAGNOSIS',
         'READY_FOR_PICKUP',
         'PICKED_UP',
         'COMPLETED',
-        'REPAIR_COMPLETED',
       ].includes(status),
     },
     {
@@ -71,16 +63,15 @@ export const RepairTimeline: React.FC<RepairTimelineProps> = ({ status }) => {
         'READY_FOR_PICKUP',
         'PICKED_UP',
         'COMPLETED',
-        'REPAIR_COMPLETED',
       ].includes(status),
     },
     {
       label: 'Picked Up',
-      done: ['PICKED_UP', 'COMPLETED', 'REPAIR_COMPLETED'].includes(status),
+      done: ['PICKED_UP', 'COMPLETED'].includes(status),
     },
     {
       label: 'Warranty',
-      done: ['COMPLETED', 'REPAIR_COMPLETED'].includes(status),
+      done: ['COMPLETED'].includes(status),
     },
   ];
 

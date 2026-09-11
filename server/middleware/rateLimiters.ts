@@ -8,6 +8,10 @@ export const paymentRateLimiter = rateLimit({
   max: 30, // Limit each IP to 30 requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
+  validate: {
+    xForwardedForHeader: false,
+    forwardedHeader: false,
+  },
   message: { error: 'Too many payment requests from this IP, please try again after a minute.' },
 });
 
@@ -19,6 +23,10 @@ export const webhookRateLimiter = rateLimit({
   max: 120, // 120 webhook events per minute
   standardHeaders: true,
   legacyHeaders: false,
+  validate: {
+    xForwardedForHeader: false,
+    forwardedHeader: false,
+  },
   message: { error: 'Webhook rate limit exceeded.' },
 });
 
@@ -30,5 +38,9 @@ export const authRateLimiter = rateLimit({
   max: 30, // Limit each IP to 30 attempts per 15 mins
   standardHeaders: true,
   legacyHeaders: false,
+  validate: {
+    xForwardedForHeader: false,
+    forwardedHeader: false,
+  },
   message: { error: 'Too many authentication attempts, please try again in a few minutes.' },
 });

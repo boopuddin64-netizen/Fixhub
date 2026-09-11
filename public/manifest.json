@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Fix Hub — Find. Fix. Done.",
-  "short_name": "Fix Hub",
+  "name": "FixHub — Find. Fix. Done.",
+  "short_name": "FixHub",
   "description": "Location-based phone repair marketplace connecting customers with vetted nearby technicians with transparent quotes, secure escrow payments, device check-in, repair passport, and warranty records.",
   "start_url": "/",
   "scope": "/",

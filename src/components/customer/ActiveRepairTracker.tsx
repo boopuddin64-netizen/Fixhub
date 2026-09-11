@@ -28,6 +28,7 @@ interface ActiveRepairTrackerProps {
   onOpenChat: () => void;
   onRefresh: () => void;
   onOpenReviewModal: () => void;
+  onPay?: (job: RepairJob) => void;
 }
 
 export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
@@ -37,10 +38,17 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
   onOpenChat,
   onRefresh,
   onOpenReviewModal,
+  onPay,
 }) => {
   const [isConfirmingPickup, setIsConfirmingPickup] = useState(false);
   const [isRespondingDiagnosis, setIsRespondingDiagnosis] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [disputeReason, setDisputeReason] = useState('');
+  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [isSubmittingCancel, setIsSubmittingCancel] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const steps = [
@@ -149,6 +157,45 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
     }
   };
 
+  const handleRaiseDispute = async () => {
+    if (!disputeReason.trim()) return;
+    setIsSubmittingDispute(true);
+    setActionError(null);
+    try {
+      const res = await ApiClient.disputeJob(job.id, disputeReason.trim());
+      if (res.success) {
+        setShowDisputeModal(false);
+        setDisputeReason('');
+        onRefresh();
+      } else {
+        setActionError(res.error || 'Failed to submit dispute');
+      }
+    } catch (err: any) {
+      setActionError(err.message || 'Failed to submit dispute');
+    } finally {
+      setIsSubmittingDispute(false);
+    }
+  };
+
+  const handleCancelJob = async () => {
+    setIsSubmittingCancel(true);
+    setActionError(null);
+    try {
+      const res = await ApiClient.cancelJob(job.id, cancelReason.trim() || undefined);
+      if (res.success) {
+        setShowCancelModal(false);
+        setCancelReason('');
+        onRefresh();
+      } else {
+        setActionError(res.error || 'Failed to cancel repair');
+      }
+    } catch (err: any) {
+      setActionError(err.message || 'Failed to cancel repair');
+    } finally {
+      setIsSubmittingCancel(false);
+    }
+  };
+
   return (
     <div id="active-repair-tracker" className="space-y-6">
       {/* Top Banner with Device, Status, & Quick Chat */}
@@ -166,7 +213,24 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {['PAYMENT_PENDING', 'BOOKED'].includes(job.status) && (
+              <button
+                onClick={() => setShowCancelModal(true)}
+                className="flex items-center gap-1 bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-200 px-3 py-2 rounded-xl text-xs font-bold border border-slate-700 transition-colors cursor-pointer"
+              >
+                <span>Cancel Repair</span>
+              </button>
+            )}
+            {!['COMPLETED', 'CANCELLED', 'REFUNDED', 'DISPUTED'].includes(job.status) && (
+              <button
+                onClick={() => setShowDisputeModal(true)}
+                className="flex items-center gap-1 bg-slate-800 hover:bg-amber-900/60 text-slate-300 hover:text-amber-200 px-3 py-2 rounded-xl text-xs font-bold border border-slate-700 transition-colors cursor-pointer"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                <span>Report Issue</span>
+              </button>
+            )}
             <button
               onClick={() => setShowQrModal(true)}
               className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl text-xs font-bold border border-slate-700 transition-colors cursor-pointer"
@@ -219,6 +283,80 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
         <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>{actionError}</span>
+        </div>
+      )}
+
+      {/* DISPUTED STATUS BANNER */}
+      {job.status === 'DISPUTED' && (
+        <div className="p-6 rounded-2xl bg-amber-950 border-2 border-amber-500/50 text-white shadow-xl space-y-3">
+          <div className="flex items-center gap-2.5 text-amber-400 font-extrabold text-base">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+            <span>Dispute Under Fixhub Review</span>
+          </div>
+          <p className="text-xs text-amber-200/90 leading-relaxed">
+            A dispute has been raised for this repair. Escrow funds remain safely locked and will not be released to the technician until Fixhub mediation reviews your case.
+          </p>
+          {(job as any).disputeReason && (
+            <div className="p-3 bg-amber-900/40 rounded-xl border border-amber-600/30 text-xs">
+              <span className="font-semibold text-amber-300">Reason reported: </span>
+              <span className="text-amber-100">"{(job as any).disputeReason}"</span>
+            </div>
+          )}
+          <div className="pt-1 flex items-center gap-3">
+            <button
+              onClick={onOpenChat}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl transition-all cursor-pointer"
+            >
+              Chat with Technician
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CANCELLED STATUS BANNER */}
+      {job.status === 'CANCELLED' && (
+        <div className="p-5 rounded-2xl bg-rose-50 border-2 border-rose-200 text-rose-950 space-y-2">
+          <div className="flex items-center gap-2 text-rose-900 font-bold text-sm">
+            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+            <span>Repair Cancelled</span>
+          </div>
+          <p className="text-xs text-rose-800 leading-relaxed">
+            This repair has been cancelled. {(job as any).cancelReason ? `Reason: ${(job as any).cancelReason}` : ''}
+          </p>
+        </div>
+      )}
+
+      {/* PAYMENT PENDING BANNER & ESCROW CHECKOUT ACTION */}
+      {job.status === 'PAYMENT_PENDING' && (
+        <div className="p-6 rounded-2xl bg-gradient-to-r from-emerald-700 via-teal-800 to-slate-900 text-white shadow-xl space-y-4 border border-emerald-500/30">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <span className="inline-block px-2.5 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 text-[11px] font-bold uppercase tracking-wider mb-1 border border-emerald-400/30">
+                Action Required • Payment Pending
+              </span>
+              <h3 className="text-lg font-extrabold text-white">
+                Complete Escrow Payment to Book Repair
+              </h3>
+              <p className="text-xs text-emerald-100/90 mt-1 max-w-lg leading-relaxed">
+                Your quote was accepted. To generate your 6-digit drop-off code and dispatch the work order to {technician?.businessName || 'the technician'}, deposit your payment into Fixhub Escrow. Funds are safely held until you verify the completed repair.
+              </p>
+            </div>
+            <div className="bg-white/10 p-4 rounded-xl text-center border border-white/20 shrink-0">
+              <span className="text-[10px] uppercase font-bold text-emerald-200 block">Total Amount</span>
+              <span className="text-xl font-black text-white">₦{(job.finalAmount || job.originalQuoteAmount || job.totalAmountNaira || 0).toLocaleString()}</span>
+            </div>
+          </div>
+
+          {onPay && (
+            <button
+              id="pay-pending-repair-btn"
+              onClick={() => onPay(job)}
+              className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <ShieldCheck className="w-5 h-5 text-slate-950" />
+              <span>Complete Escrow Payment (₦{(job.finalAmount || job.originalQuoteAmount || job.totalAmountNaira || 0).toLocaleString()})</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -502,6 +640,102 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
             <p className="text-[11px] text-slate-500">
               Provide your Drop-off Code when delivering your device, and your Pickup Code when collecting your device.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Raise Dispute Modal */}
+      {showDisputeModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+                <span>Report an Issue / Dispute</span>
+              </h3>
+              <button onClick={() => setShowDisputeModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              If the repair was done incorrectly, parts failed tests, or there is an unresolved issue with the shop, submitting a dispute locks escrow funds until Fixhub mediation resolves the case.
+            </p>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700">Please describe the problem:</label>
+              <textarea
+                value={disputeReason}
+                onChange={(e) => setDisputeReason(e.target.value)}
+                placeholder="e.g. Screen touch is unresponsive on the left side, or device casing not fitted properly..."
+                rows={4}
+                className="w-full p-3 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDisputeModal(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRaiseDispute}
+                disabled={!disputeReason.trim() || isSubmittingDispute}
+                className="px-5 py-2 text-xs font-extrabold bg-amber-600 hover:bg-amber-700 text-white rounded-xl shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {isSubmittingDispute ? 'Submitting...' : 'Submit Dispute'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Repair Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-rose-600" />
+                <span>Cancel Repair Request</span>
+              </h3>
+              <button onClick={() => setShowCancelModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Are you sure you want to cancel this repair? This will close the repair order.
+            </p>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700">Reason for cancellation (optional):</label>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="e.g. Decided to upgrade device or found an alternate fix..."
+                rows={3}
+                className="w-full p-3 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+              >
+                Keep Repair
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelJob}
+                disabled={isSubmittingCancel}
+                className="px-5 py-2 text-xs font-extrabold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {isSubmittingCancel ? 'Cancelling...' : 'Confirm Cancellation'}
+              </button>
+            </div>
           </div>
         </div>
       )}

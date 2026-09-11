@@ -284,6 +284,22 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
             </>
           )}
 
+          {/* Step 3b: Additional Diagnosis Awaiting Customer Approval */}
+          {job.status === 'ADDITIONAL_DIAGNOSIS' && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-amber-800 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-300 flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-amber-600 animate-pulse" />
+                <span>Awaiting Customer Approval for Additional Issue</span>
+              </span>
+              <button
+                onClick={onOpenChat}
+                className="px-3.5 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs rounded-xl border border-blue-200 transition-colors cursor-pointer"
+              >
+                Message Customer
+              </button>
+            </div>
+          )}
+
           {/* Step 4: Add Part Used */}
           {['REPAIR_IN_PROGRESS', 'DIAGNOSING'].includes(job.status) && (
             <button
@@ -315,8 +331,92 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
               ✓ Repair Completed & Payment Released to Your Available Payout Balance
             </span>
           )}
+
+          {job.status === 'DISPUTED' && (
+            <span className="text-xs font-bold text-amber-800 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
+              ⚠ Job Disputed — Escrow Funds On Hold Under Fixhub Mediation
+            </span>
+          )}
         </div>
       </div>
+
+      {/* DISPUTED STATUS PANEL FOR TECHNICIAN */}
+      {job.status === 'DISPUTED' && (
+        <div className="p-5 bg-amber-50 border-2 border-amber-300 rounded-2xl space-y-3 animate-fadeIn">
+          <div className="flex items-center justify-between">
+            <h4 className="font-bold text-sm text-amber-950 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+              <span>Customer Raised a Dispute</span>
+            </h4>
+            <span className="text-xs font-bold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-300">
+              Under Fixhub Review
+            </span>
+          </div>
+          <p className="text-xs text-amber-900 leading-relaxed">
+            The customer reported an issue with the repair. Escrow payout release is paused pending resolution. Please message the customer directly to resolve the issue or perform any corrective adjustments.
+          </p>
+          {(job as any).disputeReason && (
+            <div className="bg-white p-3.5 rounded-xl border border-amber-200 text-xs space-y-1">
+              <span className="font-bold text-slate-800">Customer's Reported Issue:</span>
+              <p className="text-slate-600 italic">"{(job as any).disputeReason}"</p>
+            </div>
+          )}
+          <div className="flex items-center justify-between pt-1">
+            <button
+              onClick={() => handleStatusChange('REPAIR_IN_PROGRESS', 'Technician reopened repair to address dispute findings')}
+              disabled={isUpdating}
+              className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
+            >
+              Resume Repair & Fix Issue
+            </button>
+            <button
+              onClick={onOpenChat}
+              className="font-bold text-xs text-blue-700 underline hover:text-blue-900 cursor-pointer"
+            >
+              Open Direct Chat with Customer
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ADDITIONAL DIAGNOSIS PENDING CUSTOMER APPROVAL PANEL */}
+      {job.status === 'ADDITIONAL_DIAGNOSIS' && (
+        <div className="p-5 bg-amber-50 border-2 border-amber-300 rounded-2xl space-y-3 animate-fadeIn">
+          <div className="flex items-center justify-between">
+            <h4 className="font-bold text-sm text-amber-950 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+              <span>Additional Issue Pending Customer Approval</span>
+            </h4>
+            <span className="text-xs font-bold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-300">
+              Customer Response Needed
+            </span>
+          </div>
+
+          <p className="text-xs text-amber-900 leading-relaxed">
+            You reported an additional issue discovered during diagnostics. Customer has been notified in real time to approve or decline the new scope.
+          </p>
+
+          {job.additionalDiagnosis && (
+            <div className="bg-white p-3.5 rounded-xl border border-amber-200 text-xs space-y-1.5">
+              <div className="flex items-center justify-between font-bold text-slate-900">
+                <span>{job.additionalDiagnosis.title}</span>
+                <span className="text-amber-900 font-extrabold">+₦{job.additionalDiagnosis.additionalCostNaira.toLocaleString()}</span>
+              </div>
+              <p className="text-slate-600 italic">"{job.additionalDiagnosis.description}"</p>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between text-xs text-amber-800 pt-1">
+            <span>• If approved: Work order amount updates and job automatically returns to Repair In Progress.</span>
+            <button
+              onClick={onOpenChat}
+              className="font-bold text-blue-700 underline hover:text-blue-900 cursor-pointer"
+            >
+              Contact Customer
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* DROP-OFF CODE VERIFICATION BOX (REQUIRED BEFORE CHECK-IN) */}
       {job.status === 'BOOKED' && (

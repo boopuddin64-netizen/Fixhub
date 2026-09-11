@@ -4,10 +4,17 @@ import path from 'path';
 import cors from 'cors';
 import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './server/routes/api';
+import { validateProductionSecrets } from './server/config/envValidator';
 
 async function startServer() {
+  // Production Secret Validation - Fail fast before booting server
+  validateProductionSecrets();
+
   const app = express();
   const PORT = 3000;
+
+  // Trust proxy for reverse proxy (Cloud Run / Nginx)
+  app.set('trust proxy', 1);
 
   // Middleware
   app.use(cors());

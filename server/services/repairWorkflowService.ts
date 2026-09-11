@@ -26,18 +26,16 @@ export const REPAIR_STATUS_TRANSITIONS: Record<RepairLifecycleStatus, RepairLife
   QUOTE_ACCEPTED: ['PAYMENT_PENDING', 'CANCELLED'],
   PAYMENT_PENDING: ['PAYMENT_CONFIRMED', 'CANCELLED'],
   PAYMENT_CONFIRMED: ['BOOKED', 'CANCELLED', 'REFUNDED'],
-  BOOKED: ['DEVICE_RECEIVED', 'DEVICE_DROPPED_OFF', 'CANCELLED'],
-  DEVICE_DROPPED_OFF: ['DEVICE_RECEIVED', 'CANCELLED'],
-  DEVICE_RECEIVED: ['DIAGNOSING', 'REPAIR_IN_PROGRESS', 'DISPUTED'],
-  DIAGNOSING: ['REPAIR_IN_PROGRESS', 'ADDITIONAL_DIAGNOSIS', 'DISPUTED'],
-  IN_REPAIR: ['READY_FOR_PICKUP', 'ADDITIONAL_DIAGNOSIS', 'DISPUTED'],
+  BOOKED: ['DEVICE_RECEIVED', 'DEVICE_DROPPED_OFF', 'CANCELLED', 'DISPUTED'],
+  DEVICE_DROPPED_OFF: ['DEVICE_RECEIVED', 'CANCELLED', 'DISPUTED'],
+  DEVICE_RECEIVED: ['DIAGNOSING', 'REPAIR_IN_PROGRESS', 'DISPUTED', 'CANCELLED'],
+  DIAGNOSING: ['REPAIR_IN_PROGRESS', 'ADDITIONAL_DIAGNOSIS', 'DISPUTED', 'CANCELLED'],
   ADDITIONAL_DIAGNOSIS: ['REPAIR_IN_PROGRESS', 'CANCELLED', 'DISPUTED'],
   REPAIR_IN_PROGRESS: ['READY_FOR_PICKUP', 'ADDITIONAL_DIAGNOSIS', 'DISPUTED'],
   READY_FOR_PICKUP: ['PICKED_UP', 'COMPLETED', 'DISPUTED'],
   PICKED_UP: ['COMPLETED', 'DISPUTED'],
   COMPLETED: [],
-  REPAIR_COMPLETED: ['COMPLETED'],
-  DISPUTED: ['COMPLETED', 'REFUNDED', 'CANCELLED'],
+  DISPUTED: ['COMPLETED', 'REFUNDED', 'CANCELLED', 'REPAIR_IN_PROGRESS'],
   CANCELLED: [],
   REFUNDED: [],
 };
@@ -764,5 +762,177 @@ export class RepairWorkflowService {
 
     db.save();
     return { success: true, warranty };
+  }
+
+  /**
+   * Raises a dispute on a repair job
+   */
+  public static disputeJob(params: {
+    jobId: string;
+    actorId: string;
+    actorRole: UserRole;
+    reason: string;
+  }): { success: boolean; job?: RepairJob; error?: string } {
+    const { jobId, actorId, actorRole, reason } = params;
+    const job = db.repairJobs.find((j) => j.id === jobId);
+    if (!job) return { success: false, error: 'Repair job not found.' };
+
+    if (actorRole === 'customer' && job.customerId !== actorId) {
+      return { success: false, error: 'Unauthorized: Repair job does not belong to you.' };
+    }
+    if (actorRole === 'technician' && job.technicianId !== actorId) {
+      return { success: false, error: 'Unauthorized: Repair job is not assigned to you.' };
+    }
+
+    if (job.status === 'COMPLETED' || job.status === 'CANCELLED' || job.status === 'REFUNDED') {
+      return { success: false, error: `Cannot dispute job in terminal state ${job.status}.` };
+    }
+
+    if (job.status === 'DISPUTED') {
+      return { success: false, error: 'Job is already marked as disputed.' };
+    }
+
+    const now = new Date().toISOString();
+    const previousStatus = job.status;
+    job.status = 'DISPUTED';
+    (job as any).disputeReason = reason;
+    (job as any).disputedAt = now;
+
+    job.statusHistory.push({
+      status: 'DISPUTED',
+      timestamp: now,
+      actorRole,
+      note: `Dispute raised: ${reason}`,
+    });
+
+    const notifyTarget = actorRole === 'customer' ? job.technicianId : job.customerId;
+    NotificationService.send({
+      userId: notifyTarget,
+      title: 'Repair Job Disputed',
+      message: `A dispute has been raised for repair #${job.id}: "${reason}". Fixhub support is reviewing escrow release.`,
+      type: 'STATUS_CHANGE',
+      repairId: job.id,
+    });
+
+    AuditService.log({
+      actorId,
+      actorRole,
+      action: 'JOB_DISPUTED',
+      resourceType: 'REPAIR_JOB',
+      resourceId: job.id,
+      details: { previousStatus, reason },
+    });
+
+    db.save();
+    return { success: true, job };
+  }
+
+  /**
+   * Cancels an active repair job if in a cancellable state
+   */
+  public static cancelJob(params: {
+    jobId: string;
+    actorId: string;
+    actorRole: UserRole;
+    reason?: string;
+  }): { success: boolean; job?: RepairJob; error?: string } {
+    const { jobId, actorId, actorRole, reason } = params;
+    const job = db.repairJobs.find((j) => j.id === jobId);
+    if (!job) return { success: false, error: 'Repair job not found.' };
+
+    if (actorRole === 'customer' && job.customerId !== actorId) {
+      return { success: false, error: 'Unauthorized: Repair job does not belong to you.' };
+    }
+    if (actorRole === 'technician' && job.technicianId !== actorId) {
+      return { success: false, error: 'Unauthorized: Repair job is not assigned to you.' };
+    }
+
+    const allowedCancelStates: RepairLifecycleStatus[] = [
+      'PAYMENT_PENDING',
+      'PAYMENT_CONFIRMED',
+      'BOOKED',
+      'DEVICE_DROPPED_OFF',
+      'DEVICE_RECEIVED',
+      'DIAGNOSING',
+      'ADDITIONAL_DIAGNOSIS',
+      'DISPUTED',
+    ];
+
+    if (!allowedCancelStates.includes(job.status)) {
+      return { success: false, error: `Cannot cancel repair job in status ${job.status}.` };
+    }
+
+    const now = new Date().toISOString();
+    const previousStatus = job.status;
+    job.status = 'CANCELLED';
+    (job as any).cancelReason = reason || 'Cancelled by user';
+    (job as any).cancelledAt = now;
+
+    job.statusHistory.push({
+      status: 'CANCELLED',
+      timestamp: now,
+      actorRole,
+      note: reason ? `Cancelled: ${reason}` : 'Cancelled by user',
+    });
+
+    const notifyTarget = actorRole === 'customer' ? job.technicianId : job.customerId;
+    NotificationService.send({
+      userId: notifyTarget,
+      title: 'Repair Job Cancelled',
+      message: `Repair #${job.id} has been cancelled.`,
+      type: 'STATUS_CHANGE',
+      repairId: job.id,
+    });
+
+    AuditService.log({
+      actorId,
+      actorRole,
+      action: 'JOB_CANCELLED',
+      resourceType: 'REPAIR_JOB',
+      resourceId: job.id,
+      details: { previousStatus, reason },
+    });
+
+    db.save();
+    return { success: true, job };
+  }
+
+  /**
+   * Cancels an open repair request
+   */
+  public static cancelRequest(params: {
+    requestId: string;
+    actorId: string;
+    actorRole: UserRole;
+    reason?: string;
+  }): { success: boolean; request?: RepairRequest; error?: string } {
+    const { requestId, actorId, actorRole, reason } = params;
+    const req = db.repairRequests.find((r) => r.id === requestId);
+    if (!req) return { success: false, error: 'Repair request not found.' };
+
+    if (actorRole === 'customer' && req.customerId !== actorId) {
+      return { success: false, error: 'Unauthorized: Repair request does not belong to you.' };
+    }
+
+    if (req.status === 'COMPLETED' || req.status === 'CANCELLED') {
+      return { success: false, error: `Cannot cancel request in terminal state ${req.status}.` };
+    }
+
+    const now = new Date().toISOString();
+    req.status = 'CANCELLED';
+    (req as any).cancelReason = reason || 'Cancelled by user';
+    (req as any).cancelledAt = now;
+
+    AuditService.log({
+      actorId,
+      actorRole,
+      action: 'REQUEST_CANCELLED',
+      resourceType: 'REPAIR_REQUEST',
+      resourceId: req.id,
+      details: { reason },
+    });
+
+    db.save();
+    return { success: true, request: req };
   }
 }
