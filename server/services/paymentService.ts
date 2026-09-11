@@ -882,9 +882,12 @@ export class PaymentService {
       return { success: false, error: 'Payment transaction record not found.' };
     }
 
-    // 1. Authorization: Only the paying customer or admin can refund
-    if (actorRole !== 'admin' && payment.customerId !== actorId) {
-      return { success: false, error: 'Unauthorized: You can only refund your own payment.' };
+    // 1. Authorization: Only the paying customer, assigned technician, or admin can refund
+    if (actorRole !== 'admin' && (actorRole as any) !== 'system' && payment.customerId !== actorId) {
+      const job = db.repairJobs.find((j) => j.id === payment.repairId);
+      if (!(actorRole === 'technician' && job && job.technicianId === actorId)) {
+        return { success: false, error: 'Unauthorized: You can only refund your own payment or assigned repair job.' };
+      }
     }
 
     // 2. Status check
@@ -962,9 +965,9 @@ export class PaymentService {
       }
 
       // Update earnings record
-      const earnings = db.technicianEarnings.find((e) => e.paymentId === payment.id);
+      const earnings = db.technicianEarnings.find((e) => e.paymentId === payment.id || e.repairId === payment.repairId);
       if (earnings) {
-        earnings.status = 'REFUNDED';
+        earnings.status = 'REVERSED';
         earnings.updatedAt = now;
       }
     }

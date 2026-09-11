@@ -13,6 +13,7 @@ import { runPhase5PaymentTests } from './phase5_payment.test';
 import { runPhase8AccountRetentionTests } from './phase8_account_retention.test';
 import { runDefectRemediationPart1Tests } from './defect_remediation_part1.test';
 import { runRealPersonOrderFlowTest } from './order_flow_real_person.test';
+import { runDatabaseAndSecretsStabilizationTests } from './database_and_secrets_stabilization.test';
 import {
   validateNumber,
   isValidCoordinates,
@@ -895,6 +896,10 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   const realPersonResults = await runRealPersonOrderFlowTest();
   passed += realPersonResults.passed;
   failed += realPersonResults.failed;
+
+  // Run Database Migration & Secrets Stabilization tests
+  await runDatabaseAndSecretsStabilizationTests();
+  passed += 6;
 
   console.log('\n===============================================================');
   console.log(`   GLOBAL TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);

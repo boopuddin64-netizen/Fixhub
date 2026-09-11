@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { ApiClient } from '../../api/client';
+import { NIGERIAN_BANKS, NigerianBank, getBankCodeByName, getBankNameByCode } from '../../data/nigerianBanks';
 import {
   Building2,
   Clock,
@@ -40,8 +41,10 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
 
   // Step 2: Bank Settlement Details
   const [bankName, setBankName] = useState(technicianProfile?.bankDetails?.bankName || 'Access Bank');
+  const [bankCode, setBankCode] = useState(technicianProfile?.bankDetails?.bankCode || '044');
   const [accountNumber, setAccountNumber] = useState(technicianProfile?.bankDetails?.accountNumber || '0129849201');
   const [accountName, setAccountName] = useState(technicianProfile?.bankDetails?.accountName || businessName || 'Emeka Okafor Enterprises');
+  const [banksList, setBanksList] = useState<NigerianBank[]>(NIGERIAN_BANKS);
 
   // Step 3: Parts Inventory Setup
   const [parts, setParts] = useState<any[]>([]);
@@ -52,6 +55,14 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
   const [newPartPrice, setNewPartPrice] = useState(48000);
   const [newPartStock, setNewPartStock] = useState(6);
   const [newPartWarranty, setNewPartWarranty] = useState(90);
+
+  useEffect(() => {
+    ApiClient.getBanks().then((res) => {
+      if (Array.isArray(res) && res.length > 0) {
+        setBanksList(res);
+      }
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (user?.id) {
@@ -90,9 +101,12 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
   const handleSaveBankDetails = async () => {
     setIsSaving(true);
     try {
+      const resolvedCode = bankCode || getBankCodeByName(bankName) || '044';
+      const resolvedName = getBankNameByCode(resolvedCode) || bankName;
       await ApiClient.updateTechnicianProfile({
         bankDetails: {
-          bankName,
+          bankName: resolvedName,
+          bankCode: resolvedCode,
           accountNumber,
           accountName,
         },
@@ -364,18 +378,20 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
               <div>
                 <label className="font-bold text-slate-300 block mb-1">Bank Name</label>
                 <select
-                  value={bankName}
-                  onChange={(e) => setBankName(e.target.value)}
+                  value={bankCode}
+                  onChange={(e) => {
+                    const code = e.target.value;
+                    setBankCode(code);
+                    const found = banksList.find((b) => b.code === code);
+                    if (found) setBankName(found.name);
+                  }}
                   className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="Access Bank">Access Bank</option>
-                  <option value="Zenith Bank">Zenith Bank</option>
-                  <option value="Guaranty Trust Bank (GTBank)">Guaranty Trust Bank (GTBank)</option>
-                  <option value="First Bank of Nigeria">First Bank of Nigeria</option>
-                  <option value="United Bank for Africa (UBA)">United Bank for Africa (UBA)</option>
-                  <option value="Providus Bank">Providus Bank</option>
-                  <option value="Kuda Microfinance Bank">Kuda Microfinance Bank</option>
-                  <option value="OPay">OPay</option>
+                  {banksList.map((b) => (
+                    <option key={b.code} value={b.code}>
+                      {b.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 

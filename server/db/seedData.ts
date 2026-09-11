@@ -271,6 +271,7 @@ export function getInitialSeedData(): SeedDataResult {
       },
       bankDetails: {
         bankName: 'Guaranty Trust Bank (GTBank)',
+        bankCode: '058',
         accountNumber: '0123456789',
         accountName: 'Emeka Okafor Engineering Ltd',
         verified: true,
@@ -317,6 +318,7 @@ export function getInitialSeedData(): SeedDataResult {
       },
       bankDetails: {
         bankName: 'Access Bank',
+        bankCode: '044',
         accountNumber: '0987654321',
         accountName: 'Kolawole Tech Innovations',
         verified: true,
@@ -363,6 +365,7 @@ export function getInitialSeedData(): SeedDataResult {
       },
       bankDetails: {
         bankName: 'Zenith Bank',
+        bankCode: '057',
         accountNumber: '2109876543',
         accountName: 'Fatima Ibrahim Repairs',
         verified: true,

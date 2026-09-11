@@ -30,6 +30,7 @@ export const PartsCatalogView: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [showAddModal, setShowAddModal] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [addPartError, setAddPartError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Price History Drawer
@@ -76,6 +77,7 @@ export const PartsCatalogView: React.FC = () => {
   const handleAddPart = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsAdding(true);
+    setAddPartError(null);
     try {
       await ApiClient.addInventoryItem({
         partName,
@@ -97,7 +99,7 @@ export const PartsCatalogView: React.FC = () => {
       setShowAddModal(false);
       fetchParts();
     } catch (err: any) {
-      alert(err.message || 'Failed to add inventory item');
+      setAddPartError(err.message || 'Failed to add inventory item');
     } finally {
       setIsAdding(false);
     }
@@ -497,6 +499,12 @@ export const PartsCatalogView: React.FC = () => {
             </div>
 
             <form onSubmit={handleAddPart} className="space-y-3 text-xs">
+              {addPartError && (
+                <p className="text-xs text-rose-600 font-medium bg-rose-50 p-2.5 rounded-lg border border-rose-200">
+                  {addPartError}
+                </p>
+              )}
+
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="font-bold block text-slate-700 mb-1">Brand</label>

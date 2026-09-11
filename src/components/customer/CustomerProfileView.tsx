@@ -53,6 +53,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
   const [profileMsg, setProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Notification Preferences State
+  const [notifError, setNotifError] = useState<string | null>(null);
   const [repairUpdatesNotif, setRepairUpdatesNotif] = useState<boolean>(
     customerProfile?.notificationPreferences?.repairUpdates ?? true
   );
@@ -136,6 +137,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
 
   const handleSaveNotifications = async () => {
     setSavingNotifs(true);
+    setNotifError(null);
     try {
       await ApiClient.updateCustomerProfile({
         notificationPreferences: {
@@ -147,7 +149,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
       if (refreshAuth) await refreshAuth();
       setShowNotifications(false);
     } catch (err: any) {
-      alert(err.message || 'Failed to update notification settings');
+      setNotifError(err.message || 'Failed to update notification settings');
     } finally {
       setSavingNotifs(false);
     }
@@ -485,6 +487,15 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
             </div>
 
             <div className="p-5 space-y-4">
+              {notifError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold flex items-center justify-between gap-2">
+                  <span>{notifError}</span>
+                  <button onClick={() => setNotifError(null)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>

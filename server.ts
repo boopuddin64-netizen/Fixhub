@@ -6,9 +6,47 @@ import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './server/routes/api';
 import { validateProductionSecrets } from './server/config/envValidator';
 
+// Production Environment & Secret Validation - Fail fast before booting server
+export function validateProductionStartup(
+  env: NodeJS.ProcessEnv = process.env,
+  exitOnError: boolean = true
+): { valid: boolean } {
+  if (env.NODE_ENV === 'production') {
+    // 1. Paystack live key check
+    const paystackKey = env.PAYSTACK_SECRET_KEY?.trim();
+    if (
+      !paystackKey ||
+      paystackKey === '' ||
+      paystackKey.toLowerCase().includes('mock') ||
+      paystackKey.startsWith('sk_test')
+    ) {
+      const msg = 'FATAL: A valid live PAYSTACK_SECRET_KEY is required when NODE_ENV=production.';
+      console.error(msg);
+      if (exitOnError) {
+        process.exit(1);
+      }
+      throw new Error(msg);
+    }
+
+    // 2. Database configuration check (refuse silent in-memory fallback)
+    if (!env.DATABASE_URL && !env.PGHOST) {
+      const msg = 'FATAL: DATABASE_URL or PGHOST must be set when NODE_ENV=production — refusing to start with in-memory storage.';
+      console.error(msg);
+      if (exitOnError) {
+        process.exit(1);
+      }
+      throw new Error(msg);
+    }
+
+    // 3. Other security credentials
+    validateProductionSecrets(env, exitOnError);
+  }
+  return { valid: true };
+}
+
 async function startServer() {
-  // Production Secret Validation - Fail fast before booting server
-  validateProductionSecrets();
+  // Production Secret & Database Validation - Fail fast before booting server
+  validateProductionStartup();
 
   const app = express();
   const PORT = 3000;

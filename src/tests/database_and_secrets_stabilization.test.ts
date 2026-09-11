@@ -219,13 +219,14 @@ export async function runDatabaseAndSecretsStabilizationTests(): Promise<void> {
       {
         NODE_ENV: 'production',
         PAYSTACK_SECRET_KEY: '',
+        DATABASE_URL: 'postgres://localhost/test',
         JWT_SECRET: 'a-secure-production-jwt-secret-key-that-is-very-long-and-safe',
       },
       false
     );
   } catch (e: any) {
     prodFailUnset = true;
-    assert(e.message.includes('PAYSTACK_SECRET_KEY is required in production'));
+    assert(e.message.includes('PAYSTACK_SECRET_KEY is required'));
   }
   assert(prodFailUnset, 'Production mode with missing Paystack key must fail fast');
 
@@ -235,15 +236,32 @@ export async function runDatabaseAndSecretsStabilizationTests(): Promise<void> {
       {
         NODE_ENV: 'production',
         PAYSTACK_SECRET_KEY: 'sk_test_mock_123456789',
+        DATABASE_URL: 'postgres://localhost/test',
         JWT_SECRET: 'a-secure-production-jwt-secret-key-that-is-very-long-and-safe',
       },
       false
     );
   } catch (e: any) {
     prodFailMockKey = true;
-    assert(e.message.includes('PAYSTACK_SECRET_KEY is required in production'));
+    assert(e.message.includes('PAYSTACK_SECRET_KEY is required'));
   }
   assert(prodFailMockKey, 'Production mode with mock Paystack key must fail fast');
+
+  let prodFailNoDb = false;
+  try {
+    validateProductionSecrets(
+      {
+        NODE_ENV: 'production',
+        PAYSTACK_SECRET_KEY: 'sk_live_valid_key_12345',
+        JWT_SECRET: 'a-secure-production-jwt-secret-key-that-is-very-long-and-safe',
+      },
+      false
+    );
+  } catch (e: any) {
+    prodFailNoDb = true;
+    assert(e.message.includes('DATABASE_URL or PGHOST must be set when NODE_ENV=production'));
+  }
+  assert(prodFailNoDb, 'Production mode without DATABASE_URL or PGHOST must fail fast');
 
   let prodFailInsecureJwt = false;
   try {
@@ -251,6 +269,7 @@ export async function runDatabaseAndSecretsStabilizationTests(): Promise<void> {
       {
         NODE_ENV: 'production',
         PAYSTACK_SECRET_KEY: 'sk_live_' + 'sample_dummy_key_not_real_123',
+        DATABASE_URL: 'postgres://localhost/test',
         JWT_SECRET: 'short-dev-secret',
       },
       false
@@ -265,6 +284,7 @@ export async function runDatabaseAndSecretsStabilizationTests(): Promise<void> {
     {
       NODE_ENV: 'production',
       PAYSTACK_SECRET_KEY: 'sk_live_' + 'valid_sample_key_for_testing_purposes',
+      DATABASE_URL: 'postgres://localhost/test',
       JWT_SECRET: 'a-valid-production-jwt-secret-with-more-than-32-characters-length',
     },
     false

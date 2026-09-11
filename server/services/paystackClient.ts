@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { NIGERIAN_BANKS, NigerianBank } from '../data/nigerianBanks';
 
 export interface PaystackInitializeOptions {
   email: string;
@@ -556,5 +557,34 @@ export class PaystackClient {
         status: 'processed',
       },
     };
+  }
+
+  /**
+   * Fetches the official list of banks supported by Paystack in Nigeria.
+   * Falls back gracefully to verified local list of Nigerian commercial banks and MFBs.
+   */
+  public static async listBanks(): Promise<NigerianBank[]> {
+    const isLive = this.getPaymentMode() === 'live';
+    const secretKey = this.getSecretKey();
+    if (isLive || (!secretKey.toLowerCase().includes('mock') && !secretKey.startsWith('sk_test_mock'))) {
+      try {
+        const response = await fetch('https://api.paystack.co/bank?country=nigeria&perPage=100', {
+          headers: {
+            Authorization: `Bearer ${secretKey}`,
+          },
+        });
+        const data: any = await response.json();
+        if (response.ok && data?.status && Array.isArray(data?.data)) {
+          return data.data.map((b: any) => ({
+            name: b.name,
+            code: b.code,
+            slug: b.slug,
+          }));
+        }
+      } catch (err: any) {
+        console.warn('[PaystackClient] Failed to fetch bank list from Paystack, falling back to local list:', err.message);
+      }
+    }
+    return NIGERIAN_BANKS;
   }
 }

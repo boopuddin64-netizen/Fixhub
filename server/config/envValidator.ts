@@ -19,7 +19,17 @@ export function validateProductionSecrets(
     paystackKey.toLowerCase().includes('mock') ||
     paystackKey.startsWith('sk_test')
   ) {
-    const errorMsg = 'FATAL: A valid live PAYSTACK_SECRET_KEY is required in production.';
+    const errorMsg = 'FATAL: A valid live PAYSTACK_SECRET_KEY is required when NODE_ENV=production.';
+    console.error(errorMsg);
+    if (exitOnError) {
+      process.exit(1);
+    }
+    throw new Error(errorMsg);
+  }
+
+  // 2. Validate Database configuration in production (prevent silent in-memory fallback)
+  if (!env.DATABASE_URL && !env.PGHOST) {
+    const errorMsg = 'FATAL: DATABASE_URL or PGHOST must be set when NODE_ENV=production — refusing to start with in-memory storage.';
     console.error(errorMsg);
     if (exitOnError) {
       process.exit(1);

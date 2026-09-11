@@ -420,6 +420,10 @@ export class ApiClient {
     }>('/technicians/earnings');
   }
 
+  public static getBanks() {
+    return this.request<{ name: string; code: string; slug?: string }[]>('/banks');
+  }
+
   public static requestPayout(amountNaira: number, destinationAccount?: any) {
     return this.request<{
       success: boolean;

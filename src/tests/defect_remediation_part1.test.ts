@@ -490,6 +490,200 @@ export async function runDefectRemediationPart1Tests(): Promise<{ passed: number
     /<foreignObject/i.test(cleanText);
   assert(cleanHasScript === false, 'Benign SVG attachments without scripts are recognized as safe');
 
+  // -------------------------------------------------------------
+  // MODULE 6: Cancellation of Paid vs Unpaid Jobs (Refund & Inventory)
+  // -------------------------------------------------------------
+  console.log('\n6. Cancellation of Paid vs Unpaid Repair Jobs');
+
+  // Case 6A: Unpaid job in PAYMENT_PENDING
+  const testPartId = 'test_part_inv_1';
+  db.technicianParts.push({
+    id: testPartId,
+    technicianId: tech1Id,
+    partName: 'iPhone Screen Test Part',
+    brand: 'Apple',
+    deviceModel: 'iPhone 13',
+    compatibleModels: ['iPhone 13'],
+    category: 'Screen',
+    quality: 'ORIGINAL_OEM',
+    sku: 'SKU-TEST-IP13',
+    unitPriceNaira: 30000,
+    currency: 'NGN',
+    quantityOnHand: 5,
+    quantityReserved: 0,
+    quantityAvailable: 5,
+    warrantyDays: 60,
+    status: 'IN_STOCK',
+    priceVersion: 1,
+    priceHistory: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  const testQuoteId = 'test_quote_for_cancel';
+  db.repairQuotes.push({
+    id: testQuoteId,
+    requestId: 'req_unpaid_test',
+    technicianId: tech1Id,
+    technicianName: 'Emeka Nwosu',
+    businessName: 'Apex Mobile Repairs',
+    technicianPhone: '08012345678',
+    technicianRating: 4.8,
+    technicianReviewsCount: 15,
+    distanceKm: 2.1,
+    partsCost: 30000,
+    laborCost: 10000,
+    otherCost: 0,
+    totalAmount: 40000,
+    estimatedTimeHours: 2,
+    warrantyDays: 60,
+    partsQuality: 'ORIGINAL_OEM',
+    notes: 'Screen replacement test quote',
+    status: 'ACCEPTED',
+    createdAt: new Date().toISOString(),
+    items: [
+      {
+        id: 'li_cancel_1',
+        inventoryItemId: testPartId,
+        partNameSnapshot: 'Screen Replacement',
+        qualitySnapshot: 'ORIGINAL_OEM',
+        unitPriceSnapshot: 30000,
+        priceVersion: 1,
+        quantity: 1,
+        subtotal: 30000,
+      },
+    ],
+  });
+
+  const unpaidJobId = 'job_unpaid_test_123';
+  db.repairJobs.push({
+    id: unpaidJobId,
+    requestId: 'req_unpaid_test',
+    quoteId: testQuoteId,
+    customerId: customer1Id,
+    technicianId: tech1Id,
+    deviceBrand: 'Apple',
+    deviceModel: 'iPhone 13',
+    issues: ['broken_screen'],
+    status: 'PAYMENT_PENDING',
+    dropOffCode: 'FX-1111',
+    pickupCode: 'PK-2222',
+    handoffQrToken: 'tok_unpaid',
+    originalQuoteAmount: 40000,
+    finalAmount: 40000,
+    platformFeeAmount: 3400,
+    technicianPayoutAmount: 36600,
+    partsUsed: [],
+    createdAt: new Date().toISOString(),
+    statusHistory: [],
+  });
+
+  // Reserve stock for the quote
+  const testPart = db.technicianParts.find((i) => i.id === testPartId)!;
+  testPart.quantityReserved = 1;
+  testPart.quantityAvailable = 4;
+
+  const unpaidCancelRes = await RepairWorkflowService.cancelJob({
+    jobId: unpaidJobId,
+    actorId: customer1Id,
+    actorRole: 'customer',
+    reason: 'Changed my mind before payment',
+  });
+
+  assert(unpaidCancelRes.success === true, 'Cancelling unpaid job succeeds');
+  assert(unpaidCancelRes.job?.status === 'CANCELLED', 'Unpaid job is marked CANCELLED');
+  assert(unpaidCancelRes.refunded === false, 'No refund triggered for unpaid job');
+  assert(testPart.quantityReserved === 0, 'Reserved stock released after cancellation');
+  assert(testPart.quantityAvailable === 5, 'Available stock restored after cancellation');
+  passed += 5;
+  console.log('  [PASS] Unpaid job cancellation cleanly releases inventory with zero financial side-effects');
+
+  // Case 6B: Paid job in BOOKED with escrow held
+  const paidJobId = 'job_paid_test_456';
+  const paymentTxId = 'pay_tx_for_cancel_test';
+  db.repairJobs.push({
+    id: paidJobId,
+    requestId: 'req_paid_test',
+    quoteId: testQuoteId,
+    customerId: customer1Id,
+    technicianId: tech1Id,
+    deviceBrand: 'Apple',
+    deviceModel: 'iPhone 13',
+    issues: ['broken_screen'],
+    status: 'BOOKED',
+    dropOffCode: 'FX-3333',
+    pickupCode: 'PK-4444',
+    handoffQrToken: 'tok_paid',
+    originalQuoteAmount: 40000,
+    finalAmount: 40000,
+    platformFeeAmount: 3400,
+    technicianPayoutAmount: 36600,
+    partsUsed: [],
+    createdAt: new Date().toISOString(),
+    statusHistory: [],
+  });
+
+  db.payments.push({
+    id: paymentTxId,
+    repairId: paidJobId,
+    customerId: customer1Id,
+    technicianId: tech1Id,
+    amountNaira: 40000,
+    platformFeeNaira: 3400,
+    technicianPayoutNaira: 36600,
+    currency: 'NGN',
+    provider: 'PAYSTACK_SANDBOX',
+    status: 'SUCCESS',
+    paymentMethod: 'CARD',
+    transactionRef: 'ref_paid_test_123',
+    providerReference: 'paystack_ref_paid_test_123',
+    idempotencyKey: 'idemp_paid_test_123',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  db.technicianEarnings.push({
+    id: 'earn_paid_test_123',
+    technicianId: tech1Id,
+    repairId: paidJobId,
+    paymentId: paymentTxId,
+    grossAmountNaira: 40000,
+    platformFeeNaira: 3400,
+    netEarningsNaira: 36600,
+    commissionPercent: 8.5,
+    status: 'HELD',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  // Re-reserve stock
+  testPart.quantityReserved = 1;
+  testPart.quantityAvailable = 4;
+
+  const paidCancelRes = await RepairWorkflowService.cancelJob({
+    jobId: paidJobId,
+    actorId: customer1Id,
+    actorRole: 'customer',
+    reason: 'Need device immediately, cancelling repair',
+  });
+
+  assert(paidCancelRes.success === true, 'Cancelling paid job succeeds');
+  assert(paidCancelRes.job?.status === 'CANCELLED', 'Paid job marked CANCELLED');
+  assert(paidCancelRes.refunded === true, 'Refund processed flag returned true');
+  assert(paidCancelRes.refundAmountNaira === 40000, 'Refund amount matches payment amount');
+
+  const updatedPayment = db.payments.find((p) => p.id === paymentTxId)!;
+  assert(updatedPayment.status === 'REFUNDED', 'Payment status transitioned to REFUNDED');
+  assert(updatedPayment.refundedAmountNaira === 40000, 'Payment recorded 40,000 refund amount');
+
+  const updatedEarnings = db.technicianEarnings.find((e) => e.repairId === paidJobId)!;
+  assert(updatedEarnings.status === 'REVERSED', 'Technician escrow earnings marked REVERSED');
+
+  assert(testPart.quantityReserved === 0, 'Inventory reserved count reset to 0');
+  assert(testPart.quantityAvailable === 5, 'Inventory available count restored to 5');
+  passed += 9;
+  console.log('  [PASS] Paid job cancellation refunds escrow, reverses earnings, and releases inventory');
+
   console.log(`\nDefect Remediation Part 1 Suite Results: ${passed} passed, ${failed} failed.`);
   return { passed, failed };
 }

@@ -9,6 +9,8 @@ import { RepairWorkflowService } from '../services/repairWorkflowService';
 import { AuditService } from '../services/auditService';
 import { NotificationService } from '../services/notificationService';
 import { InventoryService } from '../services/inventoryService';
+import { PaystackClient } from '../services/paystackClient';
+import { getBankCodeByName, getBankNameByCode } from '../data/nigerianBanks';
 import { calculateDistanceKm } from '../services/technicianMatchingService';
 import { authRateLimiter, paymentRateLimiter, webhookRateLimiter } from '../middleware/rateLimiters';
 import {
@@ -2123,9 +2125,9 @@ apiRouter.post('/jobs/:id/dispute', requireAuth, (req: AuthenticatedRequest, res
   return res.json(result);
 });
 
-apiRouter.post('/jobs/:id/cancel', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/jobs/:id/cancel', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   const { reason } = req.body;
-  const result = RepairWorkflowService.cancelJob({
+  const result = await RepairWorkflowService.cancelJob({
     jobId: req.params.id,
     actorId: req.user!.id,
     actorRole: req.user!.role,
@@ -2302,6 +2304,15 @@ apiRouter.post('/parts', requireAuth, requireRole(['technician']), (req: Authent
   return res.status(201).json(result.item);
 });
 
+apiRouter.get('/banks', async (req: Request, res: Response) => {
+  try {
+    const banks = await PaystackClient.listBanks();
+    return res.json(banks);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to retrieve banks list' });
+  }
+});
+
 apiRouter.put('/technicians/profile', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
   const tech = db.technicianProfiles.find((t) => t.userId === req.user!.id);
   const user = db.users.find((u) => u.id === req.user!.id);
@@ -2351,8 +2362,14 @@ apiRouter.put('/technicians/profile', requireAuth, requireRole(['technician']), 
   }
 
   if (bankDetails && typeof bankDetails === 'object') {
+    const rawBankName = sanitizeString(bankDetails.bankName, 80) || 'Access Bank';
+    const providedCode = bankDetails.bankCode ? sanitizeString(bankDetails.bankCode, 20) : undefined;
+    const resolvedCode = providedCode || getBankCodeByName(rawBankName) || '044';
+    const resolvedName = getBankNameByCode(resolvedCode) || rawBankName;
+
     tech.bankDetails = {
-      bankName: sanitizeString(bankDetails.bankName, 80) || 'Access Bank',
+      bankName: resolvedName,
+      bankCode: resolvedCode,
       accountNumber: sanitizeString(bankDetails.accountNumber, 30),
       accountName: sanitizeString(bankDetails.accountName, 120) || tech.businessName || user.name,
       verified: true,

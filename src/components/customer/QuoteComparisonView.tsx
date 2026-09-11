@@ -95,7 +95,8 @@ export const QuoteComparisonView: React.FC<QuoteComparisonViewProps> = ({
       setTimeout(() => setActionSuccessMsg(null), 4000);
       fetchData();
     } catch (err: any) {
-      alert(err.message || 'Failed to reject quote.');
+      setErrorMsg(err.message || 'Failed to reject quote.');
+      setTimeout(() => setErrorMsg(null), 5000);
     }
   };
 

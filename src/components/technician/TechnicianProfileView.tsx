@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { ApiClient } from '../../api/client';
+import { NIGERIAN_BANKS, NigerianBank, getBankCodeByName, getBankNameByCode } from '../../data/nigerianBanks';
 import {
   Wrench,
   ShieldCheck,
@@ -54,10 +55,13 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
   const [profileMsg, setProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Bank Form State
-  const [bankName, setBankName] = useState<string>(technicianProfile?.bankDetails?.bankName || '');
+  const [bankName, setBankName] = useState<string>(technicianProfile?.bankDetails?.bankName || 'Providus Bank');
+  const [bankCode, setBankCode] = useState<string>(technicianProfile?.bankDetails?.bankCode || '101');
   const [accountNumber, setAccountNumber] = useState<string>(technicianProfile?.bankDetails?.accountNumber || '');
   const [accountName, setAccountName] = useState<string>(technicianProfile?.bankDetails?.accountName || technicianProfile?.businessName || '');
   const [savingBank, setSavingBank] = useState<boolean>(false);
+  const [bankError, setBankError] = useState<string | null>(null);
+  const [banksList, setBanksList] = useState<NigerianBank[]>(NIGERIAN_BANKS);
 
   // Live Financial Data State
   const [financesData, setFinancesData] = useState<{
@@ -86,6 +90,14 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
   };
 
   useEffect(() => {
+    ApiClient.getBanks().then((res) => {
+      if (Array.isArray(res) && res.length > 0) {
+        setBanksList(res);
+      }
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (showFinances) {
       fetchFinances();
     }
@@ -106,6 +118,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
       setIsAvailable(technicianProfile.isAvailable ?? true);
       if (technicianProfile.bankDetails) {
         setBankName(technicianProfile.bankDetails.bankName || 'Providus Bank');
+        setBankCode(technicianProfile.bankDetails.bankCode || getBankCodeByName(technicianProfile.bankDetails.bankName || '') || '101');
         setAccountNumber(technicianProfile.bankDetails.accountNumber || '');
         setAccountName(technicianProfile.bankDetails.accountName || technicianProfile.businessName || '');
       }
@@ -163,15 +176,19 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
 
   const handleSaveBank = async (e: React.FormEvent) => {
     e.preventDefault();
+    setBankError(null);
     if (accountNumber.trim().length < 10) {
-      alert('Account number must be at least 10 digits.');
+      setBankError('Account number must be at least 10 digits.');
       return;
     }
     setSavingBank(true);
     try {
+      const resolvedCode = bankCode || getBankCodeByName(bankName) || '044';
+      const resolvedName = getBankNameByCode(resolvedCode) || bankName;
       await ApiClient.updateTechnicianProfile({
         bankDetails: {
-          bankName: bankName.trim(),
+          bankName: resolvedName.trim(),
+          bankCode: resolvedCode.trim(),
           accountNumber: accountNumber.trim(),
           accountName: accountName.trim() || businessName,
         },
@@ -179,7 +196,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
       if (refreshAuth) await refreshAuth();
       setShowBankModal(false);
     } catch (err: any) {
-      alert(err.message || 'Failed to update settlement bank details');
+      setBankError(err.message || 'Failed to update settlement bank details');
     } finally {
       setSavingBank(false);
     }
@@ -566,23 +583,34 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
             </div>
 
             <form onSubmit={handleSaveBank} className="p-5 space-y-4 text-xs">
+              {bankError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold flex items-center justify-between gap-2">
+                  <span>{bankError}</span>
+                  <button type="button" onClick={() => setBankError(null)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Bank Name
                 </label>
                 <select
-                  value={bankName}
-                  onChange={(e) => setBankName(e.target.value)}
+                  value={bankCode}
+                  onChange={(e) => {
+                    const code = e.target.value;
+                    setBankCode(code);
+                    const found = banksList.find((b) => b.code === code);
+                    if (found) setBankName(found.name);
+                  }}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-semibold text-slate-900 bg-white"
                 >
-                  <option value="Providus Bank">Providus Bank</option>
-                  <option value="Access Bank">Access Bank</option>
-                  <option value="GTBank">GTBank (Guaranty Trust)</option>
-                  <option value="Zenith Bank">Zenith Bank</option>
-                  <option value="First Bank">First Bank Nigeria</option>
-                  <option value="UBA">United Bank for Africa (UBA)</option>
-                  <option value="Kuda Bank">Kuda Microfinance Bank</option>
-                  <option value="OPay">OPay Digital Bank</option>
+                  {banksList.map((b) => (
+                    <option key={b.code} value={b.code}>
+                      {b.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 

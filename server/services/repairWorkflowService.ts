@@ -828,14 +828,22 @@ export class RepairWorkflowService {
   }
 
   /**
-   * Cancels an active repair job if in a cancellable state
+   * Cancels an active repair job if in a cancellable state.
+   * If the job was already paid (money in escrow), triggers PaymentService.recordRefund,
+   * marks technicianEarnings as REVERSED, and releases any reserved inventory within a transaction.
    */
-  public static cancelJob(params: {
+  public static async cancelJob(params: {
     jobId: string;
     actorId: string;
     actorRole: UserRole;
     reason?: string;
-  }): { success: boolean; job?: RepairJob; error?: string } {
+  }): Promise<{
+    success: boolean;
+    job?: RepairJob;
+    refunded?: boolean;
+    refundAmountNaira?: number;
+    error?: string;
+  }> {
     const { jobId, actorId, actorRole, reason } = params;
     const job = db.repairJobs.find((j) => j.id === jobId);
     if (!job) return { success: false, error: 'Repair job not found.' };
@@ -862,39 +870,136 @@ export class RepairWorkflowService {
       return { success: false, error: `Cannot cancel repair job in status ${job.status}.` };
     }
 
+    // Check if there is an associated successful payment (held in escrow)
+    const payment = db.payments.find(
+      (p) => p.repairId === job.id && (p.status === 'SUCCESS' || p.status === 'ESCROW_HELD')
+    );
+
     const now = new Date().toISOString();
     const previousStatus = job.status;
-    job.status = 'CANCELLED';
-    (job as any).cancelReason = reason || 'Cancelled by user';
-    (job as any).cancelledAt = now;
 
-    job.statusHistory.push({
-      status: 'CANCELLED',
-      timestamp: now,
-      actorRole,
-      note: reason ? `Cancelled: ${reason}` : 'Cancelled by user',
-    });
+    try {
+      return await db.transaction(async (tx) => {
+        let refundProcessed = false;
+        let refundAmount = 0;
 
-    const notifyTarget = actorRole === 'customer' ? job.technicianId : job.customerId;
-    NotificationService.send({
-      userId: notifyTarget,
-      title: 'Repair Job Cancelled',
-      message: `Repair #${job.id} has been cancelled.`,
-      type: 'STATUS_CHANGE',
-      repairId: job.id,
-    });
+        // 1. If payment succeeded, trigger refund & reverse technician earnings
+        if (payment) {
+          const refundRes = await PaymentService.recordRefund({
+            paymentId: payment.id,
+            amountNaira: payment.amountNaira,
+            reason: reason ? `Job #${job.id} cancelled: ${reason}` : `Job #${job.id} cancelled by ${actorRole}`,
+            actorId,
+            actorRole,
+          });
 
-    AuditService.log({
-      actorId,
-      actorRole,
-      action: 'JOB_CANCELLED',
-      resourceType: 'REPAIR_JOB',
-      resourceId: job.id,
-      details: { previousStatus, reason },
-    });
+          if (!refundRes.success) {
+            throw new Error(refundRes.error || 'Failed to process refund with payment gateway.');
+          }
 
-    db.save();
-    return { success: true, job };
+          refundProcessed = true;
+          refundAmount = payment.amountNaira;
+
+          // Reverse technician earnings record
+          const earnings = db.technicianEarnings.find(
+            (e) => e.paymentId === payment.id || e.repairId === job.id
+          );
+          if (earnings) {
+            earnings.status = 'REVERSED';
+            earnings.updatedAt = now;
+            await tx.query(
+              'UPDATE technician_earnings SET status = $1, updated_at = $2 WHERE id = $3',
+              ['REVERSED', now, earnings.id]
+            );
+          }
+
+          // Audit log for refund & earnings reversal specifically
+          AuditService.log({
+            actorId,
+            actorRole,
+            action: 'ESCROW_EARNINGS_REVERSED',
+            resourceType: 'TECHNICIAN_EARNINGS',
+            resourceId: earnings?.id || payment.id,
+            details: {
+              jobId: job.id,
+              paymentId: payment.id,
+              previousStatus: 'HELD',
+              newStatus: 'REVERSED',
+              refundAmountNaira: refundAmount,
+              reason: reason || 'Job cancelled',
+            },
+          });
+        }
+
+        // 2. Release reserved inventory for the quote if present
+        if (job.quoteId) {
+          const quote = db.repairQuotes.find((q) => q.id === job.quoteId);
+          if (quote) {
+            InventoryService.releaseStockForQuote(
+              quote,
+              job.id,
+              reason ? `Job cancelled: ${reason}` : 'Job cancelled'
+            );
+          }
+        }
+
+        // 3. Mark job as CANCELLED
+        job.status = 'CANCELLED';
+        (job as any).cancelReason = reason || 'Cancelled by user';
+        (job as any).cancelledAt = now;
+
+        job.statusHistory.push({
+          status: 'CANCELLED',
+          timestamp: now,
+          actorRole,
+          note: reason
+            ? `Cancelled: ${reason}${refundProcessed ? ` (Refunded ₦${refundAmount.toLocaleString()} to customer)` : ''}`
+            : refundProcessed
+              ? `Cancelled by user (Refund of ₦${refundAmount.toLocaleString()} initiated via Paystack)`
+              : 'Cancelled by user',
+        });
+
+        await tx.query(
+          'UPDATE repair_jobs SET status = $1, status_history = $2, closed_at = $3 WHERE id = $4',
+          ['CANCELLED', JSON.stringify(job.statusHistory), now, job.id]
+        );
+
+        // 4. Notifications
+        const notifyTarget = actorRole === 'customer' ? job.technicianId : job.customerId;
+        NotificationService.send({
+          userId: notifyTarget,
+          title: 'Repair Job Cancelled',
+          message: `Repair #${job.id} has been cancelled.${refundProcessed ? ` Refund of ₦${refundAmount.toLocaleString()} has been initiated.` : ''}`,
+          type: 'STATUS_CHANGE',
+          repairId: job.id,
+        });
+
+        // 5. Audit Log for job cancellation
+        AuditService.log({
+          actorId,
+          actorRole,
+          action: 'JOB_CANCELLED',
+          resourceType: 'REPAIR_JOB',
+          resourceId: job.id,
+          details: {
+            previousStatus,
+            reason,
+            refundIssued: refundProcessed,
+            refundAmountNaira: refundAmount,
+          },
+        });
+
+        return {
+          success: true,
+          job,
+          refunded: refundProcessed,
+          refundAmountNaira: refundAmount,
+        };
+      });
+    } catch (err: any) {
+      console.error(`Failed to cancel job #${jobId}:`, err);
+      return { success: false, error: err.message || 'Failed to cancel repair job.' };
+    }
   }
 
   /**

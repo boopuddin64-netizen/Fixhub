@@ -551,7 +551,8 @@ export type EarningsStatus =
   | 'ELIGIBLE_FOR_PAYOUT'
   | 'PAYOUT_INITIATED'
   | 'PAID_OUT'
-  | 'REFUNDED';
+  | 'REFUNDED'
+  | 'REVERSED';
 
 export interface TechnicianEarnings {
   id: string;

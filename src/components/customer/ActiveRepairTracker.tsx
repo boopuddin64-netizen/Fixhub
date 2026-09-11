@@ -704,9 +704,35 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
               <button onClick={() => setShowCancelModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
             </div>
 
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Are you sure you want to cancel this repair? This will close the repair order.
-            </p>
+            {actionError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-semibold">
+                {actionError}
+              </div>
+            )}
+
+            {job.status !== 'PAYMENT_PENDING' ? (
+              <div className="space-y-2">
+                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">
+                  <p className="text-xs font-bold text-amber-900">
+                    Escrow Refund Notice
+                  </p>
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    Since you've already paid, this repair will be cancelled and your full escrow deposit of{' '}
+                    <span className="font-bold text-slate-900">
+                      ₦{(job.finalAmount || job.originalQuoteAmount || quote?.totalAmount || 0).toLocaleString()}
+                    </span>{' '}
+                    will be refunded to your original payment method via Paystack within 3–5 business days.
+                  </p>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Any reserved inventory parts will be released immediately. If you have already dropped off your device, please coordinate physical pickup with the technician.
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-600 leading-relaxed">
+                You have not made payment yet. Cancelling this repair will close the booking and release any reserved parts with no fee.
+              </p>
+            )}
 
             <div className="space-y-2">
               <label className="block text-xs font-bold text-slate-700">Reason for cancellation (optional):</label>

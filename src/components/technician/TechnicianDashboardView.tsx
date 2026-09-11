@@ -25,6 +25,8 @@ import {
   Wallet,
   ArrowDownToLine,
   Building,
+  AlertCircle,
+  X,
 } from 'lucide-react';
 
 interface TechnicianDashboardViewProps {
@@ -67,6 +69,14 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
   const [isUpdatingAvail, setIsUpdatingAvail] = useState(false);
   const [activeTab, setActiveTab] = useState<'LEADS' | 'MY_QUOTES' | 'WORK_ORDERS' | 'FINANCES'>('LEADS');
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (technicianProfile?.bankDetails) {
+      setPayoutBank(technicianProfile.bankDetails.bankName || '');
+      setPayoutAccountNum(technicianProfile.bankDetails.accountNumber || '');
+    }
+  }, [technicianProfile]);
 
   const fetchDashboardData = async () => {
     if (!user) return;
@@ -113,11 +123,23 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
       setTimeout(() => setActionMsg(null), 3000);
       fetchDashboardData();
     } catch (err: any) {
-      alert(err.message || 'Failed to withdraw quote.');
+      setActionError(err.message || 'Failed to withdraw quote.');
+      setTimeout(() => setActionError(null), 5000);
     }
   };
 
   const handleRequestPayout = async () => {
+    const bankDetails = technicianProfile?.bankDetails;
+    const bankCode = bankDetails?.bankCode;
+
+    if (!bankDetails || !bankCode || !bankDetails.accountNumber) {
+      setPayoutMsg({
+        type: 'error',
+        text: 'Please configure and verify your bank account in Profile Settings before requesting a payout.',
+      });
+      return;
+    }
+
     const amt = Number(payoutAmountInput);
     if (!amt || amt <= 0) {
       setPayoutMsg({ type: 'error', text: 'Please enter a valid payout amount in Naira.' });
@@ -135,10 +157,10 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
     setPayoutMsg(null);
     try {
       const res = await ApiClient.requestPayout(amt, {
-        bankName: payoutBank,
-        accountNumber: payoutAccountNum,
-        bankCode: '044',
-        accountName: technicianProfile?.businessName || user?.name || 'Technician',
+        bankName: bankDetails.bankName || payoutBank,
+        accountNumber: bankDetails.accountNumber || payoutAccountNum,
+        bankCode: bankCode,
+        accountName: bankDetails.accountName || technicianProfile?.businessName || user?.name || 'Technician',
       });
       if (!res.success) {
         setPayoutMsg({ type: 'error', text: res.error || 'Payout request failed.' });
@@ -210,6 +232,18 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
         <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2">
           <Check className="w-4 h-4 text-emerald-600" />
           <span>{actionMsg}</span>
+        </div>
+      )}
+
+      {actionError && (
+        <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{actionError}</span>
+          </div>
+          <button onClick={() => setActionError(null)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
@@ -564,6 +598,13 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
               </span>
             </div>
 
+            {!technicianProfile?.bankDetails?.bankCode && (
+              <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Settlement bank account is not configured with a valid bank code. Please configure your bank account in Profile Settings before requesting a payout.</span>
+              </div>
+            )}
+
             {payoutMsg && (
               <div className={`p-3 rounded-xl text-xs font-semibold ${
                 payoutMsg.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
@@ -604,7 +645,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
                   <button
                     id="submit-payout-btn"
                     onClick={handleRequestPayout}
-                    disabled={isRequestingPayout || financials.availablePayoutNaira <= 0}
+                    disabled={isRequestingPayout || financials.availablePayoutNaira <= 0 || !technicianProfile?.bankDetails?.bankCode}
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl cursor-pointer disabled:opacity-50 shrink-0"
                   >
                     {isRequestingPayout ? 'Submitting...' : 'Request'}
