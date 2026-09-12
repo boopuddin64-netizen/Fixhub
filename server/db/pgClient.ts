@@ -5,8 +5,13 @@ import { Pool, PoolClient } from 'pg';
 import { newDb, IMemoryDb, DataType } from 'pg-mem';
 import { getInitialSeedData } from './seedData';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const safeFilename = typeof __filename !== 'undefined'
+  ? __filename
+  : (import.meta && import.meta.url ? fileURLToPath(import.meta.url) : process.cwd());
+
+const safeDirname = typeof __dirname !== 'undefined'
+  ? __dirname
+  : path.dirname(safeFilename);
 
 export interface TransactionClient {
   query: (sql: string, params?: any[]) => Promise<any>;
@@ -83,7 +88,7 @@ export class PostgresDatabase {
   }
 
   public executeSchema() {
-    const schemaPath = path.resolve(__dirname, 'schema.sql');
+    const schemaPath = path.resolve(safeDirname, 'schema.sql');
     let schemaSql = '';
     if (fs.existsSync(schemaPath)) {
       schemaSql = fs.readFileSync(schemaPath, 'utf-8');
