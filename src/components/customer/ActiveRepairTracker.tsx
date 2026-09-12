@@ -294,7 +294,7 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
             <span>Dispute Under Fixhub Review</span>
           </div>
           <p className="text-xs text-amber-200/90 leading-relaxed">
-            A dispute has been raised for this repair. Escrow funds remain safely locked and will not be released to the technician until Fixhub mediation reviews your case.
+            A dispute has been raised for this repair. Your payment is being held securely and will not be released to the technician until Fixhub reviews your case.
           </p>
           {(job as any).disputeReason && (
             <div className="p-3 bg-amber-900/40 rounded-xl border border-amber-600/30 text-xs">
@@ -335,10 +335,10 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
                 Action Required • Payment Pending
               </span>
               <h3 className="text-lg font-extrabold text-white">
-                Complete Escrow Payment to Book Repair
+                Complete Payment to Book Repair
               </h3>
               <p className="text-xs text-emerald-100/90 mt-1 max-w-lg leading-relaxed">
-                Your quote was accepted. To generate your 6-digit drop-off code and dispatch the work order to {technician?.businessName || 'the technician'}, deposit your payment into Fixhub Escrow. Funds are safely held until you verify the completed repair.
+                Your quote was accepted. To generate your 6-digit drop-off code and dispatch the work order to {technician?.businessName || 'the technician'}, complete your payment. Your money is safely held until you verify the completed repair.
               </p>
             </div>
             <div className="bg-white/10 p-4 rounded-xl text-center border border-white/20 shrink-0">
@@ -354,7 +354,7 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
               className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <ShieldCheck className="w-5 h-5 text-slate-950" />
-              <span>Complete Escrow Payment (₦{(job.finalAmount || job.originalQuoteAmount || job.totalAmountNaira || 0).toLocaleString()})</span>
+              <span>Pay Now (₦{(job.finalAmount || job.originalQuoteAmount || job.totalAmountNaira || 0).toLocaleString()})</span>
             </button>
           )}
         </div>
@@ -657,7 +657,7 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed">
-              If the repair was done incorrectly, parts failed tests, or there is an unresolved issue with the shop, submitting a dispute locks escrow funds until Fixhub mediation resolves the case.
+              If the repair was done incorrectly, parts failed tests, or there is an unresolved issue with the shop, submitting a dispute will hold your payment until Fixhub resolves the case.
             </p>
 
             <div className="space-y-2">
@@ -714,10 +714,10 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
               <div className="space-y-2">
                 <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">
                   <p className="text-xs font-bold text-amber-900">
-                    Escrow Refund Notice
+                    Refund Notice
                   </p>
                   <p className="text-xs text-amber-800 leading-relaxed">
-                    Since you've already paid, this repair will be cancelled and your full escrow deposit of{' '}
+                    Since you've already paid, this repair will be cancelled and your full payment of{' '}
                     <span className="font-bold text-slate-900">
                       ₦{(job.finalAmount || job.originalQuoteAmount || quote?.totalAmount || 0).toLocaleString()}
                     </span>{' '}

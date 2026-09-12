@@ -202,10 +202,17 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
     }
   };
 
+  const isVerifiedPro = Boolean(
+    technicianProfile?.isVerified ||
+    (technicianProfile?.verificationStatus?.identityVerified &&
+     technicianProfile?.verificationStatus?.locationConfirmed &&
+     technicianProfile?.verificationStatus?.businessVerified)
+  );
+
   const verificationStages = [
-    { label: 'Government ID & Identity Verified', done: true },
-    { label: 'Physical Shop / Counter Inspected in Computer Village', done: true },
-    { label: 'CAC Business Registration Confirmed', done: true },
+    { label: 'Government ID & Identity Verified', done: Boolean(technicianProfile?.verificationStatus?.identityVerified) },
+    { label: 'Physical Shop / Counter Inspected in Computer Village', done: Boolean(technicianProfile?.verificationStatus?.locationConfirmed) },
+    { label: 'CAC Business Registration Confirmed', done: Boolean(technicianProfile?.verificationStatus?.businessVerified) },
     { label: 'Dedicated Settlement Account Active', done: !!technicianProfile?.bankDetails?.accountNumber },
   ];
 
@@ -223,9 +230,15 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-black text-white truncate">{technicianProfile?.businessName}</h2>
-                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Verified Pro
-                </span>
+                {isVerifiedPro ? (
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    Verified Pro
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    Verification Pending
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-400 truncate">{user?.email}</p>
               <div className="flex items-center gap-2 mt-1 text-xs">

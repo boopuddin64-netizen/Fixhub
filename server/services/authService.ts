@@ -28,12 +28,100 @@ export class AuthService {
   }
 
   public static verifyToken(token: string): { id: string; email: string; role: UserRole; isBorrowedDevice?: boolean } | null {
+    if (this.isTokenRevoked(token)) return null;
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as any;
       return decoded;
     } catch {
       return null;
     }
+  }
+
+  private static resetTokens: Map<string, { userId: string; expiresAt: number }> = new Map();
+  private static emailVerifyTokens: Map<string, { userId: string; email: string; expiresAt: number }> = new Map();
+  private static revokedTokens: Set<string> = new Set();
+
+  public static revokeToken(token: string): void {
+    this.revokedTokens.add(token);
+  }
+
+  public static isTokenRevoked(token: string): boolean {
+    return this.revokedTokens.has(token);
+  }
+
+  public static requestPasswordReset(emailOrPhone: string): { success: boolean; resetCode?: string; message: string } {
+    const clean = emailOrPhone.trim().toLowerCase();
+    const user = db.users.find(
+      (u) => u.email.toLowerCase() === clean || u.phone.replace(/\s+/g, '') === clean.replace(/\s+/g, '')
+    );
+    if (!user) {
+      return { success: true, message: 'If an account exists with this credential, a password reset code has been generated.' };
+    }
+
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    this.resetTokens.set(resetCode, {
+      userId: user.id,
+      expiresAt: Date.now() + 15 * 60 * 1000,
+    });
+
+    return {
+      success: true,
+      resetCode,
+      message: 'Password reset code generated.',
+    };
+  }
+
+  public static resetPasswordWithCode(code: string, newPassword: string): { success: boolean; error?: string } {
+    const record = this.resetTokens.get(code);
+    if (!record || record.expiresAt < Date.now()) {
+      return { success: false, error: 'Invalid or expired password reset code.' };
+    }
+
+    if (newPassword.length < 8 || !/\d/.test(newPassword)) {
+      return { success: false, error: 'Password must be at least 8 characters long and contain at least one number.' };
+    }
+
+    const user = db.users.find((u) => u.id === record.userId);
+    if (!user) {
+      return { success: false, error: 'User not found.' };
+    }
+
+    user.passwordHash = bcrypt.hashSync(newPassword, 8);
+    this.resetTokens.delete(code);
+    db.save();
+
+    return { success: true };
+  }
+
+  public static requestEmailVerification(userId: string): { success: boolean; code: string } {
+    const user = db.users.find((u) => u.id === userId);
+    if (!user) return { success: false, code: '' };
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    this.emailVerifyTokens.set(code, {
+      userId: user.id,
+      email: user.email,
+      expiresAt: Date.now() + 30 * 60 * 1000,
+    });
+
+    return { success: true, code };
+  }
+
+  public static confirmEmailVerification(code: string): { success: boolean; error?: string } {
+    const record = this.emailVerifyTokens.get(code);
+    if (!record || record.expiresAt < Date.now()) {
+      return { success: false, error: 'Invalid or expired verification code.' };
+    }
+
+    const user = db.users.find((u) => u.id === record.userId);
+    if (user) {
+      (user as any).emailVerified = true;
+      (user as any).emailVerifiedAt = new Date().toISOString();
+      db.save();
+    }
+
+    this.emailVerifyTokens.delete(code);
+    return { success: true };
   }
 
   public static login(emailOrPhone: string, password?: string, isBorrowedDevice = false): AuthSession | { error: string } {

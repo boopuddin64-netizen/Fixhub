@@ -225,6 +225,112 @@ apiRouter.get('/auth/me', requireAuth, (req: AuthenticatedRequest, res: Response
   return res.json(session);
 });
 
+apiRouter.post('/auth/logout', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    AuthService.revokeToken(token);
+  }
+  return res.json({ success: true, message: 'Successfully logged out and revoked authentication session.' });
+});
+
+apiRouter.post('/auth/forgot-password', authRateLimiter, (req: Request, res: Response) => {
+  const { emailOrPhone } = req.body;
+  if (!isNonEmptyString(emailOrPhone)) {
+    return res.status(400).json({ error: 'Email or phone number is required.' });
+  }
+
+  const result = AuthService.requestPasswordReset(sanitizeString(emailOrPhone, 120));
+  return res.json(result);
+});
+
+apiRouter.post('/auth/reset-password', authRateLimiter, (req: Request, res: Response) => {
+  const { code, newPassword } = req.body;
+  if (!isNonEmptyString(code) || !isNonEmptyString(newPassword)) {
+    return res.status(400).json({ error: 'Reset code and new password are required.' });
+  }
+
+  const result = AuthService.resetPasswordWithCode(sanitizeString(code, 20), String(newPassword));
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+
+  return res.json({ success: true, message: 'Password reset successfully. You can now sign in with your new password.' });
+});
+
+apiRouter.post('/auth/verify-email/request', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  const result = AuthService.requestEmailVerification(req.user!.id);
+  return res.json({ success: true, code: result.code, message: 'Verification code sent.' });
+});
+
+apiRouter.post('/auth/verify-email/confirm', (req: Request, res: Response) => {
+  const { code } = req.body;
+  if (!isNonEmptyString(code)) {
+    return res.status(400).json({ error: 'Verification code is required.' });
+  }
+
+  const result = AuthService.confirmEmailVerification(sanitizeString(code, 20));
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+
+  return res.json({ success: true, message: 'Email address verified successfully.' });
+});
+
+apiRouter.get('/account/export-data', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const user = db.users.find((u) => u.id === userId);
+  const customerProfile = db.customerProfiles.find((c) => c.userId === userId);
+  const technicianProfile = db.technicianProfiles.find((t) => t.userId === userId);
+  const repairRequests = db.repairRequests.filter((r) => r.customerId === userId);
+  const repairJobs = db.repairJobs.filter((j) => j.customerId === userId || j.technicianId === userId);
+  const quotes = db.repairQuotes.filter((q) => q.technicianId === userId);
+  const payments = db.payments.filter((p) => p.customerId === userId);
+  const reviews = db.reviews.filter((r) => r.customerId === userId || r.technicianId === userId);
+
+  const exportPayload = {
+    exportMeta: {
+      platform: 'Fixhub Nigeria',
+      ndprCompliant: true,
+      exportedAt: new Date().toISOString(),
+      userId,
+    },
+    user,
+    customerProfile,
+    technicianProfile,
+    repairRequests,
+    repairJobs,
+    quotes,
+    payments,
+    reviews,
+  };
+
+  return res.json(exportPayload);
+});
+
+apiRouter.delete('/account/me', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+
+  // 1. Remove user
+  db.users = db.users.filter((u) => u.id !== userId);
+  // 2. Remove profiles
+  db.customerProfiles = db.customerProfiles.filter((c) => c.userId !== userId);
+  db.technicianProfiles = db.technicianProfiles.filter((t) => t.userId !== userId);
+
+  // Revoke current token
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    AuthService.revokeToken(authHeader.substring(7));
+  }
+
+  db.save();
+
+  return res.json({
+    success: true,
+    message: 'Your account and personal data have been permanently deleted in compliance with NDPR right to erasure.',
+  });
+});
+
 apiRouter.put('/customer/profile', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
   const user = db.users.find((u) => u.id === req.user!.id);
   const cust = db.customerProfiles.find((c) => c.userId === req.user!.id);
@@ -2548,6 +2654,78 @@ apiRouter.get('/audit-logs/repair/:id', requireAuth, (req: AuthenticatedRequest,
 
   const logs = AuditService.getLogsForResource(resourceId);
   return res.json(logs);
+});
+
+/* -------------------------------------------------------------
+ * 11B. ADMIN VERIFICATION & DISPUTES ENDPOINTS
+ * ----------------------------------------------------------- */
+apiRouter.post('/admin/technicians/:id/verify', requireAuth, requireRole(['admin']), (req: AuthenticatedRequest, res: Response) => {
+  const techId = req.params.id;
+  const tech = db.technicianProfiles.find((t) => t.userId === techId || t.id === techId);
+  if (!tech) {
+    return res.status(404).json({ error: 'Technician profile not found.' });
+  }
+
+  const { basic, locationConfirmed, identityVerified, businessVerified, payoutVerified, isVerified } = req.body;
+
+  tech.verificationStatus = {
+    basic: basic ?? tech.verificationStatus?.basic ?? true,
+    locationConfirmed: locationConfirmed ?? tech.verificationStatus?.locationConfirmed ?? false,
+    identityVerified: identityVerified ?? tech.verificationStatus?.identityVerified ?? false,
+    businessVerified: businessVerified ?? tech.verificationStatus?.businessVerified ?? false,
+    payoutVerified: payoutVerified ?? tech.verificationStatus?.payoutVerified ?? false,
+  };
+
+  tech.isVerified = isVerified ?? (
+    tech.verificationStatus.identityVerified &&
+    tech.verificationStatus.businessVerified &&
+    tech.verificationStatus.locationConfirmed
+  );
+
+  return res.json({ success: true, technician: tech });
+});
+
+apiRouter.get('/admin/disputes', requireAuth, requireRole(['admin']), (_req: AuthenticatedRequest, res: Response) => {
+  const disputedJobs = db.repairJobs.filter((j) => j.status === 'DISPUTED');
+  return res.json(disputedJobs);
+});
+
+apiRouter.post('/admin/disputes/:jobId/resolve', requireAuth, requireRole(['admin']), async (req: AuthenticatedRequest, res: Response) => {
+  const { jobId } = req.params;
+  const { decision, resolutionNotes } = req.body;
+
+  const job = db.repairJobs.find((j) => j.id === jobId);
+  if (!job) {
+    return res.status(404).json({ error: 'Disputed job not found.' });
+  }
+
+  if (job.status !== 'DISPUTED') {
+    return res.status(400).json({ error: 'Job is not currently in DISPUTED status.' });
+  }
+
+  if (decision === 'REFUND_CUSTOMER') {
+    job.status = 'CANCELLED';
+    const payment = db.payments.find((p) => p.repairId === job.id);
+    if (payment) {
+      await PaymentService.recordRefund({
+        paymentId: payment.id,
+        reason: resolutionNotes || 'Admin dispute resolution: Customer refund approved',
+        actorId: req.user!.id,
+        actorRole: 'admin',
+      });
+    }
+  } else if (decision === 'RELEASE_TECHNICIAN') {
+    job.status = 'COMPLETED';
+    await PaymentService.releaseEscrow({
+      repairJobId: job.id,
+      actorId: req.user!.id,
+      actorRole: 'admin',
+    });
+  } else {
+    return res.status(400).json({ error: 'Invalid decision. Must be REFUND_CUSTOMER or RELEASE_TECHNICIAN.' });
+  }
+
+  return res.json({ success: true, job, decision });
 });
 
 /* -------------------------------------------------------------

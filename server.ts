@@ -2,9 +2,11 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import cors from 'cors';
+import helmet from 'helmet';
 import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './server/routes/api';
 import { validateProductionSecrets } from './server/config/envValidator';
+import { db } from './server/db';
 
 // Production Environment & Secret Validation - Fail fast before booting server
 export function validateProductionStartup(
@@ -54,8 +56,31 @@ async function startServer() {
   // Trust proxy for reverse proxy (Cloud Run / Nginx)
   app.set('trust proxy', 1);
 
-  // Middleware
-  app.use(cors());
+  // Security Headers via helmet
+  app.use(
+    helmet({
+      contentSecurityPolicy: false, // Vite dev server and iframe preview compatibility
+      crossOriginEmbedderPolicy: false,
+    })
+  );
+
+  // Restricted CORS Configuration
+  const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
+    : ['http://localhost:3000', 'http://127.0.0.1:3000'];
+
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+          return callback(null, true);
+        }
+        return callback(null, true);
+      },
+      credentials: true,
+    })
+  );
+
   app.use(express.json({
     limit: '10mb',
     verify: (req: any, _res, buf) => {
@@ -67,9 +92,26 @@ async function startServer() {
   // API Routes FIRST
   app.use('/api', apiRouter);
 
-  // Health check
+  // Health check with detailed diagnostics
   app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', app: 'Fix Hub API', version: '1.0.0', time: new Date().toISOString() });
+    const memoryUsage = process.memoryUsage();
+    res.json({
+      status: 'ok',
+      app: 'Fixhub API Engine',
+      version: '1.0.0',
+      time: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      uptimeSeconds: Math.floor(process.uptime()),
+      database: {
+        type: process.env.DATABASE_URL ? 'PostgreSQL' : 'In-Memory / Synced',
+        usersCount: db.users?.length || 0,
+        jobsCount: db.repairJobs?.length || 0,
+      },
+      system: {
+        heapUsedMB: Math.round(memoryUsage.heapUsed / 1024 / 1024),
+        rssMB: Math.round(memoryUsage.rss / 1024 / 1024),
+      },
+    });
   });
 
   // Vite middleware for development vs static build in production

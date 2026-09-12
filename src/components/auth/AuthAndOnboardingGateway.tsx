@@ -69,9 +69,14 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
   ]);
 
   // Login Form State
-  const [loginIdentifier, setLoginIdentifier] = useState('customer@test.fixhub.local');
-  const [loginPassword, setLoginPassword] = useState('password123');
+  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [loginIsBorrowed, setLoginIsBorrowed] = useState(false);
+
+  // Terms and Conditions State (NDPR Compliance)
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -79,36 +84,20 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
   const handleRoleSwitch = (role: 'customer' | 'technician') => {
     setSelectedRole(role);
     setErrorMsg(null);
-    if (role === 'customer') {
-      setLoginIdentifier('customer@test.fixhub.local');
-    } else {
-      setLoginIdentifier('technician@test.fixhub.local');
-    }
-  };
-
-  // Sample Autofill Helpers for Forms
-  const handleFillSampleCustomerLogin = () => {
-    setLoginIdentifier('customer@test.fixhub.local');
-    setLoginPassword('password123');
-    setLoginIsBorrowed(false);
-  };
-
-  const handleFillSampleTechnicianLogin = () => {
-    setLoginIdentifier('technician@test.fixhub.local');
-    setLoginPassword('password123');
-    setLoginIsBorrowed(false);
+    setLoginIdentifier('');
   };
 
   const handlePreFillCustomerRegister = () => {
     setCustName('Tamuno Briggs');
     setCustPhone('+234 803 123 4567');
     setCustEmail(`tamuno.${Date.now().toString().slice(-4)}@fixhub.ng`);
-    setCustPassword('password123');
+    setCustPassword('Password123');
     setCustAddress('Plot 14 Aba Road, Garrison');
     setCustLandmark('Near Garrison Junction');
     setCustCity('Port Harcourt');
     setCustState('Rivers State');
     setCustIsBorrowed(false);
+    setTermsAccepted(true);
   };
 
   const handlePreFillTechnicianRegister = () => {
@@ -116,12 +105,13 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
     setTechBusinessName('Rivers Precision Microsoldering & Tech Hub');
     setTechPhone('+234 802 987 6543');
     setTechEmail(`baridura.${Date.now().toString().slice(-4)}@fixhub.ng`);
-    setTechPassword('password123');
+    setTechPassword('Password123');
     setTechShopAddress('Shop 12, Garrison Tech Plaza, Aba Road');
     setTechLandmark('Near Garrison Junction');
     setTechArea('Garrison, Port Harcourt');
     setTechCity('Port Harcourt');
     setTechSupportedBrands(['Apple', 'Samsung', 'Google Pixel', 'Tecno', 'Infinix']);
+    setTermsAccepted(true);
   };
 
   // Submission Handlers
@@ -139,6 +129,14 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
   const handleCustomerRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    if (!termsAccepted) {
+      setErrorMsg('You must agree to the Terms of Service and Privacy Policy to register.');
+      return;
+    }
+    if (custPassword.length < 8 || !/\d/.test(custPassword)) {
+      setErrorMsg('Password must be at least 8 characters long and contain at least one number.');
+      return;
+    }
     try {
       await registerCustomer({
         name: custName,
@@ -150,7 +148,8 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
         city: custCity,
         state: custState,
         isBorrowedDevice: custIsBorrowed,
-      });
+        termsAcceptedAt: new Date().toISOString(),
+      } as any);
       onComplete();
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to register customer.');
@@ -160,6 +159,14 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
   const handleTechnicianRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    if (!termsAccepted) {
+      setErrorMsg('You must agree to the Terms of Service and Privacy Policy to register.');
+      return;
+    }
+    if (techPassword.length < 8 || !/\d/.test(techPassword)) {
+      setErrorMsg('Password must be at least 8 characters long and contain at least one number.');
+      return;
+    }
     try {
       await registerTechnician({
         name: techName,
@@ -173,7 +180,8 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
         city: techCity,
         state: 'Rivers State',
         supportedBrands: techSupportedBrands,
-      });
+        termsAcceptedAt: new Date().toISOString(),
+      } as any);
       onComplete();
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to register technician.');
@@ -307,31 +315,15 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
         {/* ======================= VIEW A: LOGIN FORM ======================= */}
         {authMode === 'login' && (
           <form onSubmit={handleLoginSubmit} className="space-y-4 text-xs animate-in fade-in duration-150">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-extrabold text-sm text-white">
-                  {selectedRole === 'customer' ? 'Customer Sign In' : 'Technician Workshop Sign In'}
-                </h3>
-                <p className="text-[11px] text-slate-400">
-                  {selectedRole === 'customer'
-                    ? 'Log in to track repairs, approve quotes & view warranty passports'
-                    : 'Log in to manage your workshop workbench & payouts'}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={
-                  selectedRole === 'customer'
-                    ? handleFillSampleCustomerLogin
-                    : handleFillSampleTechnicianLogin
-                }
-                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
-                title="Autofill default test credentials"
-              >
-                <Zap className="w-3 h-3 text-amber-400" />
-                <span>Fill Credentials</span>
-              </button>
+            <div>
+              <h3 className="font-extrabold text-sm text-white">
+                {selectedRole === 'customer' ? 'Customer Sign In' : 'Technician Workshop Sign In'}
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                {selectedRole === 'customer'
+                  ? 'Log in to track repairs, approve quotes & view warranty passports'
+                  : 'Log in to manage your workshop workbench & payouts'}
+              </p>
             </div>
 
             <div>
@@ -345,8 +337,8 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
                 required
                 placeholder={
                   selectedRole === 'customer'
-                    ? 'customer@test.fixhub.local'
-                    : 'technician@test.fixhub.local'
+                    ? 'you@example.com'
+                    : 'yourshop@example.com'
                 }
                 className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -510,7 +502,7 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
               </div>
             </div>
 
-            <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700 text-slate-300">
+            <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700 text-slate-300 space-y-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -520,6 +512,23 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
                 />
                 <span className="text-xs">
                   I am currently using a borrowed/friend's phone to request this repair
+                </span>
+              </label>
+
+              <label className="flex items-start gap-2 cursor-pointer pt-2 border-t border-slate-700/80">
+                <input
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  required
+                  className="mt-0.5 rounded text-blue-600 bg-slate-900 border-slate-700"
+                />
+                <span className="text-xs text-slate-300 leading-relaxed">
+                  I agree to Fixhub's{' '}
+                  <button type="button" onClick={() => setShowTermsModal(true)} className="text-blue-400 font-bold underline hover:text-blue-300">Terms of Service</button>
+                  {' '}and{' '}
+                  <button type="button" onClick={() => setShowPrivacyModal(true)} className="text-blue-400 font-bold underline hover:text-blue-300">Privacy Policy</button>
+                  {' '}(NDPR compliant data processing).
                 </span>
               </label>
             </div>
@@ -652,7 +661,7 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
               </div>
             </div>
 
-            <div className="p-3 bg-slate-800/80 rounded-2xl border border-slate-700 space-y-1.5">
+            <div className="p-3 bg-slate-800/80 rounded-2xl border border-slate-700 space-y-2">
               <span className="font-bold text-slate-300 text-xs block">Supported Brands</span>
               <div className="flex flex-wrap gap-2">
                 {['Apple', 'Samsung', 'Google Pixel', 'Xiaomi', 'Tecno', 'Infinix'].map((brand) => (
@@ -677,6 +686,23 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
                   </button>
                 ))}
               </div>
+
+              <label className="flex items-start gap-2 cursor-pointer pt-3 border-t border-slate-700">
+                <input
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  required
+                  className="mt-0.5 rounded text-indigo-600 bg-slate-900 border-slate-700"
+                />
+                <span className="text-xs text-slate-300 leading-relaxed">
+                  I agree to Fixhub Partner Workshop{' '}
+                  <button type="button" onClick={() => setShowTermsModal(true)} className="text-indigo-400 font-bold underline hover:text-indigo-300">Terms of Service</button>
+                  {' '}and{' '}
+                  <button type="button" onClick={() => setShowPrivacyModal(true)} className="text-indigo-400 font-bold underline hover:text-indigo-300">Privacy Policy</button>
+                  {' '}(NDPR compliant).
+                </span>
+              </label>
             </div>
 
             <button
@@ -718,6 +744,60 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
           Protected Direct Settlement
         </span>
       </div>
+
+      {/* Terms of Service Modal */}
+      {showTermsModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 text-slate-200 space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-extrabold text-base text-white">Fixhub Terms of Service</h3>
+              <button onClick={() => setShowTermsModal(false)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <div className="text-xs space-y-3 leading-relaxed text-slate-300">
+              <p><strong>1. Service Overview:</strong> Fixhub provides a platform connecting device owners with verified repair technicians in Port Harcourt and across Nigeria.</p>
+              <p><strong>2. Payment & Holds:</strong> Customer payments are processed securely through Paystack. Funds are safely held until the customer approves the repair after testing at pickup or drop-off.</p>
+              <p><strong>3. Warranty Passports:</strong> All completed repairs performed by verified Fixhub technicians include a digital warranty passport with an explicit warranty duration period.</p>
+              <p><strong>4. Disputes:</strong> In the event of a repair quality dispute, Fixhub mediation holds funds while inspecting the device status.</p>
+            </div>
+            <button
+              onClick={() => {
+                setTermsAccepted(true);
+                setShowTermsModal(false);
+              }}
+              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl cursor-pointer"
+            >
+              I Accept Terms of Service
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Privacy Policy Modal */}
+      {showPrivacyModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 text-slate-200 space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-extrabold text-base text-white">Fixhub Privacy Policy (NDPR)</h3>
+              <button onClick={() => setShowPrivacyModal(false)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <div className="text-xs space-y-3 leading-relaxed text-slate-300">
+              <p><strong>1. Data Compliance:</strong> Compliant with the Nigeria Data Protection Regulation (NDPR) and Nigeria Data Protection Act 2023.</p>
+              <p><strong>2. Personal Data Collected:</strong> We collect name, phone number, email address, physical location address, and device repair specs required to fulfill repair requests.</p>
+              <p><strong>3. Usage & Sharing:</strong> Your data is shared only with the assigned repair technician for device pickup/diagnostic purposes and Paystack for payment processing.</p>
+              <p><strong>4. User Rights:</strong> You have full rights to request account data export, data correction, or account deletion at any time via your account settings.</p>
+            </div>
+            <button
+              onClick={() => {
+                setTermsAccepted(true);
+                setShowPrivacyModal(false);
+              }}
+              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl cursor-pointer"
+            >
+              I Accept Privacy Policy
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

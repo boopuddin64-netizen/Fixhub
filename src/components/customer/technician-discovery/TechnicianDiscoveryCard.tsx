@@ -16,7 +16,12 @@ export const TechnicianDiscoveryCard: React.FC<TechnicianDiscoveryCardProps> = (
   const { technician, distanceKm, breakdown } = match;
   const rating = technician.rating || 4.8;
   const completedRepairs = technician.completedRepairs || 240;
-  const isVerified = technician.isVerified ?? true;
+  const isVerified = Boolean(
+    technician.isVerified ||
+    (technician.verificationStatus?.identityVerified &&
+     technician.verificationStatus?.businessVerified &&
+     technician.verificationStatus?.locationConfirmed)
+  );
 
   const handleGetDirections = (e: React.MouseEvent) => {
     e.stopPropagation();
