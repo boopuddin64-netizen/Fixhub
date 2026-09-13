@@ -29,16 +29,47 @@ export const GestureContainer: React.FC<GestureContainerProps> = ({
 
   const BACK_THRESHOLD = 75; // px to trigger back
   const REFRESH_THRESHOLD = 75; // px to trigger pull-to-refresh
+  const EDGE_SWIPE_THRESHOLD = 44; // px from left edge to qualify for native-feel edge back swipe
 
-  // Helper to check if touch started inside an interactive element that shouldn't swipe
+  // Prevent multi-touch pinch zoom globally
+  useEffect(() => {
+    const preventZoom = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        if (e.cancelable) e.preventDefault();
+      }
+    };
+    const preventGesture = (e: Event) => {
+      if (e.cancelable) e.preventDefault();
+    };
+
+    document.addEventListener('touchstart', preventZoom, { passive: false });
+    document.addEventListener('touchmove', preventZoom, { passive: false });
+    document.addEventListener('gesturestart', preventGesture);
+    document.addEventListener('gesturechange', preventGesture);
+
+    return () => {
+      document.removeEventListener('touchstart', preventZoom);
+      document.removeEventListener('touchmove', preventZoom);
+      document.removeEventListener('gesturestart', preventGesture);
+      document.removeEventListener('gesturechange', preventGesture);
+    };
+  }, []);
+
+  // Helper to check if touch started inside an interactive or horizontal scroll element that shouldn't swipe back
   const isIgnoredTarget = (target: EventTarget | null): boolean => {
     if (!(target instanceof HTMLElement)) return false;
     return !!(
-      target.closest('input[type="range"]') ||
-      target.closest('.gm-style') || // Google Maps canvas
-      target.closest('[data-no-swipe="true"]') ||
+      target.closest('input') ||
+      target.closest('select') ||
       target.closest('textarea') ||
-      target.closest('input[type="text"]')
+      target.closest('button') ||
+      target.closest('[role="button"]') ||
+      target.closest('.overflow-x-auto') ||
+      target.closest('.overflow-x-scroll') ||
+      target.closest('[data-no-swipe="true"]') ||
+      target.closest('[data-scroll="horizontal"]') ||
+      target.closest('.gm-style') ||
+      target.closest('input[type="range"]')
     );
   };
 
@@ -66,9 +97,13 @@ export const GestureContainer: React.FC<GestureContainerProps> = ({
       time: Date.now(),
     };
 
-    isEligibleForPullRef.current = isAtScrollTop();
-    // Swipe right is eligible from anywhere or predominantly left half
-    isEligibleForBackRef.current = canGoBack && !!onBack;
+    // Pull-to-refresh eligible only when scrolled to top and touch starts near upper viewport
+    isEligibleForPullRef.current = isAtScrollTop() && touch.clientY <= 140;
+
+    // Native iOS/Android style Back Swipe: strictly eligible ONLY if swipe starts from the far left edge of screen
+    const isLeftEdgeTouch = touch.clientX <= EDGE_SWIPE_THRESHOLD;
+    isEligibleForBackRef.current = canGoBack && !!onBack && isLeftEdgeTouch;
+
     isLockedHorizontalRef.current = false;
     isLockedVerticalRef.current = false;
   };
@@ -79,11 +114,21 @@ export const GestureContainer: React.FC<GestureContainerProps> = ({
     const deltaX = touch.clientX - touchStartRef.current.x;
     const deltaY = touch.clientY - touchStartRef.current.y;
 
-    // Lock direction once movement is detected
+    // Lock direction once clear movement (>14px) is detected
     if (!isLockedHorizontalRef.current && !isLockedVerticalRef.current) {
-      if (Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+      if (
+        Math.abs(deltaX) > 14 &&
+        Math.abs(deltaX) > Math.abs(deltaY) * 2.0 &&
+        isEligibleForBackRef.current &&
+        deltaX > 0
+      ) {
         isLockedHorizontalRef.current = true;
-      } else if (Math.abs(deltaY) > 10 && Math.abs(deltaY) > Math.abs(deltaX) * 1.2) {
+      } else if (
+        Math.abs(deltaY) > 14 &&
+        Math.abs(deltaY) > Math.abs(deltaX) * 2.0 &&
+        isEligibleForPullRef.current &&
+        deltaY > 0
+      ) {
         isLockedVerticalRef.current = true;
       }
     }

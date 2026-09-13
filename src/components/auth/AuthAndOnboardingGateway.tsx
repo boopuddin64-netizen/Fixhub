@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { ApiClient } from '../../api/client';
 import { FixhubLogo } from '../common/FixhubLogo';
+import { OtpVerificationModal } from './OtpVerificationModal';
 import {
   Smartphone,
   Wrench,
@@ -18,7 +20,10 @@ import {
   Clock,
   Zap,
   LogIn,
-  UserPlus
+  UserPlus,
+  Eye,
+  EyeOff,
+  RefreshCw,
 } from 'lucide-react';
 
 interface AuthAndOnboardingGatewayProps {
@@ -32,19 +37,20 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
   initialRole = 'customer',
   onOpenIntro,
 }) => {
-  const { login, registerCustomer, registerTechnician, isLoading } = useAuth();
+  const { login, registerCustomer, registerTechnician, user, refreshUser, isLoading } = useAuth();
 
   // Primary Role Selection: 'customer' | 'technician'
   const [selectedRole, setSelectedRole] = useState<'customer' | 'technician'>(initialRole);
 
-  // Authentication Mode: 'login' | 'register'
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  // Authentication Mode: 'login' | 'register' | 'forgot_password'
+  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot_password'>('login');
 
   // Customer Registration State
   const [custName, setCustName] = useState('');
   const [custPhone, setCustPhone] = useState('');
   const [custEmail, setCustEmail] = useState('');
-  const [custPassword, setCustPassword] = useState('password123');
+  const [custPassword, setCustPassword] = useState('');
+  const [custConfirmPassword, setCustConfirmPassword] = useState('');
   const [custAddress, setCustAddress] = useState('');
   const [custLandmark, setCustLandmark] = useState('');
   const [custCity, setCustCity] = useState('Port Harcourt');
@@ -56,7 +62,8 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
   const [techBusinessName, setTechBusinessName] = useState('');
   const [techPhone, setTechPhone] = useState('');
   const [techEmail, setTechEmail] = useState('');
-  const [techPassword, setTechPassword] = useState('password123');
+  const [techPassword, setTechPassword] = useState('');
+  const [techConfirmPassword, setTechConfirmPassword] = useState('');
   const [techShopAddress, setTechShopAddress] = useState('');
   const [techLandmark, setTechLandmark] = useState('');
   const [techArea, setTechArea] = useState('Garrison, Port Harcourt');
@@ -72,6 +79,26 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginIsBorrowed, setLoginIsBorrowed] = useState(false);
+
+  // Password Visibility Toggles
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showCustPassword, setShowCustPassword] = useState(false);
+  const [showCustConfirmPassword, setShowCustConfirmPassword] = useState(false);
+  const [showTechPassword, setShowTechPassword] = useState(false);
+  const [showTechConfirmPassword, setShowTechConfirmPassword] = useState(false);
+
+  // Phone OTP Modal State (Blocking after Register/Login if unverified)
+  const [showPhoneOtpModal, setShowPhoneOtpModal] = useState(false);
+  const [phoneToVerify, setPhoneToVerify] = useState('');
+
+  // Forgot Password Flow State
+  const [forgotEmailOrPhone, setForgotEmailOrPhone] = useState('');
+  const [forgotStep, setForgotStep] = useState<'request' | 'otp' | 'new_password'>('request');
+  const [forgotResetCode, setForgotResetCode] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+  const [showForgotNewPassword, setShowForgotNewPassword] = useState(false);
+  const [forgotSuccessMsg, setForgotSuccessMsg] = useState<string | null>(null);
 
   // Terms and Conditions State (NDPR Compliance)
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -92,6 +119,7 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
     setCustPhone('+234 803 123 4567');
     setCustEmail(`tamuno.${Date.now().toString().slice(-4)}@fixhub.ng`);
     setCustPassword('Password123');
+    setCustConfirmPassword('Password123');
     setCustAddress('Plot 14 Aba Road, Garrison');
     setCustLandmark('Near Garrison Junction');
     setCustCity('Port Harcourt');
@@ -106,6 +134,7 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
     setTechPhone('+234 802 987 6543');
     setTechEmail(`baridura.${Date.now().toString().slice(-4)}@fixhub.ng`);
     setTechPassword('Password123');
+    setTechConfirmPassword('Password123');
     setTechShopAddress('Shop 12, Garrison Tech Plaza, Aba Road');
     setTechLandmark('Near Garrison Junction');
     setTechArea('Garrison, Port Harcourt');
@@ -120,7 +149,17 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
     setErrorMsg(null);
     try {
       await login(loginIdentifier, loginPassword, loginIsBorrowed);
-      onComplete();
+      // Refresh to get latest user session state
+      await refreshUser();
+      
+      const currentUser = (window as any).__fixhub_user || user;
+      if (currentUser && !currentUser.phoneVerified) {
+        setPhoneToVerify(currentUser.phone || loginIdentifier);
+        await ApiClient.requestPhoneVerification(currentUser.phone || loginIdentifier);
+        setShowPhoneOtpModal(true);
+      } else {
+        onComplete();
+      }
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to sign in. Please check your credentials.');
     }
@@ -137,6 +176,11 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
       setErrorMsg('Password must be at least 8 characters long and contain at least one number.');
       return;
     }
+    if (custPassword !== custConfirmPassword) {
+      setErrorMsg('Passwords do not match. Please ensure both fields are identical.');
+      return;
+    }
+
     try {
       await registerCustomer({
         name: custName,
@@ -150,7 +194,10 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
         isBorrowedDevice: custIsBorrowed,
         termsAcceptedAt: new Date().toISOString(),
       } as any);
-      onComplete();
+
+      setPhoneToVerify(custPhone);
+      await ApiClient.requestPhoneVerification(custPhone);
+      setShowPhoneOtpModal(true);
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to register customer.');
     }
@@ -167,6 +214,11 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
       setErrorMsg('Password must be at least 8 characters long and contain at least one number.');
       return;
     }
+    if (techPassword !== techConfirmPassword) {
+      setErrorMsg('Passwords do not match. Please ensure both fields are identical.');
+      return;
+    }
+
     try {
       await registerTechnician({
         name: techName,
@@ -182,9 +234,73 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
         supportedBrands: techSupportedBrands,
         termsAcceptedAt: new Date().toISOString(),
       } as any);
-      onComplete();
+
+      setPhoneToVerify(techPhone);
+      await ApiClient.requestPhoneVerification(techPhone);
+      setShowPhoneOtpModal(true);
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to register technician.');
+    }
+  };
+
+  // OTP Verification for Phone
+  const handleVerifyPhoneOtp = async (code: string) => {
+    await ApiClient.confirmPhoneVerification(phoneToVerify, code);
+    await refreshUser();
+    setShowPhoneOtpModal(false);
+    onComplete();
+  };
+
+  const handleResendPhoneOtp = async () => {
+    await ApiClient.requestPhoneVerification(phoneToVerify);
+  };
+
+  // Forgot Password Handlers
+  const handleForgotRequestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    if (!forgotEmailOrPhone.trim()) {
+      setErrorMsg('Please enter your email or phone number.');
+      return;
+    }
+
+    try {
+      await ApiClient.requestPasswordReset(forgotEmailOrPhone);
+      setForgotStep('otp');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to send reset code.');
+    }
+  };
+
+  const handleForgotVerifyOtp = async (code: string) => {
+    setForgotResetCode(code);
+    setForgotStep('new_password');
+  };
+
+  const handleForgotResendOtp = async () => {
+    await ApiClient.requestPasswordReset(forgotEmailOrPhone);
+  };
+
+  const handleForgotResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    if (forgotNewPassword.length < 8 || !/\d/.test(forgotNewPassword)) {
+      setErrorMsg('New password must be at least 8 characters long and contain at least one number.');
+      return;
+    }
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      setErrorMsg('New passwords do not match.');
+      return;
+    }
+
+    try {
+      await ApiClient.resetPasswordWithCode(forgotResetCode, forgotNewPassword);
+      setForgotSuccessMsg('Password reset successfully! You can now sign in with your new password.');
+      setAuthMode('login');
+      setLoginIdentifier(forgotEmailOrPhone);
+      setLoginPassword('');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to reset password.');
     }
   };
 
@@ -304,6 +420,14 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
           </div>
         </div>
 
+        {/* Success / Info Notification */}
+        {forgotSuccessMsg && (
+          <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+            <span>{forgotSuccessMsg}</span>
+          </div>
+        )}
+
         {/* Error Notification */}
         {errorMsg && (
           <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs flex items-center gap-2">
@@ -335,25 +459,50 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
                 value={loginIdentifier}
                 onChange={(e) => setLoginIdentifier(e.target.value)}
                 required
+                autoComplete="username"
                 placeholder={
                   selectedRole === 'customer'
-                    ? 'you@example.com'
-                    : 'yourshop@example.com'
+                    ? 'you@example.com or +234...'
+                    : 'yourshop@example.com or +234...'
                 }
                 className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
             <div>
-              <label className="font-bold text-slate-300 block mb-1">Password</label>
-              <input
-                type="password"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                required
-                placeholder="••••••••"
-                className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <div className="flex items-center justify-between mb-1">
+                <label className="font-bold text-slate-300">Password</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode('forgot_password');
+                    setForgotStep('request');
+                    setErrorMsg(null);
+                    setForgotSuccessMsg(null);
+                  }}
+                  className="text-[11px] font-semibold text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
+                >
+                  Forgot password?
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  type={showLoginPassword ? 'text' : 'password'}
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  className="w-full p-2.5 pr-10 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPassword(!showLoginPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+                >
+                  {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             {selectedRole === 'customer' && (
@@ -395,6 +544,120 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
               </button>
             </div>
           </form>
+        )}
+
+        {/* ======================= VIEW B: FORGOT PASSWORD FORM ======================= */}
+        {authMode === 'forgot_password' && (
+          <div className="space-y-4 text-xs animate-in fade-in duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div>
+                <h3 className="font-extrabold text-sm text-white">Reset Password</h3>
+                <p className="text-[11px] text-slate-400">
+                  {forgotStep === 'request'
+                    ? 'Enter your registered phone or email address'
+                    : forgotStep === 'otp'
+                    ? 'Enter the 6-digit verification code sent to your phone/email'
+                    : 'Set your new secure password'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('login');
+                  setErrorMsg(null);
+                }}
+                className="text-xs text-slate-400 hover:text-white font-semibold underline cursor-pointer"
+              >
+                Back to Sign In
+              </button>
+            </div>
+
+            {forgotStep === 'request' && (
+              <form onSubmit={handleForgotRequestSubmit} className="space-y-4">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Registered Phone or Email</label>
+                  <input
+                    type="text"
+                    value={forgotEmailOrPhone}
+                    onChange={(e) => setForgotEmailOrPhone(e.target.value)}
+                    required
+                    placeholder="+234... or email@example.com"
+                    className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <span>Send Reset Verification Code</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </form>
+            )}
+
+            {forgotStep === 'otp' && (
+              <OtpVerificationModal
+                title="Password Reset Verification"
+                subtitle="Enter the 6-digit code sent to your phone/email to reset your password."
+                targetAddress={forgotEmailOrPhone}
+                type="password_reset"
+                onVerify={handleForgotVerifyOtp}
+                onResend={handleForgotResendOtp}
+                onClose={() => setForgotStep('request')}
+                isBlocking={false}
+              />
+            )}
+
+            {forgotStep === 'new_password' && (
+              <form onSubmit={handleForgotResetSubmit} className="space-y-4">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">New Password (8+ chars, 1 digit)</label>
+                  <div className="relative">
+                    <input
+                      type={showForgotNewPassword ? 'text' : 'password'}
+                      value={forgotNewPassword}
+                      onChange={(e) => setForgotNewPassword(e.target.value)}
+                      required
+                      autoComplete="new-password"
+                      placeholder="••••••••"
+                      className="w-full p-2.5 pr-10 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotNewPassword(!showForgotNewPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+                    >
+                      {showForgotNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Confirm New Password</label>
+                  <input
+                    type="password"
+                    value={forgotConfirmPassword}
+                    onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                    required
+                    autoComplete="new-password"
+                    placeholder="••••••••"
+                    className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <span>Update Password & Sign In</span>
+                  <CheckCircle2 className="w-4 h-4" />
+                </button>
+              </form>
+            )}
+          </div>
         )}
 
         {/* ======================= VIEW B: CUSTOMER REGISTER FORM ======================= */}
@@ -450,33 +713,69 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
                   value={custEmail}
                   onChange={(e) => setCustEmail(e.target.value)}
                   required
+                  autoComplete="email"
                   placeholder="tunde@fixhub.ng"
                   className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div>
-                <label className="font-bold text-slate-300 block mb-1">Password</label>
-                <input
-                  type="password"
-                  value={custPassword}
-                  onChange={(e) => setCustPassword(e.target.value)}
-                  required
-                  className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <label className="font-bold text-slate-300 block mb-1">Password (8+ chars, 1 digit)</label>
+                <div className="relative">
+                  <input
+                    type={showCustPassword ? 'text' : 'password'}
+                    value={custPassword}
+                    onChange={(e) => setCustPassword(e.target.value)}
+                    required
+                    autoComplete="new-password"
+                    placeholder="••••••••"
+                    className="w-full p-2.5 pr-10 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCustPassword(!showCustPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+                  >
+                    {showCustPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div>
-              <label className="font-bold text-slate-300 block mb-1">Your Location Address (e.g. Aba Road, Port Harcourt)</label>
-              <input
-                type="text"
-                value={custAddress}
-                onChange={(e) => setCustAddress(e.target.value)}
-                required
-                placeholder="e.g. Plot 14 Aba Road, Garrison"
-                className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Confirm Password</label>
+                <div className="relative">
+                  <input
+                    type={showCustConfirmPassword ? 'text' : 'password'}
+                    value={custConfirmPassword}
+                    onChange={(e) => setCustConfirmPassword(e.target.value)}
+                    required
+                    autoComplete="new-password"
+                    placeholder="••••••••"
+                    className="w-full p-2.5 pr-10 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCustConfirmPassword(!showCustConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+                  >
+                    {showCustConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Your Location Address (e.g. Aba Road, Port Harcourt)</label>
+                <input
+                  type="text"
+                  value={custAddress}
+                  onChange={(e) => setCustAddress(e.target.value)}
+                  required
+                  placeholder="e.g. Plot 14 Aba Road, Garrison"
+                  className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -650,14 +949,47 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
               </div>
 
               <div>
-                <label className="font-bold text-slate-300 block mb-1">Password</label>
-                <input
-                  type="password"
-                  value={techPassword}
-                  onChange={(e) => setTechPassword(e.target.value)}
-                  required
-                  className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+                <label className="font-bold text-slate-300 block mb-1">Password (8+ chars, 1 digit)</label>
+                <div className="relative">
+                  <input
+                    type={showTechPassword ? 'text' : 'password'}
+                    value={techPassword}
+                    onChange={(e) => setTechPassword(e.target.value)}
+                    required
+                    autoComplete="new-password"
+                    placeholder="••••••••"
+                    className="w-full p-2.5 pr-10 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowTechPassword(!showTechPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+                  >
+                    {showTechPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Confirm Password</label>
+                <div className="relative">
+                  <input
+                    type={showTechConfirmPassword ? 'text' : 'password'}
+                    value={techConfirmPassword}
+                    onChange={(e) => setTechConfirmPassword(e.target.value)}
+                    required
+                    autoComplete="new-password"
+                    placeholder="••••••••"
+                    className="w-full p-2.5 pr-10 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowTechConfirmPassword(!showTechConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+                  >
+                    {showTechConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -797,6 +1129,19 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
             </button>
           </div>
         </div>
+      )}
+
+      {/* Blocking Phone OTP Modal */}
+      {showPhoneOtpModal && (
+        <OtpVerificationModal
+          title="Verify Your Phone Number"
+          subtitle="Enter the 6-digit verification code sent to your mobile phone."
+          targetAddress={phoneToVerify}
+          type="phone"
+          onVerify={handleVerifyPhoneOtp}
+          onResend={handleResendPhoneOtp}
+          isBlocking={true}
+        />
       )}
     </div>
   );

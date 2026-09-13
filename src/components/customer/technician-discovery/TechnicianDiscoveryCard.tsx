@@ -13,9 +13,11 @@ export const TechnicianDiscoveryCard: React.FC<TechnicianDiscoveryCardProps> = (
   onViewShop,
   customerLocation,
 }) => {
-  const { technician, distanceKm, breakdown } = match;
-  const rating = technician.rating || 4.8;
-  const completedRepairs = technician.completedRepairs || 240;
+  const { technician, distanceKm } = match;
+  const rating = technician.rating;
+  const reviewCount = technician.reviewCount || 0;
+  const completedRepairs = technician.completedRepairs || 0;
+  const hasReviews = Boolean(reviewCount > 0 && rating && rating > 0);
   const isVerified = Boolean(
     technician.isVerified ||
     (technician.verificationStatus?.identityVerified &&
@@ -64,13 +66,19 @@ export const TechnicianDiscoveryCard: React.FC<TechnicianDiscoveryCardProps> = (
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-600 mt-1">
-              <div className="flex items-center text-amber-500 font-bold">
-                <Star className="w-3.5 h-3.5 fill-current" />
-                <span className="ml-1 text-slate-800">{rating.toFixed(1)}</span>
-              </div>
+            <div className="flex items-center gap-1.5 text-xs text-slate-600 mt-1 flex-wrap">
+              {hasReviews ? (
+                <div className="flex items-center text-amber-500 font-bold">
+                  <Star className="w-3.5 h-3.5 fill-current" />
+                  <span className="ml-1 text-slate-800">{rating!.toFixed(1)} ({reviewCount})</span>
+                </div>
+              ) : (
+                <span className="font-semibold text-slate-500">New to Fixhub</span>
+              )}
               <span className="text-slate-300">•</span>
-              <span className="font-medium text-slate-500">{completedRepairs}+ repairs</span>
+              <span className="font-medium text-slate-500">
+                {completedRepairs > 0 ? `${completedRepairs} repairs` : '0 repairs'}
+              </span>
               <span className="text-slate-300">•</span>
               <span className="font-bold text-blue-600">{distanceKm.toFixed(1)} km away</span>
             </div>
@@ -80,15 +88,19 @@ export const TechnicianDiscoveryCard: React.FC<TechnicianDiscoveryCardProps> = (
 
       {/* Trust Signals */}
       <div className="flex flex-wrap gap-2 pt-1">
+        {isVerified && (
+          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[11px] font-semibold rounded-lg flex items-center gap-1">
+            ✓ Verified Shop
+          </span>
+        )}
         <span className="px-2.5 py-1 bg-slate-100 text-slate-700 text-[11px] font-semibold rounded-lg flex items-center gap-1">
-          ✓ Verified Shop
+          ✓ Escrow Warranty
         </span>
-        <span className="px-2.5 py-1 bg-slate-100 text-slate-700 text-[11px] font-semibold rounded-lg flex items-center gap-1">
-          ✓ Warranty available
-        </span>
-        <span className="px-2.5 py-1 bg-slate-100 text-slate-700 text-[11px] font-semibold rounded-lg flex items-center gap-1">
-          ✓ {completedRepairs}+ repairs
-        </span>
+        {completedRepairs > 0 && (
+          <span className="px-2.5 py-1 bg-slate-100 text-slate-700 text-[11px] font-semibold rounded-lg flex items-center gap-1">
+            ✓ {completedRepairs} completed repairs
+          </span>
+        )}
       </div>
 
       {/* Capabilities & Location */}

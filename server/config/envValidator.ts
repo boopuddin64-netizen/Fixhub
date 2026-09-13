@@ -37,7 +37,7 @@ export function validateProductionSecrets(
     throw new Error(errorMsg);
   }
 
-  // 2. Validate JWT_SECRET in production
+  // 3. Validate JWT_SECRET in production
   const jwtSecret = env.JWT_SECRET?.trim();
   if (
     !jwtSecret ||
@@ -47,6 +47,17 @@ export function validateProductionSecrets(
     jwtSecret.length < 32
   ) {
     const errorMsg = 'FATAL: A secure JWT_SECRET (minimum 32 characters) is required in production.';
+    console.error(errorMsg);
+    if (exitOnError) {
+      process.exit(1);
+    }
+    throw new Error(errorMsg);
+  }
+
+  // 4. Validate SMS_PROVIDER_API_KEY in production
+  const smsKey = (env.SMS_PROVIDER_API_KEY || env.TERMII_API_KEY || env.AFRICASTALKING_API_KEY)?.trim();
+  if (!smsKey) {
+    const errorMsg = 'FATAL: A valid SMS_PROVIDER_API_KEY (or TERMII_API_KEY / AFRICASTALKING_API_KEY) is required when NODE_ENV=production.';
     console.error(errorMsg);
     if (exitOnError) {
       process.exit(1);

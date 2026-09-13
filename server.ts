@@ -80,7 +80,7 @@ async function startServer() {
         if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
           return callback(null, true);
         }
-        return callback(null, true);
+        return callback(new Error('Not allowed by CORS'));
       },
       credentials: true,
     })
@@ -93,6 +93,23 @@ async function startServer() {
     },
   }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+  // Root health check endpoint
+  app.get('/health', async (_req, res) => {
+    let database = 'connected';
+    try {
+      if ((db as any).rawQuery) {
+        await (db as any).rawQuery('SELECT 1');
+      }
+    } catch {
+      database = 'unreachable';
+    }
+    return res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      database,
+    });
+  });
 
   // API Routes FIRST
   app.use('/api', apiRouter);

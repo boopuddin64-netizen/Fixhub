@@ -81,6 +81,10 @@ export interface User {
   avatarUrl?: string;
   createdAt: string;
   isBorrowedDeviceSession?: boolean;
+  phoneVerified?: boolean;
+  phoneVerifiedAt?: string;
+  emailVerified?: boolean;
+  emailVerifiedAt?: string;
 }
 
 export interface CustomerProfile {

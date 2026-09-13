@@ -14,9 +14,16 @@ export const TechnicianDetailsView: React.FC<TechnicianDetailsViewProps> = ({
   customerLocation,
 }) => {
   const { technician, distanceKm } = match;
-  const rating = technician.rating || 4.8;
-  const completedRepairs = technician.completedRepairs || 240;
-  const isVerified = technician.isVerified ?? true;
+  const rating = technician.rating;
+  const reviewCount = technician.reviewCount || 0;
+  const completedRepairs = technician.completedRepairs || 0;
+  const hasReviews = Boolean(reviewCount > 0 && rating && rating > 0);
+  const isVerified = Boolean(
+    technician.isVerified ||
+    (technician.verificationStatus?.identityVerified &&
+     technician.verificationStatus?.businessVerified &&
+     technician.verificationStatus?.locationConfirmed)
+  );
 
   const handleGetDirections = () => {
     const origin =
@@ -69,14 +76,17 @@ export const TechnicianDetailsView: React.FC<TechnicianDetailsViewProps> = ({
               )}
             </div>
             <p className="text-xs text-slate-500">Managed by {technician.name}</p>
-            <div className="flex items-center gap-2 pt-1 text-xs font-medium text-slate-700">
-              <div className="flex items-center text-amber-500 font-bold">
-                <Star className="w-4 h-4 fill-current" />
-                <span className="ml-1 text-slate-900">{rating.toFixed(1)}</span>
-                <span className="text-slate-400 font-normal ml-1">— Excellent</span>
-              </div>
+            <div className="flex items-center gap-2 pt-1 text-xs font-medium text-slate-700 flex-wrap">
+              {hasReviews ? (
+                <div className="flex items-center text-amber-500 font-bold">
+                  <Star className="w-4 h-4 fill-current" />
+                  <span className="ml-1 text-slate-900">{rating!.toFixed(1)} ({reviewCount} reviews)</span>
+                </div>
+              ) : (
+                <span className="font-semibold text-slate-500">New to Fixhub</span>
+              )}
               <span>•</span>
-              <span>{completedRepairs}+ repairs completed</span>
+              <span>{completedRepairs > 0 ? `${completedRepairs} repairs completed` : '0 repairs completed'}</span>
               <span>•</span>
               <span className="font-bold text-blue-600">{distanceKm.toFixed(1)} km away</span>
             </div>

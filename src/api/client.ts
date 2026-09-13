@@ -91,6 +91,47 @@ export class ApiClient {
     });
   }
 
+  public static requestPhoneVerification(phoneOrUserId: string) {
+    return this.request<any>('/auth/verify-phone/request', {
+      method: 'POST',
+      body: JSON.stringify({ phoneOrUserId }),
+    });
+  }
+
+  public static confirmPhoneVerification(phoneOrUserId: string, code: string) {
+    return this.request<any>('/auth/verify-phone/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ phoneOrUserId, code }),
+    });
+  }
+
+  public static requestPasswordReset(emailOrPhone: string) {
+    return this.request<any>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ emailOrPhone }),
+    });
+  }
+
+  public static resetPasswordWithCode(code: string, newPassword: string) {
+    return this.request<any>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ code, newPassword }),
+    });
+  }
+
+  public static requestEmailVerification() {
+    return this.request<any>('/auth/verify-email/request', {
+      method: 'POST',
+    });
+  }
+
+  public static confirmEmailVerification(code: string) {
+    return this.request<any>('/auth/verify-email/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+  }
+
   public static getMe() {
     return this.request<any>('/auth/me');
   }

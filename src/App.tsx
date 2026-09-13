@@ -5,6 +5,7 @@ import { BottomNav } from './components/common/BottomNav';
 import { NotificationDrawer } from './components/common/NotificationDrawer';
 import { WorkflowProgressRibbon } from './components/common/WorkflowProgressRibbon';
 import { AuthAndOnboardingGateway } from './components/auth/AuthAndOnboardingGateway';
+import { EmailVerificationBanner } from './components/auth/EmailVerificationBanner';
 import { CustomerHomeView } from './components/customer/CustomerHomeView';
 import { RepairRequestWizard } from './components/customer/RepairRequestWizard';
 import { SavedDevicesManager } from './components/customer/SavedDevicesManager';
@@ -243,6 +244,9 @@ function MainAppContent() {
           onOpenIntro={() => setShowIntroGuide(true)}
           onReplayIntro={() => setIsLoadingIntro(true)}
         />
+
+        {/* Email Verification Banner */}
+        <EmailVerificationBanner />
 
       {/* Guided Workflow Progress Ribbon */}
       <WorkflowProgressRibbon

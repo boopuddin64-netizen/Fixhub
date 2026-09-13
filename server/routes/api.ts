@@ -111,6 +111,23 @@ export function geocodeCustomerLocation(customerLocation: any) {
 
 export const apiRouter = Router();
 
+// 0. HEALTH CHECK ENDPOINT (Includes DB connectivity check)
+apiRouter.get('/health', async (req: Request, res: Response) => {
+  let database = 'connected';
+  try {
+    if ((db as any).rawQuery) {
+      await (db as any).rawQuery('SELECT 1');
+    }
+  } catch {
+    database = 'unreachable';
+  }
+  return res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    database,
+  });
+});
+
 // Authentication Middleware
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -234,14 +251,14 @@ apiRouter.post('/auth/logout', requireAuth, (req: AuthenticatedRequest, res: Res
   return res.json({ success: true, message: 'Successfully logged out and revoked authentication session.' });
 });
 
-apiRouter.post('/auth/forgot-password', authRateLimiter, (req: Request, res: Response) => {
+apiRouter.post('/auth/forgot-password', authRateLimiter, async (req: Request, res: Response) => {
   const { emailOrPhone } = req.body;
   if (!isNonEmptyString(emailOrPhone)) {
     return res.status(400).json({ error: 'Email or phone number is required.' });
   }
 
-  const result = AuthService.requestPasswordReset(sanitizeString(emailOrPhone, 120));
-  return res.json(result);
+  const result = await AuthService.requestPasswordReset(sanitizeString(emailOrPhone, 120));
+  return res.json({ success: result.success, message: result.message });
 });
 
 apiRouter.post('/auth/reset-password', authRateLimiter, (req: Request, res: Response) => {
@@ -258,9 +275,9 @@ apiRouter.post('/auth/reset-password', authRateLimiter, (req: Request, res: Resp
   return res.json({ success: true, message: 'Password reset successfully. You can now sign in with your new password.' });
 });
 
-apiRouter.post('/auth/verify-email/request', requireAuth, (req: AuthenticatedRequest, res: Response) => {
-  const result = AuthService.requestEmailVerification(req.user!.id);
-  return res.json({ success: true, code: result.code, message: 'Verification code sent.' });
+apiRouter.post('/auth/verify-email/request', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const result = await AuthService.requestEmailVerification(req.user!.id);
+  return res.json({ success: result.success, message: result.message });
 });
 
 apiRouter.post('/auth/verify-email/confirm', (req: Request, res: Response) => {
@@ -275,6 +292,30 @@ apiRouter.post('/auth/verify-email/confirm', (req: Request, res: Response) => {
   }
 
   return res.json({ success: true, message: 'Email address verified successfully.' });
+});
+
+apiRouter.post('/auth/verify-phone/request', authRateLimiter, async (req: Request, res: Response) => {
+  const { phoneOrUserId } = req.body;
+  if (!isNonEmptyString(phoneOrUserId)) {
+    return res.status(400).json({ error: 'Phone number or user ID is required.' });
+  }
+
+  const result = await AuthService.requestPhoneVerification(sanitizeString(phoneOrUserId, 120));
+  return res.json(result);
+});
+
+apiRouter.post('/auth/verify-phone/confirm', authRateLimiter, (req: Request, res: Response) => {
+  const { phoneOrUserId, code } = req.body;
+  if (!isNonEmptyString(phoneOrUserId) || !isNonEmptyString(code)) {
+    return res.status(400).json({ error: 'Phone/User ID and verification code are required.' });
+  }
+
+  const result = AuthService.confirmPhoneVerification(sanitizeString(phoneOrUserId, 120), sanitizeString(code, 20));
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+
+  return res.json(result);
 });
 
 apiRouter.get('/account/export-data', requireAuth, (req: AuthenticatedRequest, res: Response) => {
@@ -2661,7 +2702,7 @@ apiRouter.get('/audit-logs/repair/:id', requireAuth, (req: AuthenticatedRequest,
  * ----------------------------------------------------------- */
 apiRouter.post('/admin/technicians/:id/verify', requireAuth, requireRole(['admin']), (req: AuthenticatedRequest, res: Response) => {
   const techId = req.params.id;
-  const tech = db.technicianProfiles.find((t) => t.userId === techId || t.id === techId);
+  const tech = db.technicianProfiles.find((t) => t.userId === techId || (t as any).id === techId);
   if (!tech) {
     return res.status(404).json({ error: 'Technician profile not found.' });
   }
@@ -2676,7 +2717,7 @@ apiRouter.post('/admin/technicians/:id/verify', requireAuth, requireRole(['admin
     payoutVerified: payoutVerified ?? tech.verificationStatus?.payoutVerified ?? false,
   };
 
-  tech.isVerified = isVerified ?? (
+  (tech as any).isVerified = isVerified ?? (
     tech.verificationStatus.identityVerified &&
     tech.verificationStatus.businessVerified &&
     tech.verificationStatus.locationConfirmed
@@ -2716,11 +2757,11 @@ apiRouter.post('/admin/disputes/:jobId/resolve', requireAuth, requireRole(['admi
     }
   } else if (decision === 'RELEASE_TECHNICIAN') {
     job.status = 'COMPLETED';
-    await PaymentService.releaseEscrow({
-      repairJobId: job.id,
-      actorId: req.user!.id,
-      actorRole: 'admin',
-    });
+    await PaymentService.releaseTechnicianFunds(
+      job.id,
+      req.user!.id,
+      'admin'
+    );
   } else {
     return res.status(400).json({ error: 'Invalid decision. Must be REFUND_CUSTOMER or RELEASE_TECHNICIAN.' });
   }

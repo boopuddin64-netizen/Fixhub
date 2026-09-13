@@ -242,11 +242,15 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
               </div>
               <p className="text-xs text-slate-400 truncate">{user?.email}</p>
               <div className="flex items-center gap-2 mt-1 text-xs">
-                <span className="flex items-center font-bold text-amber-400">
-                  <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400 mr-0.5" />
-                  {technicianProfile?.rating || '4.9'}
-                </span>
-                <span className="text-slate-400">• {technicianProfile?.completedJobs || 214} Repairs</span>
+                {technicianProfile?.reviewCount && technicianProfile.reviewCount > 0 && technicianProfile.rating ? (
+                  <span className="flex items-center font-bold text-amber-400">
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400 mr-0.5" />
+                    {technicianProfile.rating.toFixed(1)}
+                  </span>
+                ) : (
+                  <span className="text-slate-400 font-medium">New to Fixhub</span>
+                )}
+                <span className="text-slate-400">• {technicianProfile?.completedJobs || 0} Repairs</span>
               </div>
             </div>
           </div>
