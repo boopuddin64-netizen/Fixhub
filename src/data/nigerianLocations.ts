@@ -1,5 +1,50 @@
 import { LocationCoordinates } from '../types/index';
 
+export interface NigerianStateOption {
+  name: string;
+  active: boolean;
+}
+
+export const NIGERIAN_STATES: NigerianStateOption[] = [
+  { name: 'Abia', active: false },
+  { name: 'Adamawa', active: false },
+  { name: 'Akwa Ibom', active: false },
+  { name: 'Anambra', active: false },
+  { name: 'Bauchi', active: false },
+  { name: 'Bayelsa', active: false },
+  { name: 'Benue', active: false },
+  { name: 'Borno', active: false },
+  { name: 'Cross River', active: false },
+  { name: 'Delta', active: false },
+  { name: 'Ebonyi', active: false },
+  { name: 'Edo', active: false },
+  { name: 'Ekiti', active: false },
+  { name: 'Enugu', active: false },
+  { name: 'Federal Capital Territory (FCT)', active: false },
+  { name: 'Gombe', active: false },
+  { name: 'Imo', active: false },
+  { name: 'Jigawa', active: false },
+  { name: 'Kaduna', active: false },
+  { name: 'Kano', active: false },
+  { name: 'Katsina', active: false },
+  { name: 'Kebbi', active: false },
+  { name: 'Kogi', active: false },
+  { name: 'Kwara', active: false },
+  { name: 'Lagos', active: false },
+  { name: 'Nasarawa', active: false },
+  { name: 'Niger', active: false },
+  { name: 'Ogun', active: false },
+  { name: 'Ondo', active: false },
+  { name: 'Osun', active: false },
+  { name: 'Oyo', active: false },
+  { name: 'Plateau', active: false },
+  { name: 'Rivers State', active: true },
+  { name: 'Sokoto', active: false },
+  { name: 'Taraba', active: false },
+  { name: 'Yobe', active: false },
+  { name: 'Zamfara', active: false },
+];
+
 export interface NigerianArea {
   name: string;
   city: string;
@@ -150,3 +195,20 @@ export function searchNigerianLocations(query: string): NigerianArea[] {
       (loc.landmark && loc.landmark.toLowerCase().includes(q))
   );
 }
+
+export function getCitiesForState(stateName: string): string[] {
+  if (!stateName) return [];
+  const stateLocations = POPULAR_NIGERIAN_LOCATIONS.filter(
+    (l) => l.state.toLowerCase().trim() === stateName.toLowerCase().trim()
+  );
+  const citySet = new Set<string>(stateLocations.map((l) => l.city));
+  if (stateName.toLowerCase().includes('rivers')) {
+    citySet.add('Port Harcourt');
+    citySet.add('Obio-Akpor');
+    citySet.add('Bonny');
+    citySet.add('Eleme');
+    citySet.add('Oyigbo');
+  }
+  return Array.from(citySet).sort();
+}
+

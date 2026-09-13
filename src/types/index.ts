@@ -85,6 +85,7 @@ export interface User {
   phoneVerifiedAt?: string;
   emailVerified?: boolean;
   emailVerifiedAt?: string;
+  authProvider?: 'local' | 'google' | 'apple' | 'facebook';
 }
 
 export interface CustomerProfile {

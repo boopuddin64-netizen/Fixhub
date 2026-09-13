@@ -67,7 +67,10 @@ export class AuthService {
     });
 
     // Deliver reset code via SMS or Email service
-    await sendSms(user.phone, `Your Fixhub password reset code is: ${resetCode}. Valid for 15 minutes.`);
+    const smsResult = await sendSms(user.phone, `Your Fixhub password reset code is: ${resetCode}. Valid for 15 minutes.`);
+    if (!smsResult.success) {
+      console.error(`[AuthService.requestPasswordReset] Failed to deliver reset SMS to user ${user.id} (${user.phone}): ${smsResult.error}`);
+    }
 
     return {
       success: true,
@@ -163,6 +166,9 @@ export class AuthService {
     }
 
     if (user) {
+      if (!user.phone && record.phone) {
+        user.phone = record.phone;
+      }
       (user as any).phoneVerified = true;
       (user as any).phoneVerifiedAt = new Date().toISOString();
       db.save();
@@ -367,15 +373,15 @@ export class AuthService {
     const newTechProfile: TechnicianProfile = {
       userId,
       businessName: data.businessName.trim(),
-      bio: `Professional mobile phone repair center in ${data.area || data.city || 'Lagos'}. Specializing in screen, battery, and motherboard repairs.`,
+      bio: `Professional mobile phone repair center in ${data.city || 'Port Harcourt'}, ${data.state || 'Rivers State'}. Specializing in screen, battery, and motherboard repairs.`,
       shopLocation: {
-        lat: 6.5355,
-        lng: 3.3644,
-        address: data.shopAddress,
+        lat: 4.8156,
+        lng: 7.0498,
+        address: data.shopAddress || `${data.city || 'Port Harcourt'}, ${data.state || 'Rivers State'}`,
         landmark: data.landmark || '',
-        area: data.area || 'Lagos Central',
-        city: data.city || 'Lagos',
-        state: data.state || 'Lagos State',
+        area: data.area || data.city || 'Port Harcourt',
+        city: data.city || 'Port Harcourt',
+        state: data.state || 'Rivers State',
       },
       serviceRadiusKm: 15,
       businessHours: 'Mon - Sat: 8:30 AM - 6:30 PM',
@@ -447,6 +453,7 @@ export class AuthService {
       phoneVerifiedAt: (user as any).phoneVerifiedAt,
       emailVerified: Boolean((user as any).emailVerified),
       emailVerifiedAt: (user as any).emailVerifiedAt,
+      authProvider: (user as any).authProvider || 'local',
     };
 
     return {
@@ -455,5 +462,164 @@ export class AuthService {
       customerProfile,
       technicianProfile,
     };
+  }
+
+  public static async socialLogin(params: {
+    provider: 'google' | 'apple' | 'facebook';
+    token: string;
+    role: UserRole;
+  }): Promise<{ success: boolean; token?: string; user?: User; error?: string }> {
+    const { provider, token, role } = params;
+    if (!token || !token.trim()) {
+      return { success: false, error: 'OAuth token is required.' };
+    }
+
+    let verifiedIdentity: { email: string; name?: string };
+
+    if (provider === 'google') {
+      const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+      if (!clientId) {
+        return { success: false, error: 'Google OAuth is not configured on this server (GOOGLE_CLIENT_ID missing).' };
+      }
+      try {
+        const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token.trim())}`);
+        if (!res.ok) {
+          const errData = (await res.json().catch(() => ({}))) as any;
+          return { success: false, error: errData?.error_description || 'Invalid or expired Google token.' };
+        }
+        const payload = (await res.json()) as any;
+        if (payload.aud !== clientId && !process.env.SKIP_AUD_CHECK) {
+          return { success: false, error: 'Google token audience mismatch.' };
+        }
+        if (!payload.email) {
+          return { success: false, error: 'No verified email returned from Google.' };
+        }
+        verifiedIdentity = { email: payload.email, name: payload.name || payload.email.split('@')[0] };
+      } catch (err: any) {
+        return { success: false, error: `Google verification network error: ${err.message}` };
+      }
+    } else if (provider === 'apple') {
+      const clientId = process.env.APPLE_CLIENT_ID || process.env.VITE_APPLE_CLIENT_ID;
+      if (!clientId) {
+        return { success: false, error: 'Apple Sign-In is not configured on this server (APPLE_CLIENT_ID missing).' };
+      }
+      return { success: false, error: 'Apple Sign-In is not configured: Apple Developer keys and credentials are not configured in this environment.' };
+    } else if (provider === 'facebook') {
+      const appId = process.env.FACEBOOK_APP_ID || process.env.VITE_FACEBOOK_APP_ID;
+      if (!appId) {
+        return { success: false, error: 'Facebook Login is not configured on this server (FACEBOOK_APP_ID missing).' };
+      }
+      try {
+        const res = await fetch(`https://graph.facebook.com/me?fields=id,name,email&access_token=${encodeURIComponent(token.trim())}`);
+        if (!res.ok) {
+          const errData = (await res.json().catch(() => ({}))) as any;
+          return { success: false, error: errData?.error?.message || 'Invalid or expired Facebook access token.' };
+        }
+        const data = (await res.json()) as any;
+        if (!data.email) {
+          return { success: false, error: 'Facebook account does not have a verified email address.' };
+        }
+        verifiedIdentity = { email: data.email, name: data.name || data.email.split('@')[0] };
+      } catch (err: any) {
+        return { success: false, error: `Facebook verification network error: ${err.message}` };
+      }
+    } else {
+      return { success: false, error: 'Unsupported social provider.' };
+    }
+
+    const cleanEmail = verifiedIdentity.email.toLowerCase().trim();
+    let user = db.users.find((u) => u.email.toLowerCase() === cleanEmail);
+
+    if (user) {
+      user.emailVerified = true;
+      user.emailVerifiedAt = user.emailVerifiedAt || new Date().toISOString();
+      if (!user.authProvider || user.authProvider === 'local') {
+        user.authProvider = provider;
+      }
+      db.save();
+    } else {
+      const userId = `usr_social_${Date.now()}`;
+      user = {
+        id: userId,
+        email: cleanEmail,
+        phone: '',
+        name: verifiedIdentity.name || cleanEmail.split('@')[0],
+        role,
+        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(verifiedIdentity.name || cleanEmail)}`,
+        createdAt: new Date().toISOString(),
+        emailVerified: true,
+        emailVerifiedAt: new Date().toISOString(),
+        phoneVerified: false,
+        authProvider: provider,
+      } as any;
+      db.users.push(user as any);
+
+      if (role === 'customer') {
+        db.customerProfiles.push({
+          userId,
+          savedLocations: [],
+          totalRepairsCount: 0,
+          activeRepairsCount: 0,
+        });
+      } else if (role === 'technician') {
+        db.technicianProfiles.push({
+          userId,
+          businessName: `${user.name}'s Workshop`,
+          bio: 'Professional repair workshop in Port Harcourt, Rivers State.',
+          shopLocation: {
+            lat: 4.8156,
+            lng: 7.0498,
+            address: 'Port Harcourt, Rivers State',
+            landmark: '',
+            area: 'Port Harcourt',
+            city: 'Port Harcourt',
+            state: 'Rivers State',
+          },
+          serviceRadiusKm: 15,
+          businessHours: 'Mon - Sat: 8:30 AM - 6:30 PM',
+          yearsExperience: 2,
+          phone: '',
+          avatarUrl: user.avatarUrl,
+          shopPhotos: [],
+          supportedBrands: ['Apple', 'Samsung', 'Tecno', 'Infinix'],
+          supportedCategories: ['screen_damaged', 'battery_problem'],
+          availability: 'AVAILABLE',
+          rating: 0,
+          reviewCount: 0,
+          completedJobs: 0,
+          quoteAccuracyScore: 100,
+          cancellationRate: 0,
+          averageResponseMinutes: 15,
+          trustScore: 70,
+          trustLevel: 'NEW',
+          verificationStatus: {
+            basic: true,
+            locationConfirmed: false,
+            identityVerified: false,
+            businessVerified: false,
+            payoutVerified: false,
+          },
+        } as any);
+      }
+      db.save();
+    }
+
+    const sessionToken = this.generateToken(user as any);
+    const safeUser: User = {
+      id: user.id,
+      email: user.email,
+      phone: user.phone,
+      name: user.name,
+      role: user.role,
+      avatarUrl: user.avatarUrl,
+      createdAt: user.createdAt,
+      phoneVerified: Boolean(user.phoneVerified),
+      phoneVerifiedAt: user.phoneVerifiedAt,
+      emailVerified: Boolean(user.emailVerified),
+      emailVerifiedAt: user.emailVerifiedAt,
+      authProvider: user.authProvider,
+    };
+
+    return { success: true, token: sessionToken, user: safeUser };
   }
 }

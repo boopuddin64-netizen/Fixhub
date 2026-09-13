@@ -77,7 +77,7 @@ export const TechnicianDiscoveryCard: React.FC<TechnicianDiscoveryCardProps> = (
               )}
               <span className="text-slate-300">•</span>
               <span className="font-medium text-slate-500">
-                {completedRepairs > 0 ? `${completedRepairs} repairs` : '0 repairs'}
+                {completedRepairs > 0 ? `${completedRepairs} repairs` : 'New to Fixhub'}
               </span>
               <span className="text-slate-300">•</span>
               <span className="font-bold text-blue-600">{distanceKm.toFixed(1)} km away</span>

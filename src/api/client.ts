@@ -77,6 +77,13 @@ export class ApiClient {
     });
   }
 
+  public static socialLogin(provider: 'google' | 'apple' | 'facebook', token: string, role: 'customer' | 'technician') {
+    return this.request<any>('/auth/social-login', {
+      method: 'POST',
+      body: JSON.stringify({ provider, token, role }),
+    });
+  }
+
   public static registerCustomer(data: any) {
     return this.request<any>('/auth/register-customer', {
       method: 'POST',

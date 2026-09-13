@@ -12,17 +12,19 @@ html {
   height: 100%;
   width: 100%;
   overflow-x: hidden;
-  touch-action: manipulation;
+  touch-action: pan-y pan-x;
   overscroll-behavior-y: none;
+  overscroll-behavior-x: none;
 }
 
 body {
   height: 100%;
   width: 100%;
   overflow-x: hidden;
-  touch-action: manipulation;
+  touch-action: pan-y pan-x;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
+  overscroll-behavior-x: none;
 }
 
 /* 1. PREVENT FOCUS ZOOM ON MOBILE: Force 16px min font size for inputs on touch/mobile screens */

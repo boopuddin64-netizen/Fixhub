@@ -66,6 +66,12 @@ export class PaymentService {
   > {
     const { repairJobId, customerId, idempotencyKey, paymentMethod = 'CARD' } = params;
 
+    // 0. Enforce email verification before allowing payment initialization
+    const customer = db.users.find((u) => u.id === customerId);
+    if (!customer || customer.emailVerified !== true) {
+      return { success: false, error: 'Please verify your email before making a payment.' };
+    }
+
     // 1. Authenticate & verify repair job ownership
     const job = db.repairJobs.find((j) => j.id === repairJobId);
     if (!job) {
@@ -139,7 +145,6 @@ export class PaymentService {
     const uniqueRef = `FXP-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
     // 8. Resolve customer email for Paystack
-    const customer = db.users.find((u) => u.id === customerId);
     const email = params.customerEmail || customer?.email || `customer_${customerId}@fixhub.ng`;
 
     // 9. Initialize Paystack transaction server-side
@@ -1018,6 +1023,12 @@ export class PaymentService {
     // 1. Authorization: Only technician can request their own payout
     if (actorId !== technicianId) {
       return { success: false, error: 'Unauthorized: You can only request payouts for your own earnings.' };
+    }
+
+    // 1b. Enforce technician email verification
+    const techUser = db.users.find((u) => u.id === technicianId);
+    if (!techUser || techUser.emailVerified !== true) {
+      return { success: false, error: 'Please verify your email before requesting a payout.' };
     }
 
     if (amountNaira <= 0) {

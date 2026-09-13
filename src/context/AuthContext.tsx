@@ -12,6 +12,7 @@ interface AuthContextType {
   login: (emailOrPhone: string, password?: string, isBorrowed?: boolean) => Promise<void>;
   registerCustomer: (data: any) => Promise<void>;
   registerTechnician: (data: any) => Promise<void>;
+  socialLogin: (provider: 'google' | 'apple' | 'facebook', token: string, role: 'customer' | 'technician') => Promise<{ success: boolean; user: User; token: string }>;
   logout: () => void;
   switchDemoUser: (email: string) => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -101,6 +102,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const socialLogin = async (
+    provider: 'google' | 'apple' | 'facebook',
+    token: string,
+    role: 'customer' | 'technician'
+  ) => {
+    setIsLoading(true);
+    try {
+      const data = await ApiClient.socialLogin(provider, token, role);
+      ApiClient.setToken(data.token);
+      ApiClient.setBorrowedDevice(false);
+      setUser(data.user);
+      await refreshUser();
+      return data;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const logout = () => {
     ApiClient.removeToken();
     setUser(null);
@@ -138,6 +157,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         registerCustomer,
         registerTechnician,
+        socialLogin,
         logout,
         switchDemoUser,
         refreshUser,

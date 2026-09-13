@@ -242,6 +242,29 @@ apiRouter.get('/auth/me', requireAuth, (req: AuthenticatedRequest, res: Response
   return res.json(session);
 });
 
+apiRouter.post('/auth/social-login', authRateLimiter, async (req: Request, res: Response) => {
+  const { provider, token, role } = req.body;
+  if (!provider || !['google', 'apple', 'facebook'].includes(provider)) {
+    return res.status(400).json({ error: 'Valid provider (google, apple, or facebook) is required.' });
+  }
+  if (!token || typeof token !== 'string') {
+    return res.status(400).json({ error: 'Valid provider token is required.' });
+  }
+  const assignedRole: UserRole = role === 'technician' ? 'technician' : 'customer';
+
+  const result = await AuthService.socialLogin({
+    provider,
+    token,
+    role: assignedRole,
+  });
+
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+
+  return res.json(result);
+});
+
 apiRouter.post('/auth/logout', requireAuth, (req: AuthenticatedRequest, res: Response) => {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {

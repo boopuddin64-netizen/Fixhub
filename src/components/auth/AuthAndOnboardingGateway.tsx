@@ -3,6 +3,9 @@ import { useAuth } from '../../context/AuthContext';
 import { ApiClient } from '../../api/client';
 import { FixhubLogo } from '../common/FixhubLogo';
 import { OtpVerificationModal } from './OtpVerificationModal';
+import { ScrollPicker, ScrollPickerItem } from '../common/ScrollPicker';
+import { SocialLoginButtons } from './SocialLoginButtons';
+import { NIGERIAN_STATES, getCitiesForState } from '../../data/nigerianLocations';
 import {
   Smartphone,
   Wrench,
@@ -53,8 +56,8 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
   const [custConfirmPassword, setCustConfirmPassword] = useState('');
   const [custAddress, setCustAddress] = useState('');
   const [custLandmark, setCustLandmark] = useState('');
-  const [custCity, setCustCity] = useState('Port Harcourt');
-  const [custState, setCustState] = useState('Rivers State');
+  const [custCity, setCustCity] = useState('');
+  const [custState, setCustState] = useState('');
   const [custIsBorrowed, setCustIsBorrowed] = useState(false);
 
   // Technician Registration State
@@ -66,14 +69,18 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
   const [techConfirmPassword, setTechConfirmPassword] = useState('');
   const [techShopAddress, setTechShopAddress] = useState('');
   const [techLandmark, setTechLandmark] = useState('');
-  const [techArea, setTechArea] = useState('Garrison, Port Harcourt');
-  const [techCity, setTechCity] = useState('Port Harcourt');
-  const [techSupportedBrands, setTechSupportedBrands] = useState<string[]>([
-    'Apple',
-    'Samsung',
-    'Google Pixel',
-    'Xiaomi',
-  ]);
+  const [techArea, setTechArea] = useState('');
+  const [techCity, setTechCity] = useState('');
+  const [techState, setTechState] = useState('');
+  const [techSupportedBrands, setTechSupportedBrands] = useState<string[]>([]);
+
+  // State Notice Message for Disabled States
+  const [stateNoticeMsg, setStateNoticeMsg] = useState<string | null>(null);
+
+  // Social Auth Phone Prompt State
+  const [socialPromptPhone, setSocialPromptPhone] = useState(false);
+  const [socialPhoneInput, setSocialPhoneInput] = useState('');
+  const [isSocialSubmitting, setIsSocialSubmitting] = useState(false);
 
   // Login Form State
   const [loginIdentifier, setLoginIdentifier] = useState('');
@@ -114,33 +121,62 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
     setLoginIdentifier('');
   };
 
-  const handlePreFillCustomerRegister = () => {
-    setCustName('Tamuno Briggs');
-    setCustPhone('+234 803 123 4567');
-    setCustEmail(`tamuno.${Date.now().toString().slice(-4)}@fixhub.ng`);
-    setCustPassword('Password123');
-    setCustConfirmPassword('Password123');
-    setCustAddress('Plot 14 Aba Road, Garrison');
-    setCustLandmark('Near Garrison Junction');
-    setCustCity('Port Harcourt');
-    setCustState('Rivers State');
-    setCustIsBorrowed(false);
-    setTermsAccepted(true);
+  // State & City Scroll Picker Data Sources
+  const statePickerItems: ScrollPickerItem[] = NIGERIAN_STATES.map((s) => ({
+    label: s.name,
+    value: s.name,
+    active: s.active,
+  }));
+
+  const custCityPickerItems: ScrollPickerItem[] = custState
+    ? getCitiesForState(custState).map((c) => ({
+        label: c,
+        value: c,
+        active: true,
+      }))
+    : [];
+
+  const techCityPickerItems: ScrollPickerItem[] = techState
+    ? getCitiesForState(techState).map((c) => ({
+        label: c,
+        value: c,
+        active: true,
+      }))
+    : [];
+
+  // Social Login Success Handler
+  const handleSocialSuccess = async (socialUser: any) => {
+    if (!socialUser.phoneVerified) {
+      if (!socialUser.phone) {
+        setSocialPhoneInput('');
+        setSocialPromptPhone(true);
+      } else {
+        setPhoneToVerify(socialUser.phone);
+        await ApiClient.requestPhoneVerification(socialUser.phone);
+        setShowPhoneOtpModal(true);
+      }
+    } else {
+      onComplete();
+    }
   };
 
-  const handlePreFillTechnicianRegister = () => {
-    setTechName('Baridura Nwiido');
-    setTechBusinessName('Rivers Precision Microsoldering & Tech Hub');
-    setTechPhone('+234 802 987 6543');
-    setTechEmail(`baridura.${Date.now().toString().slice(-4)}@fixhub.ng`);
-    setTechPassword('Password123');
-    setTechConfirmPassword('Password123');
-    setTechShopAddress('Shop 12, Garrison Tech Plaza, Aba Road');
-    setTechLandmark('Near Garrison Junction');
-    setTechArea('Garrison, Port Harcourt');
-    setTechCity('Port Harcourt');
-    setTechSupportedBrands(['Apple', 'Samsung', 'Google Pixel', 'Tecno', 'Infinix']);
-    setTermsAccepted(true);
+  const handleSendSocialPhoneOtp = async () => {
+    if (!socialPhoneInput.trim()) {
+      setErrorMsg('Please enter a valid phone number.');
+      return;
+    }
+    setIsSocialSubmitting(true);
+    setErrorMsg(null);
+    try {
+      await ApiClient.requestPhoneVerification(socialPhoneInput.trim());
+      setPhoneToVerify(socialPhoneInput.trim());
+      setSocialPromptPhone(false);
+      setShowPhoneOtpModal(true);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to send SMS verification code.');
+    } finally {
+      setIsSocialSubmitting(false);
+    }
   };
 
   // Submission Handlers
@@ -178,6 +214,10 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
     }
     if (custPassword !== custConfirmPassword) {
       setErrorMsg('Passwords do not match. Please ensure both fields are identical.');
+      return;
+    }
+    if (!custState || !custCity) {
+      setErrorMsg('Please select your State and City.');
       return;
     }
 
@@ -218,6 +258,10 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
       setErrorMsg('Passwords do not match. Please ensure both fields are identical.');
       return;
     }
+    if (!techState || !techCity) {
+      setErrorMsg('Please select your Workshop State and City.');
+      return;
+    }
 
     try {
       await registerTechnician({
@@ -228,9 +272,9 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
         password: techPassword,
         shopAddress: techShopAddress,
         landmark: techLandmark,
-        area: techArea,
+        area: techArea || techCity,
         city: techCity,
-        state: 'Rivers State',
+        state: techState,
         supportedBrands: techSupportedBrands,
         termsAcceptedAt: new Date().toISOString(),
       } as any);
@@ -534,6 +578,21 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
               <ArrowRight className="w-4 h-4" />
             </button>
 
+            {/* Social Authentication */}
+            <div className="pt-1">
+              <div className="relative flex py-2 items-center">
+                <div className="flex-grow border-t border-slate-700/80"></div>
+                <span className="flex-shrink mx-3 text-slate-400 text-[10px] uppercase font-bold tracking-wider">Or continue with</span>
+                <div className="flex-grow border-t border-slate-700/80"></div>
+              </div>
+              <SocialLoginButtons
+                role={selectedRole}
+                onSuccess={handleSocialSuccess}
+                onError={(msg) => setErrorMsg(msg)}
+                disabled={isLoading}
+              />
+            </div>
+
             <div className="text-center pt-2">
               <button
                 type="button"
@@ -668,15 +727,6 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
                 <h3 className="font-extrabold text-sm text-white">Create Customer Account</h3>
                 <p className="text-[11px] text-slate-400">Join the trusted repair network</p>
               </div>
-
-              <button
-                type="button"
-                onClick={handlePreFillCustomerRegister}
-                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
-              >
-                <Zap className="w-3 h-3 text-amber-400" />
-                <span>Fill Sample</span>
-              </button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -766,38 +816,79 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
               </div>
 
               <div>
-                <label className="font-bold text-slate-300 block mb-1">Your Location Address (e.g. Aba Road, Port Harcourt)</label>
+                <label className="font-bold text-slate-300 block mb-1">Street Address</label>
                 <input
                   type="text"
                   value={custAddress}
                   onChange={(e) => setCustAddress(e.target.value)}
-                  required
                   placeholder="e.g. Plot 14 Aba Road, Garrison"
                   className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="font-bold text-slate-300 block mb-1">Landmark</label>
-                <input
-                  type="text"
-                  value={custLandmark}
-                  onChange={(e) => setCustLandmark(e.target.value)}
-                  placeholder="Beside Ikeja City Mall"
-                  className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+            <div>
+              <label className="font-bold text-slate-300 block mb-1">Landmark (Optional)</label>
+              <input
+                type="text"
+                value={custLandmark}
+                onChange={(e) => setCustLandmark(e.target.value)}
+                placeholder="e.g. Near Garrison Junction, opposite plaza"
+                className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* State & City Location Split Pickers */}
+            <div className="space-y-2 pt-1">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-300 text-xs">Service Location</span>
+                <span className="text-[11px] text-slate-400">
+                  {custState ? `${custCity || 'Select city'}, ${custState}` : 'Pick your State & City'}
+                </span>
               </div>
 
-              <div>
-                <label className="font-bold text-slate-300 block mb-1">City / State</label>
-                <input
-                  type="text"
-                  value={`${custCity}, ${custState}`}
-                  readOnly
-                  className="w-full p-2.5 bg-slate-800/50 border border-slate-700 rounded-xl text-slate-400 cursor-not-allowed"
-                />
+              {stateNoticeMsg && (
+                <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center gap-2 text-amber-300 text-[11px] font-medium animate-in fade-in">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                  <span>{stateNoticeMsg}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1 text-[11px]">
+                    State <span className="text-blue-400 font-normal">({custState || 'Scroll to select'})</span>
+                  </label>
+                  <ScrollPicker
+                    id="picker-cust-state"
+                    ariaLabel="Select Customer State"
+                    items={statePickerItems}
+                    selectedValue={custState}
+                    onSelect={(val) => {
+                      setCustState(val);
+                      setCustCity('');
+                      setStateNoticeMsg(null);
+                    }}
+                    onDisabledSelect={() => {
+                      setStateNoticeMsg('Fixhub is currently only available in Rivers State — more states coming soon.');
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1 text-[11px]">
+                    City <span className="text-blue-400 font-normal">({custCity || (custState ? 'Scroll to select' : 'Pick state first')})</span>
+                  </label>
+                  <ScrollPicker
+                    id="picker-cust-city"
+                    ariaLabel="Select Customer City"
+                    items={custCityPickerItems}
+                    selectedValue={custCity}
+                    disabled={!custState || custCityPickerItems.length === 0}
+                    disabledMessage={!custState ? 'Select a state first' : 'No cities available'}
+                    onSelect={(val) => setCustCity(val)}
+                  />
+                </div>
               </div>
             </div>
 
@@ -841,6 +932,21 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
               <ArrowRight className="w-4 h-4" />
             </button>
 
+            {/* Social Authentication */}
+            <div className="pt-1">
+              <div className="relative flex py-2 items-center">
+                <div className="flex-grow border-t border-slate-700/80"></div>
+                <span className="flex-shrink mx-3 text-slate-400 text-[10px] uppercase font-bold tracking-wider">Or register with</span>
+                <div className="flex-grow border-t border-slate-700/80"></div>
+              </div>
+              <SocialLoginButtons
+                role={selectedRole}
+                onSuccess={handleSocialSuccess}
+                onError={(msg) => setErrorMsg(msg)}
+                disabled={isLoading}
+              />
+            </div>
+
             <div className="text-center pt-2">
               <button
                 type="button"
@@ -859,17 +965,8 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <div>
                 <h3 className="font-extrabold text-sm text-white">Register Repair Workshop / Store</h3>
-                <p className="text-[11px] text-slate-400">Join verified technicians in Computer Village & Lagos</p>
+                <p className="text-[11px] text-slate-400">Join verified technicians in Port Harcourt & Rivers State</p>
               </div>
-
-              <button
-                type="button"
-                onClick={handlePreFillTechnicianRegister}
-                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
-              >
-                <Zap className="w-3 h-3 text-amber-400" />
-                <span>Fill Sample</span>
-              </button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -925,28 +1022,96 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
             </div>
 
             <div>
-              <label className="font-bold text-slate-300 block mb-1">Physical Workshop Address (Computer Village / Lagos)</label>
+              <label className="font-bold text-slate-300 block mb-1">Physical Workshop Address</label>
               <input
                 type="text"
                 value={techShopAddress}
                 onChange={(e) => setTechShopAddress(e.target.value)}
                 required
-                placeholder="Shop 14, Digital Bridge Plaza, Computer Village, Ikeja"
+                placeholder="e.g. Shop 12, Garrison Tech Plaza, Aba Road"
                 className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
+                <label className="font-bold text-slate-300 block mb-1">Landmark (Optional)</label>
+                <input
+                  type="text"
+                  value={techLandmark}
+                  onChange={(e) => setTechLandmark(e.target.value)}
+                  placeholder="e.g. Near Garrison Junction"
+                  className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
                 <label className="font-bold text-slate-300 block mb-1">Market Zone / Area</label>
                 <input
                   type="text"
                   value={techArea}
                   onChange={(e) => setTechArea(e.target.value)}
-                  placeholder="Computer Village, Ikeja"
+                  placeholder="e.g. Garrison / Olu Obasanjo"
                   className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
+            </div>
+
+            {/* Workshop State & City Scroll Pickers */}
+            <div className="space-y-2 pt-1">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-300 text-xs">Workshop Location</span>
+                <span className="text-[11px] text-slate-400">
+                  {techState ? `${techCity || 'Select city'}, ${techState}` : 'Pick your Workshop State & City'}
+                </span>
+              </div>
+
+              {stateNoticeMsg && (
+                <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center gap-2 text-amber-300 text-[11px] font-medium animate-in fade-in">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                  <span>{stateNoticeMsg}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1 text-[11px]">
+                    State <span className="text-indigo-400 font-normal">({techState || 'Scroll to select'})</span>
+                  </label>
+                  <ScrollPicker
+                    id="picker-tech-state"
+                    ariaLabel="Select Workshop State"
+                    items={statePickerItems}
+                    selectedValue={techState}
+                    onSelect={(val) => {
+                      setTechState(val);
+                      setTechCity('');
+                      setStateNoticeMsg(null);
+                    }}
+                    onDisabledSelect={() => {
+                      setStateNoticeMsg('Fixhub is currently only available in Rivers State — more states coming soon.');
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1 text-[11px]">
+                    City <span className="text-indigo-400 font-normal">({techCity || (techState ? 'Scroll to select' : 'Pick state first')})</span>
+                  </label>
+                  <ScrollPicker
+                    id="picker-tech-city"
+                    ariaLabel="Select Workshop City"
+                    items={techCityPickerItems}
+                    selectedValue={techCity}
+                    disabled={!techState || techCityPickerItems.length === 0}
+                    disabledMessage={!techState ? 'Select a state first' : 'No cities available'}
+                    onSelect={(val) => setTechCity(val)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
               <div>
                 <label className="font-bold text-slate-300 block mb-1">Password (8+ chars, 1 digit)</label>
@@ -1046,6 +1211,21 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
               <ArrowRight className="w-4 h-4" />
             </button>
 
+            {/* Social Authentication */}
+            <div className="pt-1">
+              <div className="relative flex py-2 items-center">
+                <div className="flex-grow border-t border-slate-700/80"></div>
+                <span className="flex-shrink mx-3 text-slate-400 text-[10px] uppercase font-bold tracking-wider">Or register with</span>
+                <div className="flex-grow border-t border-slate-700/80"></div>
+              </div>
+              <SocialLoginButtons
+                role={selectedRole}
+                onSuccess={handleSocialSuccess}
+                onError={(msg) => setErrorMsg(msg)}
+                disabled={isLoading}
+              />
+            </div>
+
             <div className="text-center pt-2">
               <button
                 type="button"
@@ -1142,6 +1322,40 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
           onResend={handleResendPhoneOtp}
           isBlocking={true}
         />
+      )}
+
+      {/* Social Auth Phone Prompt Modal */}
+      {socialPromptPhone && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 text-slate-200 space-y-4 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="text-center space-y-1">
+              <h3 className="font-extrabold text-base text-white">Link Your Phone Number</h3>
+              <p className="text-xs text-slate-400">
+                Fixhub requires a verified phone number for repair tracking and technician coordination.
+              </p>
+            </div>
+
+            <div>
+              <label className="font-bold text-slate-300 block mb-1 text-xs">Mobile Phone Number</label>
+              <input
+                type="tel"
+                value={socialPhoneInput}
+                onChange={(e) => setSocialPhoneInput(e.target.value)}
+                placeholder="+234 803 123 4567"
+                className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
+              />
+            </div>
+
+            <button
+              onClick={handleSendSocialPhoneOtp}
+              disabled={isSocialSubmitting || !socialPhoneInput.trim()}
+              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl cursor-pointer disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+            >
+              {isSocialSubmitting ? 'Sending Code...' : 'Send SMS Verification Code'}
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
