@@ -16,6 +16,7 @@ interface AuthContextType {
   logout: () => void;
   switchDemoUser: (email: string) => Promise<void>;
   refreshUser: () => Promise<void>;
+  refreshAuth?: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -161,6 +162,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         switchDemoUser,
         refreshUser,
+        refreshAuth: refreshUser,
       }}
     >
       {children}

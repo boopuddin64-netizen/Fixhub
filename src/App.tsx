@@ -51,7 +51,7 @@ function MainAppContent() {
   } | null>(null);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-  const [paymentTarget, setPaymentTarget] = useState<{ job: RepairJob; quote: RepairQuote } | null>(null);
+  const [paymentTarget, setPaymentTarget] = useState<{ job: RepairJob; quote?: RepairQuote } | null>(null);
 
   // Chat & Notifications Drawers
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
@@ -291,7 +291,7 @@ function MainAppContent() {
                   setCurrentTab('discovery');
                   loadData();
                 }}
-                preselectedDevice={wizardPrefill?.device}
+                preselectedDevice={wizardPrefill?.device?.modelName || (wizardPrefill?.device as any)?.model || (wizardPrefill?.device ? `${wizardPrefill.device.brand} ${wizardPrefill.device.modelName}` : undefined)}
                 preselectedBrand={wizardPrefill?.brand}
                 preselectedModel={wizardPrefill?.model}
                 preselectedIssue={wizardPrefill?.issue}

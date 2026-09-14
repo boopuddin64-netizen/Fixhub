@@ -286,6 +286,7 @@ export async function runDatabaseAndSecretsStabilizationTests(): Promise<void> {
       PAYSTACK_SECRET_KEY: 'sk_live_' + 'valid_sample_key_for_testing_purposes',
       DATABASE_URL: 'postgres://localhost/test',
       JWT_SECRET: 'a-valid-production-jwt-secret-with-more-than-32-characters-length',
+      SMS_PROVIDER_API_KEY: 'mock_sms_api_key_for_unit_tests_only',
     },
     false
   );

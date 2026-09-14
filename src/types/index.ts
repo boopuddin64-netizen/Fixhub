@@ -57,6 +57,7 @@ export interface LocationCoordinates {
   area?: string;
   city: string;
   state: string;
+  street?: string;
   accuracyMeters?: number;
   timestamp?: string;
   capturedAt?: string;
@@ -104,9 +105,15 @@ export interface CustomerProfile {
 
 export interface TechnicianProfile {
   userId: string;
+  name?: string;
   businessName: string;
   bio: string;
   shopLocation: LocationCoordinates;
+  shopAddress?: string;
+  city?: string;
+  area?: string;
+  state?: string;
+  landmark?: string;
   serviceRadiusKm: number;
   businessHours: string;
   yearsExperience: number;
@@ -116,11 +123,16 @@ export interface TechnicianProfile {
   supportedBrands: string[];
   supportedCategories: string[];
   availability: AvailabilityStatus;
+  availabilityStatus?: AvailabilityStatus;
+  isAvailable?: boolean;
+  isVerified?: boolean;
+  totalEarningsNaira?: number;
   
   // Performance & Trust Metrics
   rating: number;
   reviewCount: number;
   completedJobs: number;
+  completedRepairs?: number;
   quoteAccuracyScore: number; // 0-100%
   cancellationRate: number; // 0-100%
   averageResponseMinutes: number;
@@ -147,6 +159,7 @@ export interface DeviceBrand {
   deviceTypes?: DeviceType[];
   logoUrl?: string;
   popularModelsCount: number;
+  modelsCount?: number;
 }
 
 export interface DeviceFamily {
@@ -176,6 +189,7 @@ export interface CustomerDevice {
   customerId: string;
   deviceModelId?: string;
   brandName: string;
+  brand?: string;
   modelName: string;
   deviceType: DeviceType;
   nickname?: string;
@@ -482,6 +496,9 @@ export interface RepairJob {
   // Total costs
   originalQuoteAmount: number;
   finalAmount: number;
+  totalAmountNaira?: number;
+  agreedRepairIssue?: string;
+  intakeNotes?: string;
   platformFeeAmount: number;
   technicianPayoutAmount: number;
   

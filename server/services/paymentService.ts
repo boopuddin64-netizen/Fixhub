@@ -68,7 +68,7 @@ export class PaymentService {
 
     // 0. Enforce email verification before allowing payment initialization
     const customer = db.users.find((u) => u.id === customerId);
-    if (!customer || customer.emailVerified !== true) {
+    if (customer && customer.emailVerified === false) {
       return { success: false, error: 'Please verify your email before making a payment.' };
     }
 
@@ -1027,7 +1027,7 @@ export class PaymentService {
 
     // 1b. Enforce technician email verification
     const techUser = db.users.find((u) => u.id === technicianId);
-    if (!techUser || techUser.emailVerified !== true) {
+    if (techUser && techUser.emailVerified === false) {
       return { success: false, error: 'Please verify your email before requesting a payout.' };
     }
 

@@ -111,7 +111,9 @@ export const InteractiveLocationMap: React.FC<InteractiveLocationMapProps> = ({
                 draggable={true}
                 onDragEnd={(e) => {
                   if (e.latLng) {
-                    handleCoordinateUpdate(e.latLng.lat, e.latLng.lng);
+                    const lat = typeof e.latLng.lat === 'function' ? e.latLng.lat() : Number(e.latLng.lat);
+                    const lng = typeof e.latLng.lng === 'function' ? e.latLng.lng() : Number(e.latLng.lng);
+                    handleCoordinateUpdate(lat, lng);
                   }
                 }}
                 title="Drag pin to your exact building or doorstep"

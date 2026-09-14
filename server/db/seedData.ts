@@ -99,6 +99,9 @@ export function getInitialSeedData(): SeedDataResult {
       avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
       createdAt: oneMonthAgo,
       passwordHash: defaultPasswordHash,
+      emailVerified: true,
+      emailVerifiedAt: oneMonthAgo,
+      phoneVerified: true,
     },
     {
       id: 'usr_customer_2',
@@ -109,6 +112,9 @@ export function getInitialSeedData(): SeedDataResult {
       avatarUrl: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=150&auto=format&fit=crop&q=80',
       createdAt: oneMonthAgo,
       passwordHash: defaultPasswordHash,
+      emailVerified: true,
+      emailVerifiedAt: oneMonthAgo,
+      phoneVerified: true,
     },
     {
       id: 'usr_tech_1',
@@ -119,6 +125,9 @@ export function getInitialSeedData(): SeedDataResult {
       avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
       createdAt: oneMonthAgo,
       passwordHash: defaultPasswordHash,
+      emailVerified: true,
+      emailVerifiedAt: oneMonthAgo,
+      phoneVerified: true,
     },
     {
       id: 'usr_tech_2',
@@ -129,6 +138,9 @@ export function getInitialSeedData(): SeedDataResult {
       avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
       createdAt: oneMonthAgo,
       passwordHash: defaultPasswordHash,
+      emailVerified: true,
+      emailVerifiedAt: oneMonthAgo,
+      phoneVerified: true,
     },
     {
       id: 'usr_tech_3',
@@ -139,6 +151,9 @@ export function getInitialSeedData(): SeedDataResult {
       avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
       createdAt: oneMonthAgo,
       passwordHash: defaultPasswordHash,
+      emailVerified: true,
+      emailVerifiedAt: oneMonthAgo,
+      phoneVerified: true,
     },
     {
       id: 'usr_tech_4',
@@ -149,6 +164,9 @@ export function getInitialSeedData(): SeedDataResult {
       avatarUrl: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150&auto=format&fit=crop&q=80',
       createdAt: oneMonthAgo,
       passwordHash: defaultPasswordHash,
+      emailVerified: true,
+      emailVerifiedAt: oneMonthAgo,
+      phoneVerified: true,
     },
     {
       id: 'usr_tech_5',
@@ -159,6 +177,9 @@ export function getInitialSeedData(): SeedDataResult {
       avatarUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80',
       createdAt: oneMonthAgo,
       passwordHash: defaultPasswordHash,
+      emailVerified: true,
+      emailVerifiedAt: oneMonthAgo,
+      phoneVerified: true,
     },
     {
       id: 'usr_tech_6',
@@ -169,6 +190,9 @@ export function getInitialSeedData(): SeedDataResult {
       avatarUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150&auto=format&fit=crop&q=80',
       createdAt: oneMonthAgo,
       passwordHash: defaultPasswordHash,
+      emailVerified: true,
+      emailVerifiedAt: oneMonthAgo,
+      phoneVerified: true,
     },
   ];
 

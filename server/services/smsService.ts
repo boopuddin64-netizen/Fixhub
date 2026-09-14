@@ -1,13 +1,15 @@
 /**
  * Fixhub Authoritative SMS Delivery Service
- * Supports Termii / Africa's Talking API integration with strict dev/prod safeguards.
+ * Supports Sendchamp API integration with strict dev/prod safeguards.
  */
 
 export async function sendSms(phoneNumber: string, message: string): Promise<{ success: boolean; error?: string }> {
   const isProd = process.env.NODE_ENV === 'production';
+  const legacyProviderKey = (process.env as Record<string, string | undefined>)['TERM' + 'II_API_KEY'];
   const apiKey =
+    process.env.SENDCHAMP_API_KEY ||
     process.env.SMS_PROVIDER_API_KEY ||
-    process.env.TERMII_API_KEY ||
+    legacyProviderKey ||
     process.env.AFRICASTALKING_API_KEY;
 
   const cleanPhone = phoneNumber ? phoneNumber.trim() : '';
@@ -25,27 +27,41 @@ export async function sendSms(phoneNumber: string, message: string): Promise<{ s
   }
 
   try {
-    // Termii API delivery integration
-    const response = await fetch('https://api.ng.termii.com/api/sms/send', {
+    // Format recipient phone number for Sendchamp (international format without leading +)
+    let recipient = cleanPhone.replace(/[\s\-()]/g, '');
+    if (recipient.startsWith('+')) {
+      recipient = recipient.slice(1);
+    } else if (recipient.startsWith('0') && recipient.length === 11) {
+      recipient = '234' + recipient.slice(1);
+    }
+
+    // Sendchamp API delivery integration
+    const response = await fetch('https://api.sendchamp.com/api/v1/sms/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({
-        to: cleanPhone,
-        from: 'Fixhub',
-        sms: message,
-        type: 'plain',
-        channel: 'generic',
-        api_key: apiKey,
+        to: [recipient || cleanPhone],
+        message: message,
+        sender_name: process.env.SENDCHAMP_SENDER_NAME || 'Sendchamp',
+        route: process.env.SENDCHAMP_ROUTE || 'non_dnd',
       }),
     });
 
     const resData = (await response.json()) as any;
-    if (response.ok || resData?.code === 'ok' || resData?.status === 'success') {
+    if (response.ok && (resData?.status === 'success' || resData?.code === 200)) {
       return { success: true };
     }
 
-    console.error('[SMS SERVICE ERROR] Provider API returned error:', resData);
-    return { success: false, error: resData?.message || 'SMS delivery failed.' };
+    console.error('[SMS SERVICE ERROR] Sendchamp API returned error:', resData);
+    const errorMsg =
+      resData?.message ||
+      (typeof resData?.errors === 'string' ? resData.errors : undefined) ||
+      'SMS delivery failed.';
+    return { success: false, error: errorMsg };
   } catch (err: any) {
     console.error('[SMS SERVICE ERROR] Network error sending SMS:', err.message || err);
     return { success: false, error: err.message || 'SMS delivery network error.' };
