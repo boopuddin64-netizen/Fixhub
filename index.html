@@ -69,14 +69,82 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="FixHub" />
     <meta name="application-name" content="FixHub" />
-    <meta name="description" content="Location-based phone repair marketplace connecting customers with vetted nearby technicians with transparent quotes, secure escrow payments, device check-in, repair passport, and warranty records." />
+    <meta name="description" content="Location-based phone repair marketplace connecting customers with vetted nearby technicians with transparent quotes, protected payments, device check-in, repair passport, and warranty records." />
     <meta property="og:title" content="FixHub — Find. Fix. Done." />
-    <meta property="og:description" content="Location-based phone repair marketplace connecting customers with vetted nearby technicians with transparent quotes, secure escrow payments, device check-in, repair passport, and warranty records." />
+    <meta property="og:description" content="Location-based phone repair marketplace connecting customers with vetted nearby technicians with transparent quotes, protected payments, device check-in, repair passport, and warranty records." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <style>
+      /* Prevent white flash during initial page load */
+      html, body {
+        background-color: #0b0f19;
+        color: #f1f5f9;
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+        width: 100%;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #fixhub-preloader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background-color: #0b0f19;
+        z-index: 9999;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      .fixhub-pulse-logo {
+        width: 64px;
+        height: 64px;
+        margin-bottom: 20px;
+        animation: fixhubPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+      @keyframes fixhubPulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.7; transform: scale(0.96); }
+      }
+      .fixhub-bar-track {
+        width: 160px;
+        height: 4px;
+        background: #1e293b;
+        border-radius: 9999px;
+        overflow: hidden;
+        position: relative;
+      }
+      .fixhub-bar-indicator {
+        position: absolute;
+        height: 100%;
+        width: 45%;
+        background: linear-gradient(90deg, #06b6d4, #10b981);
+        border-radius: 9999px;
+        animation: fixhubSlide 1.5s ease-in-out infinite alternate;
+      }
+      @keyframes fixhubSlide {
+        from { left: -45%; }
+        to { left: 100%; }
+      }
+    </style>
+    <!-- Google Identity Services SDK -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
-  <body>
-    <div id="root"></div>
+  <body class="bg-slate-950 text-slate-100 antialiased selection:bg-cyan-500 selection:text-white min-h-screen">
+    <div id="root">
+      <div id="fixhub-preloader">
+        <svg class="fixhub-pulse-logo" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="48" height="48" rx="14" fill="#0f172a" />
+          <path d="M14 24C14 18.4772 18.4772 14 24 14C29.5228 14 34 18.4772 34 24" stroke="#06b6d4" stroke-width="3.5" stroke-linecap="round"/>
+          <circle cx="24" cy="24" r="5" fill="#10b981" />
+          <path d="M16 34L32 34" stroke="#38bdf8" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <div class="fixhub-bar-track">
+          <div class="fixhub-bar-indicator"></div>
+        </div>
+        <p style="margin-top: 14px; font-size: 13px; color: #94a3b8; font-weight: 500; letter-spacing: 0.02em;">Starting FixHub...</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

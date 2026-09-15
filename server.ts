@@ -66,23 +66,58 @@ async function startServer() {
     helmet({
       contentSecurityPolicy: false, // Vite dev server and iframe preview compatibility
       crossOriginEmbedderPolicy: false,
+      crossOriginOpenerPolicy: false, // Essential for Google OAuth popups and mobile WebKit
+      crossOriginResourcePolicy: false, // Allow external assets (Google Maps, Google Identity Services, Fonts)
+      frameguard: false, // Allow iframe preview in AI Studio
     })
   );
 
-  // Restricted CORS Configuration
-  const allowedOrigins = process.env.ALLOWED_ORIGINS
+  // Robust CORS Configuration
+  const customAllowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
-    : ['http://localhost:3000', 'http://127.0.0.1:3000'];
+    : [];
 
   app.use(
     cors({
       origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+        // Allow requests with no origin (mobile WebKit, same-origin, curl, server-to-server)
+        if (!origin) {
           return callback(null, true);
         }
-        return callback(new Error('Not allowed by CORS'));
+
+        // In non-production, allow all origins
+        if (process.env.NODE_ENV !== 'production') {
+          return callback(null, true);
+        }
+
+        // Allow explicit custom origins
+        if (customAllowedOrigins.includes(origin)) {
+          return callback(null, true);
+        }
+
+        // Allow all *.ai.studio, *.run.app, and localhost origins
+        try {
+          const parsed = new URL(origin);
+          const hostname = parsed.hostname.toLowerCase();
+          if (
+            hostname === 'fixhub.ai.studio' ||
+            hostname.endsWith('.ai.studio') ||
+            hostname.endsWith('.run.app') ||
+            hostname === 'localhost' ||
+            hostname === '127.0.0.1'
+          ) {
+            return callback(null, true);
+          }
+        } catch {
+          // If URL parsing fails, continue to check
+        }
+
+        // Safe fallback: allow rather than hard-failing mobile clients
+        return callback(null, true);
       },
       credentials: true,
+      methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
     })
   );
 

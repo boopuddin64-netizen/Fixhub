@@ -587,4 +587,65 @@ export class PaystackClient {
     }
     return NIGERIAN_BANKS;
   }
+
+  static async resolveAccountNumber(
+    accountNumber: string,
+    bankCode: string
+  ): Promise<{ success: boolean; accountName?: string; message: string }> {
+    const cleanAccount = (accountNumber || '').trim().replace(/\D/g, '');
+    const cleanBankCode = (bankCode || '').trim();
+
+    if (cleanAccount.length !== 10) {
+      return { success: false, message: 'Account number must be exactly 10 digits.' };
+    }
+    if (!cleanBankCode) {
+      return { success: false, message: 'Bank code is required.' };
+    }
+
+    const secretKey = this.getSecretKey();
+    const isLive = this.isLiveMode();
+    const isDummyKey = this.isSimulatedTestKey(secretKey);
+
+    if (!isDummyKey) {
+      try {
+        const response = await fetch(
+          `https://api.paystack.co/bank/resolve?account_number=${encodeURIComponent(cleanAccount)}&bank_code=${encodeURIComponent(cleanBankCode)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${secretKey}`,
+            },
+          }
+        );
+        const data: any = await response.json();
+        if (response.ok && data?.status && data?.data?.account_name) {
+          return {
+            success: true,
+            accountName: data.data.account_name,
+            message: 'Account resolved successfully',
+          };
+        } else if (isLive) {
+          return {
+            success: false,
+            message: data?.message || 'Could not resolve account details. Please check the account number and bank.',
+          };
+        }
+      } catch (err: any) {
+        if (isLive) {
+          return {
+            success: false,
+            message: err.message || 'Network error resolving bank account.',
+          };
+        }
+      }
+    }
+
+    // Sandbox / Development simulation
+    const bankObj = NIGERIAN_BANKS.find((b) => b.code === cleanBankCode);
+    const bankName = bankObj ? bankObj.name : 'Commercial Bank';
+    return {
+      success: true,
+      accountName: `VERIFIED TECH (${bankName.toUpperCase()})`,
+      message: 'Account resolved in sandbox environment',
+    };
+  }
 }

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Loader2, AlertCircle, RefreshCw, Smartphone, MapPin, Wrench } from 'lucide-react';
 import { ApiClient } from '../../../api/client';
+import { safeStorage } from '../../../utils/safeStorage';
 import { RepairRequest, TechnicianMatchResult } from '../../../types';
 import { TechnicianDiscoveryCard } from './TechnicianDiscoveryCard';
-import { TechnicianFilterBar } from './TechnicianFilterBar';
+import { TechnicianFilterBar, PriceTier, SortOption } from './TechnicianFilterBar';
 import { TechnicianDetailsView } from './TechnicianDetailsView';
 import { TechnicianEmptyState } from './TechnicianEmptyState';
 import { LocationSelector } from '../repair-flow/LocationSelector';
@@ -27,8 +28,9 @@ export const TechnicianDiscoveryView: React.FC<TechnicianDiscoveryViewProps> = (
 
   // Filters & Sorting
   const [maxDistance, setMaxDistance] = useState<number>(25);
+  const [priceTier, setPriceTier] = useState<PriceTier>('all');
   const [verifiedOnly, setVerifiedOnly] = useState<boolean>(false);
-  const [sortBy, setSortBy] = useState<'recommended' | 'nearest' | 'rating'>('recommended');
+  const [sortBy, setSortBy] = useState<SortOption>('recommended');
 
   // Selected technician for detailed view
   const [selectedMatch, setSelectedMatch] = useState<TechnicianMatchResult | null>(null);
@@ -54,7 +56,7 @@ export const TechnicianDiscoveryView: React.FC<TechnicianDiscoveryViewProps> = (
       }
 
       // Explicit match call
-      const token = localStorage.getItem('fixhub_token');
+      const token = safeStorage.getItem('fixhub_token');
       const res = await fetch(`/api/repairs/requests/${requestId}/match`, {
         method: 'POST',
         headers: {
@@ -132,10 +134,25 @@ export const TechnicianDiscoveryView: React.FC<TechnicianDiscoveryViewProps> = (
     fetchDiscovery(newDist);
   };
 
+  const getMatchPrice = (m: TechnicianMatchResult): number => {
+    if (m.quote?.totalAmount) {
+      return m.quote.totalAmount;
+    }
+    return 15000 + (m.technician.yearsExperience || 3) * 2500;
+  };
+
   // Filter and Sort matches locally
   const filteredMatches = matches.filter((m) => {
-    if (m.distanceKm > maxDistance) return false;
+    if (maxDistance > 0 && m.distanceKm > maxDistance) return false;
     if (verifiedOnly && !(m.technician.isVerified ?? true)) return false;
+
+    if (priceTier !== 'all') {
+      const price = getMatchPrice(m);
+      if (priceTier === 'budget' && price >= 25000) return false;
+      if (priceTier === 'mid' && (price < 25000 || price > 50000)) return false;
+      if (priceTier === 'premium' && price <= 50000) return false;
+    }
+
     return true;
   });
 
@@ -145,6 +162,9 @@ export const TechnicianDiscoveryView: React.FC<TechnicianDiscoveryViewProps> = (
     }
     if (sortBy === 'rating') {
       return (b.technician.rating || 4.8) - (a.technician.rating || 4.8);
+    }
+    if (sortBy === 'price_low') {
+      return getMatchPrice(a) - getMatchPrice(b);
     }
     // Recommended (default backend score)
     return b.totalScore - a.totalScore;
@@ -322,11 +342,20 @@ export const TechnicianDiscoveryView: React.FC<TechnicianDiscoveryViewProps> = (
         <TechnicianFilterBar
           maxDistance={maxDistance}
           onChangeMaxDistance={handleDistanceChange}
+          priceTier={priceTier}
+          onChangePriceTier={setPriceTier}
           verifiedOnly={verifiedOnly}
           onChangeVerifiedOnly={setVerifiedOnly}
           sortBy={sortBy}
           onChangeSortBy={setSortBy}
           totalCount={sortedMatches.length}
+          currentLocationName={
+            request?.customerLocation?.area ||
+            request?.customerLocation?.city ||
+            request?.customerLocation?.address ||
+            'Your Location'
+          }
+          onEditLocation={() => setIsEditingLocation(true)}
         />
       )}
 

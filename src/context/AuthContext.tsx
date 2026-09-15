@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User, UserRole, CustomerProfile, TechnicianProfile } from '../types';
 import { ApiClient } from '../api/client';
+import { safeStorage } from '../utils/safeStorage';
 
 interface AuthContextType {
   user: User | null;
@@ -47,7 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem('fixhub_token');
+    const token = safeStorage.getItem('fixhub_token');
     if (token) {
       refreshUser();
     } else {

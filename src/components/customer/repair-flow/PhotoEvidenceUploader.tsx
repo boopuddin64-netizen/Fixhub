@@ -99,26 +99,6 @@ export const PhotoEvidenceUploader: React.FC<PhotoEvidenceUploaderProps> = ({
     onChange(next);
   };
 
-  const sampleDamagePhotos = [
-    {
-      label: 'Cracked Front Glass',
-      url: 'https://images.unsplash.com/photo-1596742578443-7682ef5251cd?w=600&auto=format&fit=crop&q=80',
-    },
-    {
-      label: 'Shattered Display',
-      url: 'https://images.unsplash.com/photo-1588508065123-287b28e013da?w=600&auto=format&fit=crop&q=80',
-    },
-    {
-      label: 'Back Glass Cracked',
-      url: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=600&auto=format&fit=crop&q=80',
-    },
-  ];
-
-  const addSamplePhoto = (url: string) => {
-    if (photos.length >= maxPhotos) return;
-    onChange([...photos, url].slice(0, maxPhotos));
-  };
-
   return (
     <div id="photo-evidence-uploader" className="space-y-3">
       <div className="flex items-center justify-between">
@@ -212,28 +192,6 @@ export const PhotoEvidenceUploader: React.FC<PhotoEvidenceUploaderProps> = ({
           </div>
         )}
       </div>
-
-      {/* Quick Sample Photos for Fast Testing / Demo */}
-      {photos.length < maxPhotos && (
-        <div className="pt-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-            Or test with sample damage photo:
-          </span>
-          <div className="flex flex-wrap gap-1.5">
-            {sampleDamagePhotos.map((sample, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => addSamplePhoto(sample.url)}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 text-[11px] font-medium border border-slate-200 hover:border-blue-200 transition-colors cursor-pointer"
-              >
-                <Sparkles className="w-3 h-3 text-amber-500" />
-                <span>{sample.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

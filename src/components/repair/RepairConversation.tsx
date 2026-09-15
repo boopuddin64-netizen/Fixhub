@@ -132,16 +132,6 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
             })
             .catch(() => {});
         }
-
-        if (!location) {
-          ApiClient.getMe()
-            .then((session) => {
-              if (session?.customerProfile?.defaultLocation) {
-                setLocation(session.customerProfile.defaultLocation);
-              }
-            })
-            .catch(() => {});
-        }
       })
       .catch(() => {});
   }, [preselectedDevice, preselectedBrand, preselectedModel]);
@@ -351,7 +341,7 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-[88vh] max-h-[860px] bg-slate-50/90 rounded-3xl overflow-hidden shadow-2xl relative border border-slate-200/90">
+    <div className="flex flex-col h-[calc(100dvh-5.5rem)] sm:h-[88vh] max-h-[860px] bg-slate-50/90 rounded-3xl overflow-hidden shadow-2xl relative border border-slate-200/90">
       {/* Top Header */}
       <div className="p-3.5 sm:p-4 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-2xs z-10">
         <div className="flex items-center gap-3">
@@ -415,7 +405,7 @@ export const RepairConversation: React.FC<RepairConversationProps> = ({
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-5"
-        style={{ paddingBottom: '7rem' }}
+        style={{ paddingBottom: 'calc(7.5rem + env(safe-area-inset-bottom))' }}
       >
         <div className="max-w-2xl mx-auto space-y-4 sm:space-y-5">
           {/* ========================================================= */}

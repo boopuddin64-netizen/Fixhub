@@ -707,6 +707,8 @@ export interface MatchScoreResult {
     availabilityScore: number;
   };
   technician: TechnicianProfile;
+  quote?: RepairQuote | null;
+  estimatedPrice?: number;
 }
 
 export type TechnicianMatchResult = MatchScoreResult;

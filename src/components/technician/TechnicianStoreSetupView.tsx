@@ -14,7 +14,9 @@ import {
   ArrowRight,
   Sparkles,
   MapPin,
-  Check
+  Check,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 
 interface TechnicianStoreSetupViewProps {
@@ -42,9 +44,34 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
   // Step 2: Bank Settlement Details
   const [bankName, setBankName] = useState(technicianProfile?.bankDetails?.bankName || 'Access Bank');
   const [bankCode, setBankCode] = useState(technicianProfile?.bankDetails?.bankCode || '044');
-  const [accountNumber, setAccountNumber] = useState(technicianProfile?.bankDetails?.accountNumber || '0129849201');
-  const [accountName, setAccountName] = useState(technicianProfile?.bankDetails?.accountName || businessName || 'Emeka Okafor Enterprises');
+  const [accountNumber, setAccountNumber] = useState(technicianProfile?.bankDetails?.accountNumber || '');
+  const [accountName, setAccountName] = useState(technicianProfile?.bankDetails?.accountName || businessName || '');
   const [banksList, setBanksList] = useState<NigerianBank[]>(NIGERIAN_BANKS);
+  const [isResolvingAccount, setIsResolvingAccount] = useState(false);
+  const [accountResolved, setAccountResolved] = useState(!!technicianProfile?.bankDetails?.accountNumber);
+  const [bankError, setBankError] = useState<string | null>(null);
+
+  const handleResolveAccount = async (num: string, bCode: string) => {
+    const cleanNum = num.replace(/\D/g, '');
+    if (cleanNum.length !== 10 || !bCode) {
+      setAccountResolved(false);
+      return;
+    }
+    setIsResolvingAccount(true);
+    setBankError(null);
+    try {
+      const res = await ApiClient.resolveBankAccount(cleanNum, bCode);
+      if (res.accountName) {
+        setAccountName(res.accountName);
+        setAccountResolved(true);
+      }
+    } catch (err: any) {
+      setAccountResolved(false);
+      setBankError(err.message || 'Could not verify account name. Please check account number and bank.');
+    } finally {
+      setIsResolvingAccount(false);
+    }
+  };
 
   // Step 3: Parts Inventory Setup
   const [parts, setParts] = useState<any[]>([]);
@@ -52,9 +79,9 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
   const [newPartBrand, setNewPartBrand] = useState('Apple');
   const [newPartModel, setNewPartModel] = useState('iPhone 13');
   const [newPartQuality, setNewPartQuality] = useState('PREMIUM_AFTERMARKET');
-  const [newPartPrice, setNewPartPrice] = useState(48000);
-  const [newPartStock, setNewPartStock] = useState(6);
-  const [newPartWarranty, setNewPartWarranty] = useState(90);
+  const [newPartPrice, setNewPartPrice] = useState<number | ''>(48000);
+  const [newPartStock, setNewPartStock] = useState<number | ''>(6);
+  const [newPartWarranty, setNewPartWarranty] = useState<number | ''>(90);
 
   useEffect(() => {
     ApiClient.getBanks().then((res) => {
@@ -364,6 +391,13 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
           </div>
 
           <div className="space-y-4 text-xs">
+            {bankError && (
+              <div className="p-3 bg-rose-900/30 border border-rose-500/40 text-rose-300 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{bankError}</span>
+              </div>
+            )}
+
             <div className="p-4 rounded-2xl bg-blue-950/40 border border-blue-500/30 text-blue-200 space-y-1">
               <span className="font-bold flex items-center gap-1.5 text-blue-300">
                 <ShieldCheck className="w-4 h-4" />
@@ -384,6 +418,9 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
                     setBankCode(code);
                     const found = banksList.find((b) => b.code === code);
                     if (found) setBankName(found.name);
+                    if (accountNumber.length === 10) {
+                      handleResolveAccount(accountNumber, code);
+                    }
                   }}
                   className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
@@ -396,12 +433,27 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
               </div>
 
               <div>
-                <label className="font-bold text-slate-300 block mb-1">10-Digit NUBAN Account Number</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-300">10-Digit NUBAN Account Number</label>
+                  {isResolvingAccount && (
+                    <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Resolving...
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={accountNumber}
-                  onChange={(e) => setAccountNumber(e.target.value)}
-                  placeholder="0129849201"
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setAccountNumber(val);
+                    if (val.length === 10) {
+                      handleResolveAccount(val, bankCode);
+                    } else {
+                      setAccountResolved(false);
+                    }
+                  }}
+                  placeholder="0123456789"
                   maxLength={10}
                   className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
@@ -409,13 +461,22 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
             </div>
 
             <div>
-              <label className="font-bold text-slate-300 block mb-1">Verified Account Name</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="font-bold text-slate-300">Verified Account Name</label>
+                {accountResolved && (
+                  <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" /> NUBAN Verified
+                  </span>
+                )}
+              </div>
               <input
                 type="text"
                 value={accountName}
                 onChange={(e) => setAccountName(e.target.value)}
                 placeholder="Emeka Okafor Enterprises"
-                className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className={`w-full p-3 bg-slate-800 border rounded-xl text-white focus:outline-none focus:ring-2 ${
+                  accountResolved ? 'border-emerald-500/50 ring-emerald-500/30' : 'border-slate-700 focus:ring-indigo-500'
+                }`}
               />
             </div>
 
@@ -537,7 +598,8 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
                 <input
                   type="number"
                   value={newPartPrice}
-                  onChange={(e) => setNewPartPrice(Number(e.target.value))}
+                  onChange={(e) => setNewPartPrice(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                  onBlur={() => { if (newPartPrice === '') setNewPartPrice(0); }}
                   required
                   className="w-full p-2 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono"
                 />
@@ -562,7 +624,8 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
                 <input
                   type="number"
                   value={newPartWarranty}
-                  onChange={(e) => setNewPartWarranty(Number(e.target.value))}
+                  onChange={(e) => setNewPartWarranty(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                  onBlur={() => { if (newPartWarranty === '') setNewPartWarranty(30); }}
                   className="w-full p-2 bg-slate-900 border border-slate-700 rounded-xl text-white"
                 />
               </div>

@@ -472,11 +472,32 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
           </div>
         )}
 
-        {/* Error Notification */}
+        {/* Error Notification with Smart Registration Suggestion */}
         {errorMsg && (
-          <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span>{errorMsg}</span>
+          <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs space-y-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+            {authMode === 'login' && (errorMsg.includes('not found') || errorMsg.includes('Invalid credentials')) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('register');
+                  if (loginIdentifier.includes('@')) {
+                    setCustEmail(loginIdentifier);
+                    setTechEmail(loginIdentifier);
+                  } else if (loginIdentifier.trim()) {
+                    setCustPhone(loginIdentifier);
+                    setTechPhone(loginIdentifier);
+                  }
+                  setErrorMsg(null);
+                }}
+                className="w-full py-1.5 px-2.5 bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/40 rounded-lg text-blue-300 hover:text-white text-[11px] font-bold text-center transition-colors cursor-pointer block"
+              >
+                Need to create a new account? Click here to register with this identifier →
+              </button>
+            )}
           </div>
         )}
 
@@ -492,6 +513,51 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
                   ? 'Log in to track repairs, approve quotes & view warranty passports'
                   : 'Log in to manage your workshop workbench & payouts'}
               </p>
+            </div>
+
+            {/* Quick-Fill Demo Chips */}
+            <div className="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1.5">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                Quick Fill Test Account:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedRole('customer');
+                    setLoginIdentifier('BooPuddin64@gmail.com');
+                    setLoginPassword('password123');
+                    setErrorMsg(null);
+                  }}
+                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 rounded-lg text-[10px] font-medium cursor-pointer transition-colors"
+                >
+                  👤 BooPuddin64@gmail.com
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedRole('customer');
+                    setLoginIdentifier('customer@test.fixhub.local');
+                    setLoginPassword('password123');
+                    setErrorMsg(null);
+                  }}
+                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-[10px] font-medium cursor-pointer transition-colors"
+                >
+                  👤 Tunde (Customer)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedRole('technician');
+                    setLoginIdentifier('technician@test.fixhub.local');
+                    setLoginPassword('password123');
+                    setErrorMsg(null);
+                  }}
+                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-400 border border-slate-700 rounded-lg text-[10px] font-medium cursor-pointer transition-colors"
+                >
+                  🔧 Emeka (Tech Pro)
+                </button>
+              </div>
             </div>
 
             <div>

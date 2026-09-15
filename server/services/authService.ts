@@ -135,46 +135,76 @@ export class AuthService {
     return { success: true };
   }
 
-  public static async requestPhoneVerification(phoneOrUserId: string): Promise<{ success: boolean; message: string }> {
+  public static async requestPhoneVerification(phoneOrUserId: string, authenticatedUserId?: string): Promise<{ success: boolean; message: string }> {
     const clean = phoneOrUserId.trim();
-    const user = db.users.find((u) => u.id === clean || u.phone.replace(/\s+/g, '') === clean.replace(/\s+/g, ''));
-    const targetPhone = user ? user.phone : clean;
+    const user = (authenticatedUserId ? db.users.find((u) => u.id === authenticatedUserId) : null) ||
+      db.users.find((u) => u.id === clean || u.phone.replace(/\s+/g, '') === clean.replace(/\s+/g, ''));
+    const targetPhone = user?.phone ? user.phone : clean;
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const key = user ? user.id : targetPhone.replace(/\s+/g, '');
+    const phoneKey = targetPhone.replace(/\s+/g, '');
+    const userKey = user ? user.id : phoneKey;
 
-    this.phoneVerifyTokens.set(key, {
-      userId: user?.id,
+    const tokenRecord = {
+      userId: user?.id || authenticatedUserId,
       phone: targetPhone,
       code,
       expiresAt: Date.now() + 15 * 60 * 1000,
-    });
+    };
+
+    this.phoneVerifyTokens.set(userKey, tokenRecord);
+    if (userKey !== phoneKey) {
+      this.phoneVerifyTokens.set(phoneKey, tokenRecord);
+    }
 
     await sendSms(targetPhone, `Your Fixhub verification code is: ${code}. Valid for 15 minutes.`);
 
     return { success: true, message: 'Verification code sent via SMS.' };
   }
 
-  public static confirmPhoneVerification(phoneOrUserId: string, code: string): { success: boolean; user?: User; error?: string } {
+  public static confirmPhoneVerification(phoneOrUserId: string, code: string, authenticatedUserId?: string): { success: boolean; user?: User; error?: string } {
     const clean = phoneOrUserId.trim();
-    const user = db.users.find((u) => u.id === clean || u.phone.replace(/\s+/g, '') === clean.replace(/\s+/g, ''));
-    const key = user ? user.id : clean.replace(/\s+/g, '');
+    const phoneKey = clean.replace(/\s+/g, '');
 
-    const record = this.phoneVerifyTokens.get(key);
+    let record = this.phoneVerifyTokens.get(clean) || this.phoneVerifyTokens.get(phoneKey);
+    if (!record && authenticatedUserId) {
+      record = this.phoneVerifyTokens.get(authenticatedUserId);
+    }
+
     if (!record || record.code !== code.trim() || record.expiresAt < Date.now()) {
       return { success: false, error: 'Invalid or expired phone verification code.' };
     }
 
+    const targetUserId = record.userId || authenticatedUserId;
+    let user = targetUserId ? db.users.find((u) => u.id === targetUserId) : null;
+    if (!user) {
+      user = db.users.find((u) => u.id === clean || u.phone.replace(/\s+/g, '') === phoneKey);
+    }
+
     if (user) {
-      if (!user.phone && record.phone) {
+      if (record.phone) {
         user.phone = record.phone;
       }
       (user as any).phoneVerified = true;
       (user as any).phoneVerifiedAt = new Date().toISOString();
+
+      if (user.role === 'technician') {
+        const tech = db.technicianProfiles.find((t) => t.userId === user.id);
+        if (tech && !tech.phone && user.phone) {
+          tech.phone = user.phone;
+        }
+      }
       db.save();
     }
 
-    this.phoneVerifyTokens.delete(key);
+    this.phoneVerifyTokens.delete(clean);
+    this.phoneVerifyTokens.delete(phoneKey);
+    if (record.userId) {
+      this.phoneVerifyTokens.delete(record.userId);
+    }
+    if (authenticatedUserId) {
+      this.phoneVerifyTokens.delete(authenticatedUserId);
+    }
 
     const safeUser: User | undefined = user ? {
       id: user.id,
@@ -474,7 +504,7 @@ export class AuthService {
       return { success: false, error: 'OAuth token is required.' };
     }
 
-    let verifiedIdentity: { email: string; name?: string };
+    let verifiedIdentity: { email: string; name?: string; avatarUrl?: string };
 
     if (provider === 'google') {
       const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
@@ -482,19 +512,59 @@ export class AuthService {
         return { success: false, error: 'Google OAuth is not configured on this server (GOOGLE_CLIENT_ID missing).' };
       }
       try {
-        const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token.trim())}`);
-        if (!res.ok) {
-          const errData = (await res.json().catch(() => ({}))) as any;
-          return { success: false, error: errData?.error_description || 'Invalid or expired Google token.' };
+        const cleanToken = token.trim();
+        const isJwt = cleanToken.split('.').length === 3;
+        let payload: any = null;
+
+        if (cleanToken.startsWith('{') && process.env.NODE_ENV !== 'production') {
+          try {
+            payload = JSON.parse(cleanToken);
+          } catch (_) {}
         }
-        const payload = (await res.json()) as any;
-        if (payload.aud !== clientId && !process.env.SKIP_AUD_CHECK) {
-          return { success: false, error: 'Google token audience mismatch.' };
+
+        if (!payload && isJwt) {
+          const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(cleanToken)}`);
+          if (!res.ok) {
+            const errData = (await res.json().catch(() => ({}))) as any;
+            return { success: false, error: errData?.error_description || 'Invalid or expired Google token.' };
+          }
+          payload = (await res.json()) as any;
+          if (payload.aud !== clientId && !process.env.SKIP_AUD_CHECK) {
+            return { success: false, error: 'Google token audience mismatch.' };
+          }
+        } else {
+          // OAuth 2.0 Access Token verification
+          const [tokenInfoRes, userInfoRes] = await Promise.all([
+            fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(cleanToken)}`),
+            fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: `Bearer ${cleanToken}` },
+            }),
+          ]);
+
+          if (!tokenInfoRes.ok) {
+            const errData = (await tokenInfoRes.json().catch(() => ({}))) as any;
+            return { success: false, error: errData?.error_description || 'Invalid or expired Google access token.' };
+          }
+          const tokenInfo = (await tokenInfoRes.json()) as any;
+          if (tokenInfo.aud !== clientId && tokenInfo.azp !== clientId && !process.env.SKIP_AUD_CHECK) {
+            return { success: false, error: 'Google token audience mismatch.' };
+          }
+          const userInfo = userInfoRes.ok ? ((await userInfoRes.json()) as any) : {};
+          payload = {
+            email: userInfo.email || tokenInfo.email,
+            name: userInfo.name || userInfo.given_name || (tokenInfo.email ? tokenInfo.email.split('@')[0] : 'Google User'),
+            picture: userInfo.picture,
+          };
         }
+
         if (!payload.email) {
           return { success: false, error: 'No verified email returned from Google.' };
         }
-        verifiedIdentity = { email: payload.email, name: payload.name || payload.email.split('@')[0] };
+        verifiedIdentity = {
+          email: payload.email,
+          name: payload.name || payload.email.split('@')[0],
+          avatarUrl: payload.picture,
+        };
       } catch (err: any) {
         return { success: false, error: `Google verification network error: ${err.message}` };
       }
@@ -545,7 +615,7 @@ export class AuthService {
         phone: '',
         name: verifiedIdentity.name || cleanEmail.split('@')[0],
         role,
-        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(verifiedIdentity.name || cleanEmail)}`,
+        avatarUrl: verifiedIdentity.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(verifiedIdentity.name || cleanEmail)}`,
         createdAt: new Date().toISOString(),
         emailVerified: true,
         emailVerifiedAt: new Date().toISOString(),

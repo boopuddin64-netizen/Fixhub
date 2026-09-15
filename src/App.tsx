@@ -236,13 +236,13 @@ function MainAppContent() {
 
   return (
     <GestureContainer onBack={handleBack} onRefresh={loadData} canGoBack={canGoBack}>
-      <div className="min-h-screen bg-slate-100/70 text-slate-900 flex flex-col font-sans selection:bg-blue-500 selection:text-white">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-100/70 text-slate-900 flex flex-col font-sans selection:bg-blue-500 selection:text-white">
         {/* Top Main App Header */}
         <Header
           onOpenNotifications={() => setIsNotifsOpen(true)}
           unreadNotifsCount={safeNotifications.filter((n) => !n.read).length}
+          onOpenProfile={() => setCurrentTab('profile')}
           onOpenIntro={() => setShowIntroGuide(true)}
-          onReplayIntro={() => setIsLoadingIntro(true)}
         />
 
         {/* Email Verification Banner */}
@@ -273,7 +273,7 @@ function MainAppContent() {
       />
 
       {/* Main Container */}
-      <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 pb-24">
+      <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 pb-28 sm:pb-32 pb-[calc(7rem+env(safe-area-inset-bottom))]">
         {/* ===================== CUSTOMER EXPERIENCE ===================== */}
         {role === 'customer' && (
           <>

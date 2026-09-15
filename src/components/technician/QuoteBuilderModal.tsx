@@ -47,11 +47,11 @@ export const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({
   const [isLoadingInventory, setIsLoadingInventory] = useState(true);
   const [selectedParts, setSelectedParts] = useState<SelectedQuotePart[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [laborCost, setLaborCost] = useState<number>(12000);
-  const [diagnosticCost, setDiagnosticCost] = useState<number>(0);
-  const [otherCost, setOtherCost] = useState<number>(0);
-  const [estimatedHours, setEstimatedHours] = useState<number>(2);
-  const [warrantyDays, setWarrantyDays] = useState<number>(60);
+  const [laborCost, setLaborCost] = useState<number | ''>(12000);
+  const [diagnosticCost, setDiagnosticCost] = useState<number | ''>(0);
+  const [otherCost, setOtherCost] = useState<number | ''>(0);
+  const [estimatedHours, setEstimatedHours] = useState<number | ''>(2);
+  const [warrantyDays, setWarrantyDays] = useState<number | ''>(60);
   const [validityDays, setValidityDays] = useState<number>(7);
   const [notes, setNotes] = useState<string>(`Certified repair for ${request.deviceBrand} ${request.deviceModel} with genuine bench testing and warranty protection.`);
   const [limitationsOrConditions, setLimitationsOrConditions] = useState<string>('');
@@ -63,9 +63,9 @@ export const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({
   const [quickPartName, setQuickPartName] = useState(`${request.deviceBrand} ${request.deviceModel} Replacement Screen`);
   const [quickCategory, setQuickCategory] = useState('Display / Screen');
   const [quickQuality, setQuickQuality] = useState<PartsQuality>('PREMIUM_AFTERMARKET');
-  const [quickPriceNaira, setQuickPriceNaira] = useState<number>(45000);
-  const [quickQuantityOnHand, setQuickQuantityOnHand] = useState<number>(5);
-  const [quickWarrantyDays, setQuickWarrantyDays] = useState<number>(90);
+  const [quickPriceNaira, setQuickPriceNaira] = useState<number | ''>(45000);
+  const [quickQuantityOnHand, setQuickQuantityOnHand] = useState<number | ''>(5);
+  const [quickWarrantyDays, setQuickWarrantyDays] = useState<number | ''>(90);
   const [quickSupplier, setQuickSupplier] = useState('');
   const [isSavingQuickPart, setIsSavingQuickPart] = useState(false);
   const [quickAddError, setQuickAddError] = useState<string | null>(null);
@@ -114,7 +114,7 @@ export const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({
 
   // Keep warranty days aligned with selected parts
   useEffect(() => {
-    if (maxPartWarranty > warrantyDays) {
+    if (maxPartWarranty > Number(warrantyDays || 0)) {
       setWarrantyDays(maxPartWarranty);
     }
   }, [maxPartWarranty]);
@@ -361,7 +361,8 @@ export const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({
                       min="0"
                       step="500"
                       value={quickPriceNaira}
-                      onChange={(e) => setQuickPriceNaira(Number(e.target.value))}
+                      onChange={(e) => setQuickPriceNaira(e.target.value === '' ? '' : Number(e.target.value))}
+                      onBlur={() => { if (quickPriceNaira === '') setQuickPriceNaira(0); }}
                       required
                       className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-bold focus:ring-2 focus:ring-blue-500"
                     />
@@ -372,7 +373,8 @@ export const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({
                       type="number"
                       min="1"
                       value={quickQuantityOnHand}
-                      onChange={(e) => setQuickQuantityOnHand(Number(e.target.value))}
+                      onChange={(e) => setQuickQuantityOnHand(e.target.value === '' ? '' : Number(e.target.value))}
+                      onBlur={() => { if (quickQuantityOnHand === '') setQuickQuantityOnHand(1); }}
                       required
                       className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-blue-500"
                     />
@@ -547,7 +549,8 @@ export const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({
                   min="0"
                   step="500"
                   value={laborCost}
-                  onChange={(e) => setLaborCost(Number(e.target.value))}
+                  onChange={(e) => setLaborCost(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                  onBlur={() => { if (laborCost === '') setLaborCost(0); }}
                   required
                   className="w-full p-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-blue-500"
                 />
@@ -562,7 +565,8 @@ export const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({
                   min="0"
                   step="500"
                   value={diagnosticCost}
-                  onChange={(e) => setDiagnosticCost(Number(e.target.value))}
+                  onChange={(e) => setDiagnosticCost(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                  onBlur={() => { if (diagnosticCost === '') setDiagnosticCost(0); }}
                   className="w-full p-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -576,7 +580,8 @@ export const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({
                   min="0"
                   step="500"
                   value={otherCost}
-                  onChange={(e) => setOtherCost(Number(e.target.value))}
+                  onChange={(e) => setOtherCost(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                  onBlur={() => { if (otherCost === '') setOtherCost(0); }}
                   className="w-full p-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -595,7 +600,8 @@ export const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({
                 min="1"
                 max="72"
                 value={estimatedHours}
-                onChange={(e) => setEstimatedHours(Number(e.target.value))}
+                onChange={(e) => setEstimatedHours(e.target.value === '' ? '' : Math.max(1, Number(e.target.value)))}
+                onBlur={() => { if (estimatedHours === '') setEstimatedHours(2); }}
                 required
                 className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500"
               />
@@ -610,7 +616,8 @@ export const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({
                 min="14"
                 max="365"
                 value={warrantyDays}
-                onChange={(e) => setWarrantyDays(Number(e.target.value))}
+                onChange={(e) => setWarrantyDays(e.target.value === '' ? '' : Math.max(14, Number(e.target.value)))}
+                onBlur={() => { if (warrantyDays === '') setWarrantyDays(30); }}
                 required
                 className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-emerald-800 focus:ring-2 focus:ring-blue-500"
               />

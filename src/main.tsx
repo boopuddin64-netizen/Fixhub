@@ -4,29 +4,16 @@ import App from './App.tsx';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import './index.css';
 
-// Prevent unwanted pinch-to-zoom gestures and zoom scaling on mobile devices
+// Prevent unwanted pinch-to-zoom gestures safely on iOS Safari
 if (typeof document !== 'undefined') {
-  document.addEventListener(
-    'gesturestart',
-    (e) => {
+  const safePrevent = (e: Event) => {
+    if (e.cancelable) {
       e.preventDefault();
-    },
-    { passive: false }
-  );
-  document.addEventListener(
-    'gesturechange',
-    (e) => {
-      e.preventDefault();
-    },
-    { passive: false }
-  );
-  document.addEventListener(
-    'gestureend',
-    (e) => {
-      e.preventDefault();
-    },
-    { passive: false }
-  );
+    }
+  };
+  document.addEventListener('gesturestart', safePrevent);
+  document.addEventListener('gesturechange', safePrevent);
+  document.addEventListener('gestureend', safePrevent);
 }
 
 // Suppress unhandled errors and rejections from third-party browser extensions (e.g. MetaMask, Phantom)
@@ -67,10 +54,15 @@ if (typeof window !== 'undefined') {
   );
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </StrictMode>,
-);
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  createRoot(rootElement).render(
+    <StrictMode>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </StrictMode>,
+  );
+} else {
+  console.error('Failed to locate #root DOM container.');
+}

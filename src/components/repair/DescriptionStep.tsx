@@ -22,11 +22,29 @@ export const DescriptionStep: React.FC<DescriptionStepProps> = ({
   onChangeDescription,
   onContinue,
 }) => {
+  const isChipSelected = (chip: string) => {
+    return description.toLowerCase().includes(chip.toLowerCase());
+  };
+
   const handleChipClick = (chip: string) => {
-    if (!description.trim()) {
-      onChangeDescription(chip);
-    } else if (!description.includes(chip)) {
-      onChangeDescription(`${description.trim()}, ${chip.toLowerCase()}`);
+    if (isChipSelected(chip)) {
+      // Remove chip cleanly
+      const escaped = chip.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(?:,\\s*)?${escaped}(?:,\\s*)?`, 'i');
+      let next = description.replace(regex, (match) => {
+        if (match.startsWith(',') && match.endsWith(',')) return ', ';
+        return '';
+      });
+      next = next.trim().replace(/^,\s*/, '').replace(/,\s*$/, '');
+      onChangeDescription(next);
+    } else {
+      // Add chip exactly once
+      const trimmed = description.trim();
+      if (!trimmed) {
+        onChangeDescription(chip);
+      } else {
+        onChangeDescription(`${trimmed}, ${chip}`);
+      }
     }
   };
 
@@ -49,7 +67,7 @@ export const DescriptionStep: React.FC<DescriptionStepProps> = ({
         </label>
         <div className="flex flex-wrap gap-1.5">
           {COMMON_SYMPTOM_CHIPS.map((chip) => {
-            const isIncluded = description.toLowerCase().includes(chip.toLowerCase());
+            const isIncluded = isChipSelected(chip);
             return (
               <button
                 key={chip}
@@ -57,11 +75,12 @@ export const DescriptionStep: React.FC<DescriptionStepProps> = ({
                 onClick={() => handleChipClick(chip)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer border ${
                   isIncluded
-                    ? 'bg-blue-50 text-blue-700 border-blue-200 ring-1 ring-blue-400/30'
+                    ? 'bg-blue-50 text-blue-700 border-blue-200 ring-1 ring-blue-400/30 font-bold'
                     : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                 }`}
               >
-                + {chip}
+                {isIncluded ? '✓ ' : '+ '}
+                {chip}
               </button>
             );
           })}

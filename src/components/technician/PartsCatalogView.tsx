@@ -41,7 +41,7 @@ export const PartsCatalogView: React.FC = () => {
 
   // Price Edit Modal
   const [editingPart, setEditingPart] = useState<TechnicianInventoryItem | null>(null);
-  const [newPriceNaira, setNewPriceNaira] = useState<number>(0);
+  const [newPriceNaira, setNewPriceNaira] = useState<number | ''>(0);
   const [priceChangeReason, setPriceChangeReason] = useState<string>('');
   const [isUpdatingPrice, setIsUpdatingPrice] = useState(false);
   const [priceUpdateError, setPriceUpdateError] = useState<string | null>(null);
@@ -52,9 +52,9 @@ export const PartsCatalogView: React.FC = () => {
   const [partCategory, setPartCategory] = useState('Display / Screen');
   const [partName, setPartName] = useState('iPhone 13 Premium Hard OLED Screen');
   const [quality, setQuality] = useState<PartsQuality>('PREMIUM_AFTERMARKET');
-  const [priceNaira, setPriceNaira] = useState<number>(48000);
-  const [stockQuantity, setStockQuantity] = useState<number>(8);
-  const [warrantyDays, setWarrantyDays] = useState<number>(90);
+  const [priceNaira, setPriceNaira] = useState<number | ''>(48000);
+  const [stockQuantity, setStockQuantity] = useState<number | ''>(8);
+  const [warrantyDays, setWarrantyDays] = useState<number | ''>(90);
   const [supplier, setSupplier] = useState('JK Global Parts Hub');
   const [sku, setSku] = useState('');
 
@@ -403,7 +403,8 @@ export const PartsCatalogView: React.FC = () => {
                   min="0"
                   step="500"
                   value={newPriceNaira}
-                  onChange={(e) => setNewPriceNaira(Number(e.target.value))}
+                  onChange={(e) => setNewPriceNaira(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                  onBlur={() => { if (newPriceNaira === '') setNewPriceNaira(0); }}
                   required
                   className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-blue-500"
                 />
@@ -580,7 +581,8 @@ export const PartsCatalogView: React.FC = () => {
                     min="0"
                     step="500"
                     value={priceNaira}
-                    onChange={(e) => setPriceNaira(Number(e.target.value))}
+                    onChange={(e) => setPriceNaira(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                    onBlur={() => { if (priceNaira === '') setPriceNaira(0); }}
                     required
                     className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold"
                   />
@@ -591,7 +593,8 @@ export const PartsCatalogView: React.FC = () => {
                     type="number"
                     min="1"
                     value={stockQuantity}
-                    onChange={(e) => setStockQuantity(Number(e.target.value))}
+                    onChange={(e) => setStockQuantity(e.target.value === '' ? '' : Math.max(1, Number(e.target.value)))}
+                    onBlur={() => { if (stockQuantity === '') setStockQuantity(1); }}
                     required
                     className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold"
                   />
@@ -603,7 +606,8 @@ export const PartsCatalogView: React.FC = () => {
                     min="14"
                     max="365"
                     value={warrantyDays}
-                    onChange={(e) => setWarrantyDays(Number(e.target.value))}
+                    onChange={(e) => setWarrantyDays(e.target.value === '' ? '' : Math.max(14, Number(e.target.value)))}
+                    onBlur={() => { if (warrantyDays === '') setWarrantyDays(30); }}
                     required
                     className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-emerald-800 font-bold"
                   />

@@ -9,7 +9,8 @@
 
 html {
   scroll-behavior: smooth;
-  height: 100%;
+  min-height: 100%;
+  min-height: 100dvh;
   width: 100%;
   overflow-x: hidden;
   touch-action: pan-y pan-x;
@@ -18,7 +19,8 @@ html {
 }
 
 body {
-  height: 100%;
+  min-height: 100%;
+  min-height: 100dvh;
   width: 100%;
   overflow-x: hidden;
   touch-action: pan-y pan-x;

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Mic, Square, Play, Pause, Trash2, Volume2, AlertCircle, Loader2 } from 'lucide-react';
 import { ApiClient } from '../../../api/client';
+import { safeStorage } from '../../../utils/safeStorage';
 
 interface VoiceNoteRecorderProps {
   voiceNoteUrl?: string;
@@ -43,9 +44,24 @@ export const VoiceNotePlayer: React.FC<{
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playbackSeconds, setPlaybackSeconds] = useState<number>(0);
   const [hasError, setHasError] = useState<boolean>(false);
+  const [resolvedDuration, setResolvedDuration] = useState<number>(durationSeconds || 0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
+    if (durationSeconds > 0) {
+      setResolvedDuration(durationSeconds);
+    }
+  }, [durationSeconds]);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setIsPlaying(false);
+    setPlaybackSeconds(0);
+    setHasError(false);
+
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
@@ -60,12 +76,35 @@ export const VoiceNotePlayer: React.FC<{
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
+  const getPlayableUrl = (rawUrl: string) => {
+    if (!rawUrl) return '';
+    if (rawUrl.startsWith('data:') || rawUrl.startsWith('blob:')) {
+      return rawUrl;
+    }
+    if (rawUrl.startsWith('/api/')) {
+      const token = safeStorage.getItem('fixhub_token');
+      if (token && !rawUrl.includes('token=')) {
+        const sep = rawUrl.includes('?') ? '&' : '?';
+        return `${rawUrl}${sep}token=${encodeURIComponent(token)}`;
+      }
+    }
+    return rawUrl;
+  };
+
   const togglePlay = () => {
+    if (!url) return;
     if (hasError) setHasError(false);
     
     if (!audioRef.current) {
-      const audio = new Audio(url);
+      const audio = new Audio(getPlayableUrl(url));
       audioRef.current = audio;
+
+      audio.onloadedmetadata = () => {
+        if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+          setResolvedDuration(Math.round(audio.duration));
+        }
+      };
+
       audio.onended = () => {
         setIsPlaying(false);
         setPlaybackSeconds(0);
@@ -74,6 +113,7 @@ export const VoiceNotePlayer: React.FC<{
         setPlaybackSeconds(Math.floor(audio.currentTime));
       };
       audio.onerror = () => {
+        console.warn('Audio playback error on url:', url);
         setIsPlaying(false);
         setHasError(true);
       };
@@ -83,6 +123,9 @@ export const VoiceNotePlayer: React.FC<{
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
+      if (audioRef.current.ended) {
+        audioRef.current.currentTime = 0;
+      }
       audioRef.current.play().then(() => {
         setIsPlaying(true);
       }).catch((err) => {
@@ -92,6 +135,20 @@ export const VoiceNotePlayer: React.FC<{
       });
     }
   };
+
+  const handleDelete = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setIsPlaying(false);
+    setPlaybackSeconds(0);
+    if (onDelete) {
+      onDelete();
+    }
+  };
+
+  const displayDuration = resolvedDuration || durationSeconds || 5;
 
   return (
     <div className={`flex items-center justify-between gap-3 p-3 rounded-2xl bg-emerald-50 border border-emerald-200 ${className}`}>
@@ -113,7 +170,7 @@ export const VoiceNotePlayer: React.FC<{
           <p className="text-[11px] text-emerald-700 font-mono font-medium">
             {hasError
               ? 'Playback unavailable'
-              : `${formatTime(isPlaying ? playbackSeconds : (durationSeconds || 5))} / ${formatTime(durationSeconds || 5)}`}
+              : `${formatTime(isPlaying ? playbackSeconds : displayDuration)} / ${formatTime(displayDuration)}`}
           </p>
         </div>
       </div>
@@ -121,7 +178,7 @@ export const VoiceNotePlayer: React.FC<{
       {onDelete && (
         <button
           type="button"
-          onClick={onDelete}
+          onClick={handleDelete}
           className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer shrink-0"
           title="Delete voice note"
         >
@@ -386,11 +443,12 @@ export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
       audioPlayerRef.current.pause();
       audioPlayerRef.current = null;
     }
+    audioChunksRef.current = [];
+    recordingSecondsRef.current = 0;
     setIsPlaying(false);
     setPlaybackSeconds(0);
-    window.setTimeout(() => {
-      onChange(undefined, undefined);
-    }, 0);
+    setErrorMessage(null);
+    onChange(undefined, undefined);
   };
 
   return (

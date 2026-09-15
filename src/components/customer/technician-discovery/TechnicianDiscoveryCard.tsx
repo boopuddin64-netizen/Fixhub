@@ -84,6 +84,22 @@ export const TechnicianDiscoveryCard: React.FC<TechnicianDiscoveryCardProps> = (
             </div>
           </div>
         </div>
+
+        {match.quote ? (
+          <div className="text-right shrink-0 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200/60">
+            <span className="text-[10px] uppercase font-bold text-emerald-700 block">Quote Ready</span>
+            <span className="text-sm sm:text-base font-extrabold text-slate-900">
+              ₦{match.quote.totalAmount.toLocaleString()}
+            </span>
+          </div>
+        ) : (
+          <div className="text-right shrink-0 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200/60">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block">Est. Starting</span>
+            <span className="text-xs sm:text-sm font-bold text-slate-700">
+              ~₦{(15000 + (technician.yearsExperience || 3) * 2500).toLocaleString()}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Trust Signals */}
@@ -94,7 +110,7 @@ export const TechnicianDiscoveryCard: React.FC<TechnicianDiscoveryCardProps> = (
           </span>
         )}
         <span className="px-2.5 py-1 bg-slate-100 text-slate-700 text-[11px] font-semibold rounded-lg flex items-center gap-1">
-          ✓ Escrow Warranty
+          ✓ Fixhub Guarantee
         </span>
         {completedRepairs > 0 && (
           <span className="px-2.5 py-1 bg-slate-100 text-slate-700 text-[11px] font-semibold rounded-lg flex items-center gap-1">

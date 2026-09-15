@@ -13,31 +13,33 @@ import {
   InventoryPriceHistoryItem,
 } from '../types/index';
 
+import { safeStorage } from '../utils/safeStorage';
+
 const API_BASE = '/api';
 
 export class ApiClient {
   private static getToken(): string | null {
-    return localStorage.getItem('fixhub_token');
+    return safeStorage.getItem('fixhub_token');
   }
 
   public static setToken(token: string) {
-    localStorage.setItem('fixhub_token', token);
+    safeStorage.setItem('fixhub_token', token);
   }
 
   public static removeToken() {
-    localStorage.removeItem('fixhub_token');
-    localStorage.removeItem('fixhub_borrowed_mode');
+    safeStorage.removeItem('fixhub_token');
+    safeStorage.removeItem('fixhub_borrowed_mode');
   }
 
   public static isBorrowedDevice(): boolean {
-    return localStorage.getItem('fixhub_borrowed_mode') === 'true';
+    return safeStorage.getItem('fixhub_borrowed_mode') === 'true';
   }
 
   public static setBorrowedDevice(isBorrowed: boolean) {
     if (isBorrowed) {
-      localStorage.setItem('fixhub_borrowed_mode', 'true');
+      safeStorage.setItem('fixhub_borrowed_mode', 'true');
     } else {
-      localStorage.removeItem('fixhub_borrowed_mode');
+      safeStorage.removeItem('fixhub_borrowed_mode');
     }
   }
 
@@ -470,6 +472,15 @@ export class ApiClient {
 
   public static getBanks() {
     return this.request<{ name: string; code: string; slug?: string }[]>('/banks');
+  }
+
+  public static resolveBankAccount(accountNumber: string, bankCode: string) {
+    return this.request<{
+      success: boolean;
+      accountName: string;
+      accountNumber: string;
+      bankCode: string;
+    }>(`/banks/resolve?accountNumber=${encodeURIComponent(accountNumber)}&bankCode=${encodeURIComponent(bankCode)}`);
   }
 
   public static requestPayout(amountNaira: number, destinationAccount?: any) {

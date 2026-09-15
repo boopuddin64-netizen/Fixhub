@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { ApiClient } from '../../api/client';
 import { NIGERIAN_BANKS, NigerianBank, getBankCodeByName, getBankNameByCode } from '../../data/nigerianBanks';
+import { TechnicianVerificationModal } from './TechnicianVerificationModal';
+import { WheelPicker } from '../common/WheelPicker';
 import {
   Wrench,
   ShieldCheck,
@@ -21,7 +23,8 @@ import {
   Power,
   TrendingUp,
   Award,
-  ChevronRight
+  ChevronRight,
+  User
 } from 'lucide-react';
 
 interface TechnicianProfileViewProps {
@@ -29,7 +32,7 @@ interface TechnicianProfileViewProps {
 }
 
 export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ onNavigateToCatalog }) => {
-  const { user, technicianProfile, logout, refreshAuth } = useAuth();
+  const { user, technicianProfile, logout, switchDemoUser, refreshUser, refreshAuth } = useAuth();
 
   // Modals
   const [showEditProfile, setShowEditProfile] = useState<boolean>(false);
@@ -39,13 +42,14 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
   // Status & Availability
   const [isAvailable, setIsAvailable] = useState<boolean>(technicianProfile?.isAvailable ?? true);
   const [updatingStatus, setUpdatingStatus] = useState<boolean>(false);
+  const [showVerificationModal, setShowVerificationModal] = useState<boolean>(false);
 
   // Edit Profile Form State
   const [businessName, setBusinessName] = useState<string>(technicianProfile?.businessName || '');
   const [bio, setBio] = useState<string>(technicianProfile?.bio || '');
   const [phone, setPhone] = useState<string>(technicianProfile?.phone || user?.phone || '');
   const [businessHours, setBusinessHours] = useState<string>(technicianProfile?.businessHours || 'Mon - Sat: 8:30 AM - 6:30 PM');
-  const [serviceRadiusKm, setServiceRadiusKm] = useState<number>(technicianProfile?.serviceRadiusKm || 15);
+  const [serviceRadiusKm, setServiceRadiusKm] = useState<number | ''>(technicianProfile?.serviceRadiusKm || 15);
   const [address, setAddress] = useState<string>(technicianProfile?.shopLocation?.address || '');
   const [landmark, setLandmark] = useState<string>(technicianProfile?.shopLocation?.landmark || '');
   const [area, setArea] = useState<string>(technicianProfile?.shopLocation?.area || 'Port Harcourt');
@@ -60,8 +64,32 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
   const [accountNumber, setAccountNumber] = useState<string>(technicianProfile?.bankDetails?.accountNumber || '');
   const [accountName, setAccountName] = useState<string>(technicianProfile?.bankDetails?.accountName || technicianProfile?.businessName || '');
   const [savingBank, setSavingBank] = useState<boolean>(false);
+  const [isResolvingAccount, setIsResolvingAccount] = useState<boolean>(false);
+  const [accountResolved, setAccountResolved] = useState<boolean>(!!technicianProfile?.bankDetails?.accountNumber);
   const [bankError, setBankError] = useState<string | null>(null);
   const [banksList, setBanksList] = useState<NigerianBank[]>(NIGERIAN_BANKS);
+
+  const handleResolveAccount = async (num: string, bCode: string) => {
+    const cleanNum = num.replace(/\D/g, '');
+    if (cleanNum.length !== 10 || !bCode) {
+      setAccountResolved(false);
+      return;
+    }
+    setIsResolvingAccount(true);
+    setBankError(null);
+    try {
+      const res = await ApiClient.resolveBankAccount(cleanNum, bCode);
+      if (res.accountName) {
+        setAccountName(res.accountName);
+        setAccountResolved(true);
+      }
+    } catch (err: any) {
+      setAccountResolved(false);
+      setBankError(err.message || 'Could not verify account name. Please check account number and bank.');
+    } finally {
+      setIsResolvingAccount(false);
+    }
+  };
 
   // Live Financial Data State
   const [financesData, setFinancesData] = useState<{
@@ -291,10 +319,19 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
 
       {/* Trust & Verification Badges */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-        <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          <span>Fixhub Verified Technician Credentials</span>
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <span>Fixhub Verified Technician Credentials</span>
+          </h3>
+          <button
+            type="button"
+            onClick={() => setShowVerificationModal(true)}
+            className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-200/60 transition-colors cursor-pointer"
+          >
+            {isVerifiedPro ? 'View Credentials' : 'Manage 4-Track Verification'}
+          </button>
+        </div>
 
         <div className="space-y-2">
           {verificationStages.map((st, i) => (
@@ -395,8 +432,15 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
         </button>
       </div>
 
-      {/* Logout Action */}
-      <div className="pt-2">
+      {/* Account Switcher & Logout Action */}
+      <div className="pt-2 space-y-2">
+        <button
+          onClick={() => switchDemoUser('chioma@fixhub.ng')}
+          className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
+        >
+          <User className="w-4 h-4 text-blue-600" />
+          <span>Switch to Customer Marketplace</span>
+        </button>
         <button
           onClick={logout}
           className="w-full py-3.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
@@ -540,17 +584,26 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
                   />
                 </div>
 
-                <div>
+                <div className="space-y-1">
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Service Radius (km)
+                    Service Radius <span className="text-cyan-600 font-normal">({serviceRadiusKm || 15} km)</span>
                   </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={serviceRadiusKm}
-                    onChange={(e) => setServiceRadiusKm(Number(e.target.value))}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-xs font-semibold text-slate-900"
+                  <WheelPicker
+                    id="tech-service-radius-picker"
+                    theme="light"
+                    unit="km"
+                    options={[
+                      { label: '5 km (Immediate Area)', value: 5 },
+                      { label: '10 km (Port Harcourt Core)', value: 10 },
+                      { label: '15 km (Greater City Area)', value: 15 },
+                      { label: '20 km (Extended Suburbs)', value: 20 },
+                      { label: '25 km (Outer LGA Boundary)', value: 25 },
+                      { label: '30 km (Metropolitan Radius)', value: 30 },
+                      { label: '50 km (All Rivers State)', value: 50 },
+                    ]}
+                    selectedValue={typeof serviceRadiusKm === 'number' ? serviceRadiusKm : 15}
+                    onChange={(val) => setServiceRadiusKm(Number(val))}
+                    ariaLabel="Select Technician Service Radius"
                   />
                 </div>
               </div>
@@ -620,6 +673,9 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
                     setBankCode(code);
                     const found = banksList.find((b) => b.code === code);
                     if (found) setBankName(found.name);
+                    if (accountNumber.length === 10) {
+                      handleResolveAccount(accountNumber, code);
+                    }
                   }}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-semibold text-slate-900 bg-white"
                 >
@@ -632,31 +688,55 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  10-Digit Account Number
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    10-Digit NUBAN Account Number
+                  </label>
+                  {isResolvingAccount && (
+                    <span className="text-[10px] text-indigo-600 font-semibold flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Resolving...
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   required
                   maxLength={10}
                   value={accountNumber}
-                  onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, ''))}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setAccountNumber(val);
+                    if (val.length === 10) {
+                      handleResolveAccount(val, bankCode);
+                    } else {
+                      setAccountResolved(false);
+                    }
+                  }}
                   placeholder="0123456789"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-semibold text-slate-900 tracking-wider font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Account Name
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Account Name
+                  </label>
+                  {accountResolved && (
+                    <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500" /> NUBAN Verified
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   required
                   value={accountName}
                   onChange={(e) => setAccountName(e.target.value)}
                   placeholder="e.g. Emeka Okafor Enterprises"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-semibold text-slate-900"
+                  className={`w-full px-3.5 py-2.5 rounded-xl border focus:outline-none focus:ring-2 text-xs font-semibold text-slate-900 ${
+                    accountResolved ? 'border-emerald-400 bg-emerald-50/30 ring-emerald-500' : 'border-slate-200 focus:ring-emerald-500'
+                  }`}
                 />
               </div>
 
@@ -764,6 +844,19 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
             </div>
           </div>
         </div>
+      )}
+
+      {/* Technician 4-Track Verification Modal */}
+      {showVerificationModal && (
+        <TechnicianVerificationModal
+          technicianProfile={technicianProfile}
+          onClose={() => setShowVerificationModal(false)}
+          onSuccess={() => {
+            refreshUser?.();
+            refreshAuth?.();
+            setShowVerificationModal(false);
+          }}
+        />
       )}
     </div>
   );

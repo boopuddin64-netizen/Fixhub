@@ -21,7 +21,8 @@ import {
   Phone,
   Mail,
   FileText,
-  Clock
+  Clock,
+  Wrench
 } from 'lucide-react';
 
 interface CustomerProfileViewProps {
@@ -33,7 +34,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
   onViewWarranties,
   onOpenDevicesManager,
 }) => {
-  const { user, customerProfile, logout, isBorrowedDevice, refreshAuth } = useAuth();
+  const { user, customerProfile, logout, switchDemoUser, isBorrowedDevice, refreshAuth } = useAuth();
 
   // Modals & Drawers
   const [showEditProfile, setShowEditProfile] = useState<boolean>(false);
@@ -298,8 +299,15 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
         </div>
       </div>
 
-      {/* Logout Action */}
-      <div className="pt-2">
+      {/* Account Switcher & Logout Action */}
+      <div className="pt-2 space-y-2">
+        <button
+          onClick={() => switchDemoUser('emeka@fixhub.ng')}
+          className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
+        >
+          <Wrench className="w-4 h-4 text-indigo-600" />
+          <span>Switch to Technician Portal</span>
+        </button>
         <button
           onClick={logout}
           className="w-full py-3.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer"

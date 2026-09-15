@@ -73,8 +73,8 @@ export class TechnicianMatchingService {
           tech.shopLocation.lng
         );
 
-        // Filter out technicians outside their service radius or max search distance
-        if (distanceKm > (tech.serviceRadiusKm || maxDistanceKm)) {
+        // Filter out technicians outside max search distance when specified
+        if (maxDistanceKm && maxDistanceKm > 0 && distanceKm > maxDistanceKm) {
           continue;
         }
 

@@ -140,11 +140,18 @@ export interface AuthenticatedRequest extends Request {
 
 export function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  let token: string | undefined;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
+  } else if (req.query && typeof req.query.token === 'string') {
+    token = req.query.token;
+  }
+
+  if (!token) {
     return res.status(401).json({ error: 'Unauthorized: Authentication token required.' });
   }
 
-  const token = authHeader.substring(7);
   const session = AuthService.verifyToken(token);
   if (!session) {
     return res.status(401).json({ error: 'Unauthorized: Invalid or expired token.' });
@@ -318,22 +325,42 @@ apiRouter.post('/auth/verify-email/confirm', (req: Request, res: Response) => {
 });
 
 apiRouter.post('/auth/verify-phone/request', authRateLimiter, async (req: Request, res: Response) => {
-  const { phoneOrUserId } = req.body;
+  const { phoneOrUserId, userId } = req.body;
   if (!isNonEmptyString(phoneOrUserId)) {
     return res.status(400).json({ error: 'Phone number or user ID is required.' });
   }
 
-  const result = await AuthService.requestPhoneVerification(sanitizeString(phoneOrUserId, 120));
+  let authenticatedUserId: string | undefined = typeof userId === 'string' ? userId.trim() : undefined;
+  const authHeader = req.headers.authorization;
+  if (!authenticatedUserId && authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    const session = AuthService.verifyToken(token);
+    if (session?.id) {
+      authenticatedUserId = session.id;
+    }
+  }
+
+  const result = await AuthService.requestPhoneVerification(sanitizeString(phoneOrUserId, 120), authenticatedUserId);
   return res.json(result);
 });
 
 apiRouter.post('/auth/verify-phone/confirm', authRateLimiter, (req: Request, res: Response) => {
-  const { phoneOrUserId, code } = req.body;
+  const { phoneOrUserId, code, userId } = req.body;
   if (!isNonEmptyString(phoneOrUserId) || !isNonEmptyString(code)) {
     return res.status(400).json({ error: 'Phone/User ID and verification code are required.' });
   }
 
-  const result = AuthService.confirmPhoneVerification(sanitizeString(phoneOrUserId, 120), sanitizeString(code, 20));
+  let authenticatedUserId: string | undefined = typeof userId === 'string' ? userId.trim() : undefined;
+  const authHeader = req.headers.authorization;
+  if (!authenticatedUserId && authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    const session = AuthService.verifyToken(token);
+    if (session?.id) {
+      authenticatedUserId = session.id;
+    }
+  }
+
+  const result = AuthService.confirmPhoneVerification(sanitizeString(phoneOrUserId, 120), sanitizeString(code, 20), authenticatedUserId);
   if (!result.success) {
     return res.status(400).json({ error: result.error });
   }
@@ -1064,6 +1091,15 @@ apiRouter.get('/repairs/attachments/:filename', requireAuth, (req: Authenticated
     return res.status(403).json({ error: 'Forbidden: You do not have permission to access this attachment.' });
   }
 
+  const ext = path.extname(safeFilename).toLowerCase();
+  if (ext === '.webm') res.type('audio/webm');
+  else if (ext === '.ogg') res.type('audio/ogg');
+  else if (ext === '.m4a' || ext === '.mp4') res.type('audio/mp4');
+  else if (ext === '.wav') res.type('audio/wav');
+  else if (ext === '.jpg' || ext === '.jpeg') res.type('image/jpeg');
+  else if (ext === '.png') res.type('image/png');
+  else if (ext === '.webp') res.type('image/webp');
+
   res.sendFile(filePath);
 });
 
@@ -1089,13 +1125,14 @@ apiRouter.post('/repairs/requests/:id/match', requireAuth, requireRole(['custome
     request.updatedAt = new Date().toISOString();
   }
 
-  const maxDistanceKm = req.body?.maxDistanceKm ? Number(req.body.maxDistanceKm) : 25;
+  const rawMaxDistance = req.body?.maxDistanceKm !== undefined ? Number(req.body.maxDistanceKm) : 25;
+  const maxDistanceKm = rawMaxDistance === 0 ? 500 : Math.min(Math.max(rawMaxDistance, 1), 500);
   const matched = TechnicianMatchingService.matchTechnicians({
     customerLocation: request.customerLocation,
     deviceBrand: request.deviceBrand,
     deviceModel: request.deviceModel,
     issues: request.issues,
-    maxDistanceKm: Math.min(Math.max(maxDistanceKm, 1), 100),
+    maxDistanceKm,
   });
 
   for (const match of matched.slice(0, 5)) {
@@ -1123,7 +1160,15 @@ apiRouter.post('/repairs/requests/:id/match', requireAuth, requireRole(['custome
   });
 
   db.save();
-  return res.json({ request, matchedTechnicians: matched });
+  const requestQuotes = db.repairQuotes.filter((q) => q.requestId === requestId && q.status !== 'WITHDRAWN');
+  const matchedWithQuotes = matched.map((m) => {
+    const q = requestQuotes.find((rq) => rq.technicianId === m.technicianId);
+    return {
+      ...m,
+      quote: q || null,
+    };
+  });
+  return res.json({ request, matchedTechnicians: matchedWithQuotes });
 });
 
 apiRouter.post('/repairs/requests/:id/cancel', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
@@ -2480,6 +2525,33 @@ apiRouter.get('/banks', async (req: Request, res: Response) => {
     return res.json(banks);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to retrieve banks list' });
+  }
+});
+
+apiRouter.get('/banks/resolve', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const accountNumber = String(req.query.accountNumber || '').trim();
+  const bankCode = String(req.query.bankCode || '').trim();
+
+  if (!accountNumber || accountNumber.length !== 10) {
+    return res.status(400).json({ error: 'Account number must be exactly 10 digits.' });
+  }
+  if (!bankCode) {
+    return res.status(400).json({ error: 'Bank code is required.' });
+  }
+
+  try {
+    const result = await PaystackClient.resolveAccountNumber(accountNumber, bankCode);
+    if (!result.success) {
+      return res.status(400).json({ error: result.message });
+    }
+    return res.json({
+      success: true,
+      accountName: result.accountName,
+      accountNumber,
+      bankCode,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Error resolving bank account details.' });
   }
 });
 

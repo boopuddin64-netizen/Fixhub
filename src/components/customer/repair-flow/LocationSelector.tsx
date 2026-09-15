@@ -6,6 +6,7 @@ import { MapPin, Navigation, Search, AlertCircle, ExternalLink, Loader2, X, Chec
 import { useGoogleMaps } from '../../maps/GoogleMapsProvider';
 import { GooglePlaceAutocomplete } from '../../maps/GooglePlaceAutocomplete';
 import { InteractiveLocationMap } from '../../maps/InteractiveLocationMap';
+import { WheelPicker } from '../../common/WheelPicker';
 
 interface LocationSelectorProps {
   location?: LocationCoordinates | null;
@@ -460,34 +461,32 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
         </div>
       )}
 
-      {/* 4. SUGGESTED AREAS (Rivers State) */}
+      {/* 4. AREA / LOCALITY WHEEL PICKER (Rivers State / Port Harcourt) */}
       <div className="space-y-2">
-        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-          Suggested Areas in Port Harcourt
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          {popularHubs.map((hub, idx) => {
-            const isSelected =
-              Boolean(hasValidLocation &&
-              location &&
-              location.lat === hub.lat &&
-              location.lng === hub.lng);
-            return (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleSelectArea(hub)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  isSelected
-                    ? 'bg-emerald-700 text-white shadow-2xs'
-                    : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/80'
-                }`}
-              >
-                {hub.name.split('/')[0].trim()}
-              </button>
-            );
-          })}
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+            Select Area / Locality (Port Harcourt)
+          </p>
+          <span className="text-[10px] text-slate-400 font-medium">Scroll to choose area</span>
         </div>
+
+        <WheelPicker
+          id="location-area-wheel-picker"
+          theme="light"
+          options={popularHubs.map((hub) => ({
+            label: hub.name,
+            value: hub.name,
+            badge: hub.city,
+          }))}
+          selectedValue={location?.area || location?.address?.split(',')[0] || popularHubs[0]?.name}
+          onChange={(val) => {
+            const found = POPULAR_NIGERIAN_LOCATIONS.find((h) => h.name === val);
+            if (found) {
+              handleSelectArea(found);
+            }
+          }}
+          ariaLabel="Select Locality Area"
+        />
       </div>
 
       {/* 5. DEV ENVIRONMENT ONLY: TEST LOCATION TRIGGER */}

@@ -49,13 +49,13 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
   const [showAdditionalModal, setShowAdditionalModal] = useState(false);
   const [addTitle, setAddTitle] = useState('Swollen Battery Pack Discovered');
   const [addDesc, setAddDesc] = useState('Battery pack is swollen by 20%, risking display separation.');
-  const [addCost, setAddCost] = useState<number>(15000);
+  const [addCost, setAddCost] = useState<number | ''>(15000);
 
   // Add Part form
   const [showAddPartModal, setShowAddPartModal] = useState(false);
   const [partName, setPartName] = useState('iPhone 13 OLED Assembly (Hard OLED)');
   const [partQuality, setPartQuality] = useState('PREMIUM_AFTERMARKET');
-  const [partPrice, setPartPrice] = useState<number>(45000);
+  const [partPrice, setPartPrice] = useState<number | ''>(45000);
   const [partSerial, setPartSerial] = useState('SN-IP13-OLED-9821');
 
   // Drop-off Verification
@@ -334,7 +334,7 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
 
           {job.status === 'DISPUTED' && (
             <span className="text-xs font-bold text-amber-800 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
-              ⚠ Job Disputed — Escrow Funds On Hold Under Fixhub Mediation
+              ⚠ Job Disputed — Protected Payment On Hold Under Fixhub Mediation
             </span>
           )}
         </div>
@@ -353,7 +353,7 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
             </span>
           </div>
           <p className="text-xs text-amber-900 leading-relaxed">
-            The customer reported an issue with the repair. Escrow payout release is paused pending resolution. Please message the customer directly to resolve the issue or perform any corrective adjustments.
+            The customer reported an issue with the repair. Protected payment payout release is paused pending resolution. Please message the customer directly to resolve the issue or perform any corrective adjustments.
           </p>
           {(job as any).disputeReason && (
             <div className="bg-white p-3.5 rounded-xl border border-amber-200 text-xs space-y-1">
@@ -716,7 +716,8 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
                   <input
                     type="number"
                     value={partPrice}
-                    onChange={(e) => setPartPrice(Number(e.target.value))}
+                    onChange={(e) => setPartPrice(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                    onBlur={() => { if (partPrice === '') setPartPrice(0); }}
                     className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg"
                   />
                 </div>
@@ -767,7 +768,8 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
                 <input
                   type="number"
                   value={addCost}
-                  onChange={(e) => setAddCost(Number(e.target.value))}
+                  onChange={(e) => setAddCost(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                  onBlur={() => { if (addCost === '') setAddCost(0); }}
                   className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg"
                 />
               </div>

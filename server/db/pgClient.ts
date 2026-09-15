@@ -41,7 +41,7 @@ export class PostgresDatabase {
       (process.env.SQL_HOST && !process.env.SQL_HOST.includes('mock'))
     );
 
-    if (hasPostgresEnv && process.env.NODE_ENV !== 'test') {
+    if (hasPostgresEnv && process.env.NODE_ENV === 'production') {
       try {
         if (process.env.DATABASE_URL) {
           this.pool = new Pool({
@@ -62,6 +62,7 @@ export class PostgresDatabase {
         }
         this.isMemory = false;
         console.log('Connected to PostgreSQL database instance.');
+        this.executeSchema();
       } catch (err) {
         console.warn('Failed connecting to live PostgreSQL, falling back to embedded PostgreSQL engine:', err);
         this.initMemoryDb();
@@ -100,8 +101,8 @@ export class PostgresDatabase {
       }
     }
 
-    if (schemaSql && this.memDb) {
-      // Strip comments and execute DDL statements in memory DB
+    if (schemaSql) {
+      // Strip comments and execute DDL statements in DB
       const strippedSql = schemaSql
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .split('\n')
@@ -115,7 +116,15 @@ export class PostgresDatabase {
 
       for (const statement of cleanSql) {
         try {
-          this.memDb.public.none(statement);
+          if (this.memDb) {
+            this.memDb.public.none(statement);
+          } else if (this.pool) {
+            this.pool.query(statement).catch((e) => {
+              if (!e.message.includes('already exists')) {
+                console.warn('Schema execution warning:', e.message);
+              }
+            });
+          }
         } catch (e: any) {
           // Ignore table already exists or minor extension warnings
           if (!e.message.includes('already exists')) {
