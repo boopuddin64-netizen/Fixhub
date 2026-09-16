@@ -488,38 +488,6 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
           ariaLabel="Select Locality Area"
         />
       </div>
-
-      {/* 5. DEV ENVIRONMENT ONLY: TEST LOCATION TRIGGER */}
-      {isDev && (
-        <div id="state-dev-panel" className="pt-2">
-          <button
-            type="button"
-            id="dev-fallback-action"
-            onClick={() => {
-              onChange({
-                lat: 4.8156,
-                lng: 7.0128,
-                address: 'Plot 14 Aba Road, Garrison',
-                landmark: 'Garrison Junction',
-                area: 'Garrison',
-                city: 'Port Harcourt',
-                state: 'Rivers State',
-                country: 'Nigeria',
-                source: 'DEVELOPMENT_FALLBACK',
-                accuracyMeters: 25,
-                timestamp: new Date().toISOString(),
-                capturedAt: new Date().toISOString(),
-              });
-              setLocationError(null);
-              setIframeBlocked(false);
-              setUnresolvedGpsPrompt(false);
-            }}
-            className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold rounded-xl border border-dashed border-slate-300 transition-colors cursor-pointer"
-          >
-            [Dev Only] Quick Fill: Garrison, Port Harcourt
-          </button>
-        </div>
-      )}
     </div>
   );
 };

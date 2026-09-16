@@ -507,22 +507,16 @@ export class AuthService {
     let verifiedIdentity: { email: string; name?: string; avatarUrl?: string };
 
     if (provider === 'google') {
-      const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
-      if (!clientId) {
-        return { success: false, error: 'Google OAuth is not configured on this server (GOOGLE_CLIENT_ID missing).' };
-      }
+      const clientId =
+        process.env.GOOGLE_CLIENT_ID ||
+        process.env.VITE_GOOGLE_CLIENT_ID ||
+        '56408372166-fdcat8gp2ildbktlu1q5u3ab9pad5t0b.apps.googleusercontent.com';
       try {
         const cleanToken = token.trim();
         const isJwt = cleanToken.split('.').length === 3;
         let payload: any = null;
 
-        if (cleanToken.startsWith('{') && process.env.NODE_ENV !== 'production') {
-          try {
-            payload = JSON.parse(cleanToken);
-          } catch (_) {}
-        }
-
-        if (!payload && isJwt) {
+        if (isJwt) {
           const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(cleanToken)}`);
           if (!res.ok) {
             const errData = (await res.json().catch(() => ({}))) as any;

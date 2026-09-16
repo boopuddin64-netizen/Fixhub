@@ -293,41 +293,6 @@ export const SocialLoginButtons: React.FC<SocialLoginButtonsProps> = ({
     }
   };
 
-  const [showOriginHelp, setShowOriginHelp] = useState(false);
-  const [copiedOrigin, setCopiedOrigin] = useState(false);
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
-
-  const handleQuickTestLogin = async (email: string, name: string) => {
-    setLoadingProvider('google');
-    try {
-      // Direct sign-in bypass for testing with the exact Google account
-      const result = await socialLogin(
-        'google',
-        JSON.stringify({
-          email,
-          name,
-          sub: 'google_test_' + email.replace(/[^a-zA-Z0-9]/g, '_'),
-          picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80',
-          email_verified: true,
-        }),
-        role as 'customer' | 'technician'
-      );
-      onSuccess(result.user);
-    } catch (err: any) {
-      onError(err.message || 'Quick sign-in failed.');
-    } finally {
-      setLoadingProvider(null);
-    }
-  };
-
-  const handleCopyOrigin = () => {
-    if (navigator.clipboard && currentOrigin) {
-      navigator.clipboard.writeText(currentOrigin);
-      setCopiedOrigin(true);
-      setTimeout(() => setCopiedOrigin(false), 2000);
-    }
-  };
-
   return (
     <div className="space-y-2.5 my-3">
       {/* Google */}
@@ -358,55 +323,6 @@ export const SocialLoginButtons: React.FC<SocialLoginButtonsProps> = ({
         </svg>
         <span>{loadingProvider === 'google' ? 'Connecting to Google...' : 'Continue with Google'}</span>
       </button>
-
-      {/* Google OAuth Origin Guide & Instant Test Login helper */}
-      <div className="pt-1">
-        <button
-          type="button"
-          onClick={() => setShowOriginHelp(!showOriginHelp)}
-          className="text-[11px] text-blue-400 hover:text-blue-300 underline font-medium flex items-center justify-center w-full gap-1 cursor-pointer"
-        >
-          <span>Facing Google OAuth "Error 400: origin_mismatch"?</span>
-        </button>
-
-        {showOriginHelp && (
-          <div className="mt-2 p-3 bg-slate-900 border border-slate-700 rounded-xl space-y-2 text-[11px] text-slate-300 animate-fadeIn">
-            <p className="font-bold text-amber-400">
-              Why does Google show Error 400: origin_mismatch?
-            </p>
-            <p className="leading-relaxed">
-              Google requires the app's current origin to be registered in Google Cloud Console under:
-              <br />
-              <strong className="text-white">APIs &amp; Services → Credentials → OAuth 2.0 Client IDs → Authorized JavaScript origins</strong>.
-            </p>
-            <div className="flex items-center gap-2 p-2 bg-slate-950 rounded-lg border border-slate-800">
-              <code className="text-[10px] text-emerald-400 truncate flex-1 select-all">
-                {currentOrigin || 'https://ais-dev-...'}
-              </code>
-              <button
-                type="button"
-                onClick={handleCopyOrigin}
-                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-bold rounded cursor-pointer shrink-0"
-              >
-                {copiedOrigin ? 'Copied!' : 'Copy'}
-              </button>
-            </div>
-
-            <div className="pt-1 border-t border-slate-800">
-              <p className="font-bold text-slate-200 mb-1.5">Or test immediately with your account:</p>
-              <button
-                type="button"
-                id="btn-quick-login-boopuddin"
-                onClick={() => handleQuickTestLogin('BooPuddin64@gmail.com', 'Boo Puddin')}
-                disabled={loadingProvider !== null}
-                className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-colors cursor-pointer"
-              >
-                One-Click Test Sign-In as BooPuddin64@gmail.com
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Apple */}
       <button

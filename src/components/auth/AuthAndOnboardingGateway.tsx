@@ -515,51 +515,6 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
               </p>
             </div>
 
-            {/* Quick-Fill Demo Chips */}
-            <div className="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1.5">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                Quick Fill Test Account:
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedRole('customer');
-                    setLoginIdentifier('BooPuddin64@gmail.com');
-                    setLoginPassword('password123');
-                    setErrorMsg(null);
-                  }}
-                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 rounded-lg text-[10px] font-medium cursor-pointer transition-colors"
-                >
-                  👤 BooPuddin64@gmail.com
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedRole('customer');
-                    setLoginIdentifier('customer@test.fixhub.local');
-                    setLoginPassword('password123');
-                    setErrorMsg(null);
-                  }}
-                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-[10px] font-medium cursor-pointer transition-colors"
-                >
-                  👤 Tunde (Customer)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedRole('technician');
-                    setLoginIdentifier('technician@test.fixhub.local');
-                    setLoginPassword('password123');
-                    setErrorMsg(null);
-                  }}
-                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-400 border border-slate-700 rounded-lg text-[10px] font-medium cursor-pointer transition-colors"
-                >
-                  🔧 Emeka (Tech Pro)
-                </button>
-              </div>
-            </div>
-
             <div>
               <label className="font-bold text-slate-300 block mb-1">
                 {selectedRole === 'customer' ? 'Email Address or Phone' : 'Store Email or Phone'}
@@ -1419,6 +1374,17 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
             >
               {isSocialSubmitting ? 'Sending Code...' : 'Send SMS Verification Code'}
               <ArrowRight className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSocialPromptPhone(false);
+                onComplete();
+              }}
+              className="w-full py-2 text-slate-400 hover:text-white text-xs font-semibold underline cursor-pointer transition-colors text-center block"
+            >
+              Skip for now and continue →
             </button>
           </div>
         </div>
