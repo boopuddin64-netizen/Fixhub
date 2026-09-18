@@ -712,3 +712,178 @@ export interface MatchScoreResult {
 }
 
 export type TechnicianMatchResult = MatchScoreResult;
+
+// ==========================================
+// API REQUEST & RESPONSE CONTRACT INTERFACES
+// ==========================================
+
+export interface RegisterCustomerInput {
+  name: string;
+  email: string;
+  phone: string;
+  password?: string;
+  address?: string;
+  landmark?: string;
+  area?: string;
+  city?: string;
+  state?: string;
+  isBorrowedDevice?: boolean;
+}
+
+export interface RegisterTechnicianInput {
+  name: string;
+  businessName: string;
+  email: string;
+  phone: string;
+  password?: string;
+  shopAddress?: string;
+  landmark?: string;
+  area?: string;
+  city?: string;
+  state?: string;
+  yearsExperience?: number;
+  serviceRadiusKm?: number;
+  businessHours?: string;
+  supportedBrands?: string[];
+  supportedCategories?: string[];
+}
+
+export interface AuthResponse {
+  success?: boolean;
+  token: string;
+  user: User;
+  customerProfile?: CustomerProfile;
+  technicianProfile?: TechnicianProfile;
+}
+
+export interface CreateRepairRequestInput {
+  deviceBrand: string;
+  deviceModel: string;
+  deviceModelId?: string;
+  deviceType?: DeviceType;
+  catalogMatch?: boolean;
+  issues: string[];
+  otherDescription?: string;
+  description?: string;
+  photos?: string[];
+  attachments?: RepairRequestAttachment[];
+  voiceNoteUrl?: string;
+  voiceNoteDurationSeconds?: number;
+  customerLocation: LocationCoordinates | null;
+}
+
+export interface SubmitQuoteInput {
+  requestId: string;
+  items?: Array<{
+    inventoryItemId: string;
+    quantity: number;
+  }>;
+  lineItems?: Array<{
+    partName: string;
+    partPriceNaira: number;
+    partQuality: PartsQuality;
+    partInventoryId?: string;
+    serialNumber?: string;
+  }>;
+  parts?: string[];
+  partsCost?: number;
+  laborCost?: number;
+  laborFeeNaira?: number;
+  diagnosticCost?: number;
+  otherCost?: number;
+  estimatedHours?: number;
+  estimatedTimeHours?: number;
+  estimatedCompletionHours?: number;
+  warrantyDays: number;
+  validityDays?: number;
+  partsQuality?: PartsQuality;
+  notes?: string;
+  technicianNotes?: string;
+  limitationsOrConditions?: string;
+  quoteId?: string;
+}
+
+export interface TechnicianMatchInput {
+  deviceBrand?: string;
+  deviceModel?: string;
+  lat: number;
+  lng: number;
+  radiusKm?: number;
+  issueCategory?: string;
+}
+
+export interface DeviceConditionReportInput {
+  frontCondition: string;
+  backCondition: string;
+  frameCondition: string;
+  screenPowersOn: boolean;
+  touchResponsive: boolean;
+  cameraWorking: boolean;
+  existingDamageNotes?: string;
+  accessoriesReceived?: string[];
+  technicianNotes?: string;
+  photos?: string[];
+}
+
+export interface AddPartUsedInput {
+  partName: string;
+  quality: string;
+  priceNaira: number;
+  serialNumber?: string;
+  warrantyDays?: number;
+  inventoryItemId?: string;
+}
+
+export interface AdditionalDiagnosisInput {
+  title: string;
+  description: string;
+  additionalCostNaira: number;
+  additionalLaborHours?: number;
+  photos?: string[];
+}
+
+export interface UpdateCustomerProfileInput {
+  name?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  landmark?: string;
+  city?: string;
+  state?: string;
+  notificationPreferences?: {
+    repairUpdates?: boolean;
+    paymentUpdates?: boolean;
+    promotional?: boolean;
+  };
+}
+
+export interface UpdateTechnicianProfileInput {
+  name?: string;
+  businessName?: string;
+  bio?: string;
+  phone?: string;
+  businessHours?: string;
+  serviceRadiusKm?: number | string;
+  shopAddress?: string;
+  city?: string;
+  state?: string;
+  landmark?: string;
+  shopLocation?: {
+    address?: string;
+    landmark?: string;
+    area?: string;
+    city?: string;
+    state?: string;
+    lat?: number;
+    lng?: number;
+  };
+  supportedBrands?: string[];
+  supportedCategories?: string[];
+  bankDetails?: {
+    bankName: string;
+    bankCode?: string;
+    accountNumber: string;
+    accountName: string;
+    verified?: boolean;
+  };
+}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { ApiClient } from '../../api/client';
 import { NIGERIAN_BANKS, NigerianBank, getBankCodeByName, getBankNameByCode } from '../../data/nigerianBanks';
+import { SearchableBankSelect } from '../common/SearchableBankSelect';
 import {
   Building2,
   Clock,
@@ -86,7 +87,17 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
   useEffect(() => {
     ApiClient.getBanks().then((res) => {
       if (Array.isArray(res) && res.length > 0) {
-        setBanksList(res);
+        const seen = new Set<string>();
+        const unique: NigerianBank[] = [];
+        for (const b of res) {
+          if (b.code && !seen.has(b.code)) {
+            seen.add(b.code);
+            unique.push(b);
+          }
+        }
+        if (unique.length > 0) {
+          setBanksList(unique);
+        }
       }
     }).catch(() => {});
   }, []);
@@ -411,25 +422,20 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="font-bold text-slate-300 block mb-1">Bank Name</label>
-                <select
-                  value={bankCode}
-                  onChange={(e) => {
-                    const code = e.target.value;
+                <SearchableBankSelect
+                  id="store-setup-bank-select"
+                  banks={banksList}
+                  selectedBankCode={bankCode}
+                  selectedBankName={bankName}
+                  theme="dark"
+                  onSelectBank={(code, name) => {
                     setBankCode(code);
-                    const found = banksList.find((b) => b.code === code);
-                    if (found) setBankName(found.name);
+                    setBankName(name);
                     if (accountNumber.length === 10) {
                       handleResolveAccount(accountNumber, code);
                     }
                   }}
-                  className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  {banksList.map((b) => (
-                    <option key={b.code} value={b.code}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
               <div>
@@ -443,6 +449,10 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
                 </div>
                 <input
                   type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  enterKeyHint="done"
+                  autoComplete="off"
                   value={accountNumber}
                   onChange={(e) => {
                     const val = e.target.value.replace(/\D/g, '').slice(0, 10);
@@ -455,7 +465,7 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
                   }}
                   placeholder="0123456789"
                   maxLength={10}
-                  className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 text-[16px] sm:text-xs"
                 />
               </div>
             </div>
@@ -471,10 +481,12 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
               </div>
               <input
                 type="text"
+                inputMode="text"
+                enterKeyHint="done"
                 value={accountName}
                 onChange={(e) => setAccountName(e.target.value)}
                 placeholder="Emeka Okafor Enterprises"
-                className={`w-full p-3 bg-slate-800 border rounded-xl text-white focus:outline-none focus:ring-2 ${
+                className={`w-full p-3 bg-slate-800 border rounded-xl text-white text-[16px] sm:text-xs focus:outline-none focus:ring-2 ${
                   accountResolved ? 'border-emerald-500/50 ring-emerald-500/30' : 'border-slate-700 focus:ring-indigo-500'
                 }`}
               />

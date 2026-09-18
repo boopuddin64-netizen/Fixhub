@@ -27,6 +27,7 @@ import {
   Building,
   AlertCircle,
   X,
+  Lock,
 } from 'lucide-react';
 
 interface TechnicianDashboardViewProps {
@@ -613,44 +614,100 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Bank Name</label>
-                <input
-                  type="text"
-                  value={payoutBank}
-                  onChange={(e) => setPayoutBank(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-slate-50 text-slate-800"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Account Number</label>
-                <input
-                  type="text"
-                  value={payoutAccountNum}
-                  onChange={(e) => setPayoutAccountNum(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-slate-50 font-mono text-slate-800"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Amount (₦)</label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    value={payoutAmountInput}
-                    onChange={(e) => setPayoutAmountInput(e.target.value)}
-                    placeholder={`Max: ${financials.availablePayoutNaira}`}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl text-slate-800"
-                  />
-                  <button
-                    id="submit-payout-btn"
-                    onClick={handleRequestPayout}
-                    disabled={isRequestingPayout || financials.availablePayoutNaira <= 0 || !technicianProfile?.bankDetails?.bankCode}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl cursor-pointer disabled:opacity-50 shrink-0"
-                  >
-                    {isRequestingPayout ? 'Submitting...' : 'Request'}
-                  </button>
+            {/* Locked Non-Editable Bank Account Display for Withdrawal */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Building className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span className="text-xs font-bold text-slate-800">Verified Settlement Destination</span>
                 </div>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold">
+                  <Lock className="w-3 h-3 text-slate-600" />
+                  Locked for Security
+                </span>
+              </div>
+
+              {technicianProfile?.bankDetails?.accountNumber ? (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-3.5 rounded-xl border border-slate-200">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Bank Name</span>
+                    <p className="text-xs font-bold text-slate-900 truncate">
+                      {technicianProfile.bankDetails.bankName || 'Verified Bank'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Account Number</span>
+                    <p className="text-xs font-mono font-bold text-slate-900 tracking-wider">
+                      {technicianProfile.bankDetails.accountNumber}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Account Holder</span>
+                    <p className="text-xs font-semibold text-slate-700 truncate">
+                      {technicianProfile.bankDetails.accountName || technicianProfile.businessName || user?.name}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
+                  No verified payout account found. Please link your bank account in Profile Settings before requesting withdrawal.
+                </p>
+              )}
+
+              <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Bank details cannot be modified during the withdrawal process.</span>
+              </p>
+            </div>
+
+            {/* Withdrawal Amount Input (Smooth Numeric Keypad) */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Withdrawal Amount (₦)</label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-sm">
+                    ₦
+                  </span>
+                  <input
+                    id="payout-amount-input"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    enterKeyHint="done"
+                    autoComplete="off"
+                    value={payoutAmountInput}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setPayoutAmountInput(val);
+                    }}
+                    placeholder={financials.availablePayoutNaira > 0 ? `Max: ₦${financials.availablePayoutNaira.toLocaleString()}` : '0'}
+                    className="w-full pl-8 pr-28 py-2.5 text-[16px] sm:text-xs font-bold border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white"
+                  />
+                  {financials.availablePayoutNaira > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setPayoutAmountInput(financials.availablePayoutNaira.toString())}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-md cursor-pointer border border-emerald-200 transition-colors"
+                    >
+                      Withdraw Max
+                    </button>
+                  )}
+                </div>
+                <button
+                  id="submit-payout-btn"
+                  onClick={handleRequestPayout}
+                  disabled={
+                    isRequestingPayout ||
+                    financials.availablePayoutNaira <= 0 ||
+                    !technicianProfile?.bankDetails?.bankCode ||
+                    !payoutAmountInput ||
+                    Number(payoutAmountInput) <= 0
+                  }
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl cursor-pointer disabled:opacity-50 shrink-0 transition-all flex items-center justify-center gap-2"
+                >
+                  <ArrowDownToLine className="w-4 h-4" />
+                  <span>{isRequestingPayout ? 'Submitting...' : 'Request Payout'}</span>
+                </button>
               </div>
             </div>
           </div>

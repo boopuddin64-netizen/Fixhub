@@ -3,7 +3,6 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { Header } from './components/common/Header';
 import { BottomNav } from './components/common/BottomNav';
 import { NotificationDrawer } from './components/common/NotificationDrawer';
-import { WorkflowProgressRibbon } from './components/common/WorkflowProgressRibbon';
 import { AuthAndOnboardingGateway } from './components/auth/AuthAndOnboardingGateway';
 import { EmailVerificationBanner } from './components/auth/EmailVerificationBanner';
 import { CustomerHomeView } from './components/customer/CustomerHomeView';
@@ -248,32 +247,8 @@ function MainAppContent() {
         {/* Email Verification Banner */}
         <EmailVerificationBanner />
 
-      {/* Guided Workflow Progress Ribbon */}
-      <WorkflowProgressRibbon
-        currentTab={currentTab}
-        onNavigateTab={(tab) => {
-          if (tab === 'home' && role === 'customer') {
-            setShowWizard(true);
-          } else {
-            setShowWizard(false);
-          }
-          if (tab === 'warranties') {
-            setCurrentTab('passport');
-          } else if (tab === 'parts') {
-            setCurrentTab('catalog');
-          } else if (tab === 'tracking') {
-            setCurrentTab('repairs');
-          } else {
-            setCurrentTab(tab);
-          }
-        }}
-        onRestartOnboarding={() => {
-          logout();
-        }}
-      />
-
-      {/* Main Container */}
-      <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 pb-28 sm:pb-32 pb-[calc(7rem+env(safe-area-inset-bottom))]">
+        {/* Main Container */}
+        <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 pb-28 sm:pb-32 pb-[calc(7rem+env(safe-area-inset-bottom))]">
         {/* ===================== CUSTOMER EXPERIENCE ===================== */}
         {role === 'customer' && (
           <>
@@ -442,7 +417,7 @@ function MainAppContent() {
             ) : currentTab === 'catalog' ? (
               <PartsCatalogView />
             ) : (
-              <TechnicianProfileView onNavigateToCatalog={() => setCurrentTab('catalog')} />
+              <TechnicianProfileView />
             )}
           </>
         )}

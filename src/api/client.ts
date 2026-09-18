@@ -11,6 +11,26 @@ import {
   RepairQuote,
   TechnicianInventoryItem,
   InventoryPriceHistoryItem,
+  User,
+  CustomerProfile,
+  TechnicianProfile,
+  RepairRequest,
+  RepairJob,
+  ConditionReport,
+  PartUsedRecord,
+  TechnicianMatchResult,
+  LocationCoordinates,
+  RegisterCustomerInput,
+  RegisterTechnicianInput,
+  AuthResponse,
+  CreateRepairRequestInput,
+  SubmitQuoteInput,
+  TechnicianMatchInput,
+  DeviceConditionReportInput,
+  AddPartUsedInput,
+  AdditionalDiagnosisInput,
+  UpdateCustomerProfileInput,
+  UpdateTechnicianProfileInput,
 } from '../types/index';
 
 import { safeStorage } from '../utils/safeStorage';
@@ -73,28 +93,42 @@ export class ApiClient {
 
   // Auth
   public static login(emailOrPhone: string, password?: string, isBorrowedDevice = false) {
-    return this.request<any>('/auth/login', {
+    return this.request<AuthResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ emailOrPhone, password, isBorrowedDevice }),
     });
   }
 
-  public static socialLogin(provider: 'google' | 'apple' | 'facebook', token: string, role: 'customer' | 'technician') {
-    return this.request<any>('/auth/social-login', {
+  public static socialLogin(provider: 'google', token: string, role: 'customer' | 'technician') {
+    return this.request<AuthResponse>('/auth/social-login', {
       method: 'POST',
       body: JSON.stringify({ provider, token, role }),
     });
   }
 
-  public static registerCustomer(data: any) {
-    return this.request<any>('/auth/register-customer', {
+  public static googleDirectLogin(email: string, name?: string, role: 'customer' | 'technician' = 'customer') {
+    return this.request<AuthResponse>('/auth/google-direct-login', {
+      method: 'POST',
+      body: JSON.stringify({ email, name, role }),
+    });
+  }
+
+  public static switchRole(role: 'customer' | 'technician') {
+    return this.request<AuthResponse>('/auth/switch-role', {
+      method: 'POST',
+      body: JSON.stringify({ role }),
+    });
+  }
+
+  public static registerCustomer(data: RegisterCustomerInput) {
+    return this.request<AuthResponse>('/auth/register-customer', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  public static registerTechnician(data: any) {
-    return this.request<any>('/auth/register-technician', {
+  public static registerTechnician(data: RegisterTechnicianInput) {
+    return this.request<AuthResponse>('/auth/register-technician', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -288,12 +322,12 @@ export class ApiClient {
   }
 
   public static getTechnician(id: string) {
-    return this.request<any>(`/technicians/${id}`);
+    return this.request<TechnicianProfile>(`/technicians/${id}`);
   }
 
-  public static async matchTechnicians(data: any): Promise<any[]> {
+  public static async matchTechnicians(data: TechnicianMatchInput): Promise<TechnicianMatchResult[]> {
     try {
-      const res = await this.request<any>('/technicians/match', {
+      const res = await this.request<TechnicianMatchResult[]>('/technicians/match', {
         method: 'POST',
         body: JSON.stringify(data),
       });
@@ -304,28 +338,46 @@ export class ApiClient {
   }
 
   public static setTechnicianAvailability(status: string) {
-    return this.request<any>('/technicians/availability', {
+    return this.request<{ success: boolean; availability: string }>('/technicians/availability', {
       method: 'POST',
       body: JSON.stringify({ status }),
     });
   }
 
-  public static updateCustomerProfile(data: any) {
-    return this.request<any>('/customer/profile', {
+  public static updateCustomerProfile(data: UpdateCustomerProfileInput) {
+    return this.request<{ success: boolean; profile: CustomerProfile }>('/customer/profile', {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   }
 
-  public static updateTechnicianProfile(data: any) {
-    return this.request<any>('/technicians/profile', {
+  public static updateTechnicianProfile(data: UpdateTechnicianProfileInput) {
+    return this.request<{ success: boolean; profile: TechnicianProfile }>('/technicians/profile', {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   }
 
-  public static updateRepairRequestLocation(id: string, customerLocation: any) {
-    return this.request<any>(`/repairs/requests/${id}/location`, {
+  public static requestBankChangeOtp() {
+    return this.request<{ success: boolean; message: string; devCode?: string }>('/technicians/bank/request-change-otp', {
+      method: 'POST',
+    });
+  }
+
+  public static verifyBankChangeOtp(otp: string) {
+    return this.request<{ success: boolean; message: string }>('/technicians/bank/verify-change-otp', {
+      method: 'POST',
+      body: JSON.stringify({ otp }),
+    });
+  }
+
+  public static updateRepairRequestLocation(id: string, customerLocation: LocationCoordinates) {
+    return this.request<{
+      success: boolean;
+      request: RepairRequest;
+      matchedTechnicians?: TechnicianMatchResult[];
+      error?: string;
+    }>(`/repairs/requests/${id}/location`, {
       method: 'PATCH',
       body: JSON.stringify({ customerLocation }),
     });
@@ -363,14 +415,14 @@ export class ApiClient {
   }
 
   // Repair Requests
-  public static createRepairRequest(data: any) {
-    return this.request<any>('/repairs/requests', {
+  public static createRepairRequest(data: CreateRepairRequestInput) {
+    return this.request<RepairRequest>('/repairs/requests', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  public static async getRepairRequests(): Promise<any[]> {
+  public static async getRepairRequests(): Promise<RepairRequest[]> {
     try {
       const res = await this.request<any>('/repairs/requests');
       if (Array.isArray(res)) return res;
@@ -383,12 +435,12 @@ export class ApiClient {
   }
 
   public static getRepairRequest(id: string) {
-    return this.request<any>(`/repairs/requests/${id}`);
+    return this.request<RepairRequest>(`/repairs/requests/${id}`);
   }
 
   // Quotes
-  public static submitQuote(data: any) {
-    return this.request<any>('/quotes/submit', {
+  public static submitQuote(data: SubmitQuoteInput) {
+    return this.request<RepairQuote>('/quotes/submit', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -399,7 +451,7 @@ export class ApiClient {
   }
 
   public static getMyQuotes() {
-    return this.request<any[]>('/quotes/my-quotes');
+    return this.request<RepairQuote[]>('/quotes/my-quotes');
   }
 
   public static withdrawQuote(quoteId: string) {
@@ -509,39 +561,39 @@ export class ApiClient {
   }
 
   public static getJob(id: string) {
-    return this.request<any>(`/jobs/${id}`);
+    return this.request<RepairJob>(`/jobs/${id}`);
   }
 
-  public static checkInDevice(jobId: string, report: any) {
-    return this.request<any>(`/jobs/${jobId}/check-in`, {
+  public static checkInDevice(jobId: string, report: DeviceConditionReportInput) {
+    return this.request<{ success: boolean; conditionReport: ConditionReport; job: RepairJob }>(`/jobs/${jobId}/check-in`, {
       method: 'POST',
       body: JSON.stringify({ report }),
     });
   }
 
   public static updateJobStatus(jobId: string, newStatus: string, note?: string) {
-    return this.request<any>(`/jobs/${jobId}/status`, {
+    return this.request<{ success: boolean; job: RepairJob }>(`/jobs/${jobId}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ newStatus, note }),
     });
   }
 
-  public static addPartUsed(jobId: string, part: any) {
-    return this.request<any>(`/jobs/${jobId}/add-part`, {
+  public static addPartUsed(jobId: string, part: AddPartUsedInput) {
+    return this.request<{ success: boolean; partUsed: PartUsedRecord; job: RepairJob }>(`/jobs/${jobId}/add-part`, {
       method: 'POST',
       body: JSON.stringify(part),
     });
   }
 
-  public static submitAdditionalDiagnosis(jobId: string, data: any) {
-    return this.request<any>(`/jobs/${jobId}/additional-diagnosis`, {
+  public static submitAdditionalDiagnosis(jobId: string, data: AdditionalDiagnosisInput) {
+    return this.request<{ success: boolean; job: RepairJob }>(`/jobs/${jobId}/additional-diagnosis`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   public static respondToAdditionalDiagnosis(jobId: string, approved: boolean, reason?: string) {
-    return this.request<{ success: boolean; job?: any; error?: string }>(`/jobs/${jobId}/additional-diagnosis/respond`, {
+    return this.request<{ success: boolean; job?: RepairJob; error?: string }>(`/jobs/${jobId}/additional-diagnosis/respond`, {
       method: 'POST',
       body: JSON.stringify({ approved, reason }),
     });

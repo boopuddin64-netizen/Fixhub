@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <!-- Suppress third-party browser extension unhandled exceptions (e.g. MetaMask, Phantom, Web3 wallet injection) -->
     <script>
       (function() {
@@ -127,7 +127,12 @@
         to { left: 100%; }
       }
     </style>
-    <!-- Google Identity Services SDK -->
+    <!-- Google Identity Services SDK Performance Optimizations -->
+    <link rel="preconnect" href="https://accounts.google.com" />
+    <link rel="preconnect" href="https://oauth2.googleapis.com" />
+    <link rel="dns-prefetch" href="https://accounts.google.com" />
+    <link rel="dns-prefetch" href="https://oauth2.googleapis.com" />
+    <link rel="preload" href="https://accounts.google.com/gsi/client" as="script" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body class="bg-slate-950 text-slate-100 antialiased selection:bg-cyan-500 selection:text-white min-h-screen">

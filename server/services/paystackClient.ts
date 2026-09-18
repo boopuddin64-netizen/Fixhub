@@ -575,11 +575,22 @@ export class PaystackClient {
         });
         const data: any = await response.json();
         if (response.ok && data?.status && Array.isArray(data?.data)) {
-          return data.data.map((b: any) => ({
-            name: b.name,
-            code: b.code,
-            slug: b.slug,
-          }));
+          const seenCodes = new Set<string>();
+          const uniqueBanks: NigerianBank[] = [];
+          for (const b of data.data) {
+            const code = String(b.code || '').trim();
+            if (code && !seenCodes.has(code)) {
+              seenCodes.add(code);
+              uniqueBanks.push({
+                name: b.name,
+                code: code,
+                slug: b.slug,
+              });
+            }
+          }
+          if (uniqueBanks.length > 0) {
+            return uniqueBanks;
+          }
         }
       } catch (err: any) {
         console.warn('[PaystackClient] Failed to fetch bank list from Paystack, falling back to local list:', err.message);

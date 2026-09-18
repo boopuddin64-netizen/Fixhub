@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { ApiClient } from '../../api/client';
 import { NIGERIAN_BANKS, NigerianBank, getBankCodeByName, getBankNameByCode } from '../../data/nigerianBanks';
+import { SearchableBankSelect } from '../common/SearchableBankSelect';
 import { TechnicianVerificationModal } from './TechnicianVerificationModal';
 import { WheelPicker } from '../common/WheelPicker';
 import {
@@ -24,20 +25,117 @@ import {
   TrendingUp,
   Award,
   ChevronRight,
-  User
+  User,
+  Lock,
+  KeyRound,
+  ShieldAlert,
+  RefreshCw,
 } from 'lucide-react';
 
-interface TechnicianProfileViewProps {
-  onNavigateToCatalog?: () => void;
-}
+interface TechnicianProfileViewProps {}
 
-export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ onNavigateToCatalog }) => {
-  const { user, technicianProfile, logout, switchDemoUser, refreshUser, refreshAuth } = useAuth();
+export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () => {
+  const { user, technicianProfile, logout, refreshUser, refreshAuth } = useAuth();
 
   // Modals
   const [showEditProfile, setShowEditProfile] = useState<boolean>(false);
   const [showBankModal, setShowBankModal] = useState<boolean>(false);
   const [showFinances, setShowFinances] = useState<boolean>(false);
+  const [openedBankFromFinances, setOpenedBankFromFinances] = useState<boolean>(false);
+
+  // Bank Account Security Verification
+  const hasExistingBank = Boolean(technicianProfile?.bankDetails?.accountNumber);
+  const [isBankUnlocked, setIsBankUnlocked] = useState<boolean>(false);
+  const [showBankVerificationModal, setShowBankVerificationModal] = useState<boolean>(false);
+  const [bankOtp, setBankOtp] = useState<string>('');
+  const [isRequestingOtp, setIsRequestingOtp] = useState<boolean>(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState<boolean>(false);
+  const [bankOtpMsg, setBankOtpMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [bankOtpDevCode, setBankOtpDevCode] = useState<string | null>(null);
+  const [otpCountdown, setOtpCountdown] = useState<number>(0);
+
+  useEffect(() => {
+    if (otpCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setOtpCountdown((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [otpCountdown]);
+
+  const handleTriggerBankSetup = (fromFinances = false) => {
+    if (fromFinances) {
+      setOpenedBankFromFinances(true);
+      setShowFinances(false);
+    }
+    // If bank account was already set up and is not yet verified/unlocked in this session:
+    if (hasExistingBank && !isBankUnlocked) {
+      setBankOtp('');
+      setBankOtpMsg(null);
+      setShowBankVerificationModal(true);
+      handleRequestOtpCode();
+    } else {
+      setShowBankModal(true);
+    }
+  };
+
+  const handleRequestOtpCode = async () => {
+    setIsRequestingOtp(true);
+    setBankOtpMsg(null);
+    try {
+      const res = await ApiClient.requestBankChangeOtp();
+      if (res.success) {
+        setBankOtpMsg({ type: 'success', text: res.message });
+        if (res.devCode) {
+          setBankOtpDevCode(res.devCode);
+        }
+        setOtpCountdown(60);
+      }
+    } catch (err: any) {
+      setBankOtpMsg({ type: 'error', text: err.message || 'Failed to send security verification code.' });
+    } finally {
+      setIsRequestingOtp(false);
+    }
+  };
+
+  const handleVerifyBankOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bankOtp || bankOtp.trim().length < 6) {
+      setBankOtpMsg({ type: 'error', text: 'Please enter all 6 digits of the verification code.' });
+      return;
+    }
+    setIsVerifyingOtp(true);
+    setBankOtpMsg(null);
+    try {
+      const res = await ApiClient.verifyBankChangeOtp(bankOtp.trim());
+      if (res.success) {
+        setIsBankUnlocked(true);
+        setShowBankVerificationModal(false);
+        setShowBankModal(true);
+      } else {
+        setBankOtpMsg({ type: 'error', text: 'Verification failed. Please check the code.' });
+      }
+    } catch (err: any) {
+      setBankOtpMsg({ type: 'error', text: err.message || 'Verification failed. Please check the code.' });
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
+  const handleCloseVerificationModal = () => {
+    setShowBankVerificationModal(false);
+    if (openedBankFromFinances) {
+      setShowFinances(true);
+      setOpenedBankFromFinances(false);
+    }
+  };
+
+  const handleCloseBankModal = () => {
+    setShowBankModal(false);
+    if (openedBankFromFinances) {
+      setShowFinances(true);
+      setOpenedBankFromFinances(false);
+    }
+  };
 
   // Status & Availability
   const [isAvailable, setIsAvailable] = useState<boolean>(technicianProfile?.isAvailable ?? true);
@@ -120,7 +218,17 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
   useEffect(() => {
     ApiClient.getBanks().then((res) => {
       if (Array.isArray(res) && res.length > 0) {
-        setBanksList(res);
+        const seen = new Set<string>();
+        const unique: NigerianBank[] = [];
+        for (const b of res) {
+          if (b.code && !seen.has(b.code)) {
+            seen.add(b.code);
+            unique.push(b);
+          }
+        }
+        if (unique.length > 0) {
+          setBanksList(unique);
+        }
       }
     }).catch(() => {});
   }, []);
@@ -154,7 +262,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
   }, [technicianProfile, user]);
 
   const handleToggleAvailability = async () => {
-    const nextStatus = isAvailable ? 'BUSY' : 'ONLINE';
+    const nextStatus = isAvailable ? 'BUSY' : 'AVAILABLE';
     setUpdatingStatus(true);
     try {
       await ApiClient.setTechnicianAvailability(nextStatus);
@@ -222,9 +330,16 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
         },
       });
       if (refreshAuth) await refreshAuth();
-      setShowBankModal(false);
+      setIsBankUnlocked(false);
+      handleCloseBankModal();
     } catch (err: any) {
       setBankError(err.message || 'Failed to update settlement bank details');
+      if (err.requiresVerification) {
+        setIsBankUnlocked(false);
+        handleCloseBankModal();
+        setShowBankVerificationModal(true);
+        handleRequestOtpCode();
+      }
     } finally {
       setSavingBank(false);
     }
@@ -343,7 +458,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
         </div>
       </div>
 
-      {/* Shop Details & Payout Bank */}
+      {/* Shop Details & Financial Overview */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs divide-y divide-slate-100 text-xs">
         <div className="p-4 flex items-start justify-between gap-3">
           <div className="flex items-start gap-3 min-w-0">
@@ -379,42 +494,6 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
           </button>
         </div>
 
-        <div className="p-4 flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3 min-w-0">
-            <Building2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-bold text-slate-900 block">Payout Bank Account</span>
-              <span className="text-slate-600">
-                {technicianProfile?.bankDetails?.bankName || 'Providus Bank'} • {technicianProfile?.bankDetails?.accountNumber || '0129849201'} • {technicianProfile?.bankDetails?.accountName || technicianProfile?.businessName}
-              </span>
-            </div>
-          </div>
-          <button
-            onClick={() => setShowBankModal(true)}
-            className="text-blue-600 font-bold hover:underline shrink-0 cursor-pointer"
-          >
-            Update Bank
-          </button>
-        </div>
-
-        {onNavigateToCatalog && (
-          <button
-            onClick={onNavigateToCatalog}
-            className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center">
-                <Layers className="w-4 h-4" />
-              </div>
-              <div>
-                <p className="font-bold text-slate-900">Technician Parts Inventory Catalog</p>
-                <p className="text-slate-500 text-[11px]">Manage stock levels, cost prices & serialized parts</p>
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-slate-400" />
-          </button>
-        )}
-
         <button
           onClick={() => setShowFinances(true)}
           className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left cursor-pointer"
@@ -425,22 +504,15 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
             </div>
             <div>
               <p className="font-bold text-slate-900">Financial Earnings & Payout Ledger</p>
-              <p className="text-slate-500 text-[11px]">View held earnings, eligible balances & completed payouts</p>
+              <p className="text-slate-500 text-[11px]">View held earnings, payout settlement bank & completed payouts</p>
             </div>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-400" />
         </button>
       </div>
 
-      {/* Account Switcher & Logout Action */}
-      <div className="pt-2 space-y-2">
-        <button
-          onClick={() => switchDemoUser('chioma@fixhub.ng')}
-          className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
-        >
-          <User className="w-4 h-4 text-blue-600" />
-          <span>Switch to Customer Marketplace</span>
-        </button>
+      {/* Logout Action */}
+      <div className="pt-2">
         <button
           onClick={logout}
           className="w-full py-3.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
@@ -496,10 +568,12 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
                 </label>
                 <input
                   type="text"
+                  inputMode="text"
+                  enterKeyHint="next"
                   required
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-xs font-semibold text-slate-900"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-[16px] sm:text-xs font-semibold text-slate-900"
                 />
               </div>
 
@@ -509,10 +583,11 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
                 </label>
                 <textarea
                   rows={2}
+                  inputMode="text"
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   placeholder="e.g. Master iPhone motherboard micro-soldering & Samsung screen replacements."
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-xs font-semibold text-slate-900"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-[16px] sm:text-xs font-semibold text-slate-900"
                 />
               </div>
 
@@ -523,10 +598,12 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
                   </label>
                   <input
                     type="tel"
+                    inputMode="tel"
+                    enterKeyHint="next"
                     required
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-xs font-semibold text-slate-900"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-[16px] sm:text-xs font-semibold text-slate-900"
                   />
                 </div>
 
@@ -536,10 +613,12 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
                   </label>
                   <input
                     type="text"
+                    inputMode="text"
+                    enterKeyHint="next"
                     required
                     value={businessHours}
                     onChange={(e) => setBusinessHours(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-xs font-semibold text-slate-900"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-[16px] sm:text-xs font-semibold text-slate-900"
                   />
                 </div>
               </div>
@@ -550,10 +629,12 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
                 </label>
                 <input
                   type="text"
+                  inputMode="text"
+                  enterKeyHint="next"
                   required
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-xs font-semibold text-slate-900"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-[16px] sm:text-xs font-semibold text-slate-900"
                 />
               </div>
 
@@ -564,10 +645,12 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
                   </label>
                   <input
                     type="text"
+                    inputMode="text"
+                    enterKeyHint="next"
                     required
                     value={area}
                     onChange={(e) => setArea(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-xs font-semibold text-slate-900"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-[16px] sm:text-xs font-semibold text-slate-900"
                   />
                 </div>
 
@@ -577,10 +660,12 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
                   </label>
                   <input
                     type="text"
+                    inputMode="text"
+                    enterKeyHint="done"
                     required
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-xs font-semibold text-slate-900"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-[16px] sm:text-xs font-semibold text-slate-900"
                   />
                 </div>
 
@@ -632,9 +717,9 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
 
       {/* Bank Account Modal */}
       {showBankModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden my-6">
-            <div className="bg-slate-950 text-white p-5 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto overscroll-contain">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92dvh] flex flex-col">
+            <div className="bg-slate-950 text-white p-4 sm:p-5 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-600/30 border border-emerald-500/40 flex items-center justify-center text-emerald-300">
                   <Building2 className="w-5 h-5" />
@@ -645,14 +730,21 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
                 </div>
               </div>
               <button
-                onClick={() => setShowBankModal(false)}
+                onClick={handleCloseBankModal}
                 className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveBank} className="p-5 space-y-4 text-xs">
+            <form onSubmit={handleSaveBank} className="p-4 sm:p-5 space-y-4 text-xs overflow-y-auto flex-1">
+              {hasExistingBank && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs font-semibold flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Security Verified • Payout bank modification is authorized for this session.</span>
+                </div>
+              )}
+
               {bankError && (
                 <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold flex items-center justify-between gap-2">
                   <span>{bankError}</span>
@@ -666,25 +758,20 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Bank Name
                 </label>
-                <select
-                  value={bankCode}
-                  onChange={(e) => {
-                    const code = e.target.value;
+                <SearchableBankSelect
+                  id="tech-payout-bank-select"
+                  banks={banksList}
+                  selectedBankCode={bankCode}
+                  selectedBankName={bankName}
+                  theme="light"
+                  onSelectBank={(code, name) => {
                     setBankCode(code);
-                    const found = banksList.find((b) => b.code === code);
-                    if (found) setBankName(found.name);
+                    setBankName(name);
                     if (accountNumber.length === 10) {
                       handleResolveAccount(accountNumber, code);
                     }
                   }}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-semibold text-slate-900 bg-white"
-                >
-                  {banksList.map((b) => (
-                    <option key={b.code} value={b.code}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
               <div>
@@ -700,6 +787,10 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
                 </div>
                 <input
                   type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  enterKeyHint="done"
+                  autoComplete="off"
                   required
                   maxLength={10}
                   value={accountNumber}
@@ -713,7 +804,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
                     }
                   }}
                   placeholder="0123456789"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-semibold text-slate-900 tracking-wider font-mono"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-[16px] sm:text-xs font-semibold text-slate-900 tracking-wider font-mono"
                 />
               </div>
 
@@ -730,11 +821,13 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
                 </div>
                 <input
                   type="text"
+                  inputMode="text"
+                  enterKeyHint="done"
                   required
                   value={accountName}
                   onChange={(e) => setAccountName(e.target.value)}
                   placeholder="e.g. Emeka Okafor Enterprises"
-                  className={`w-full px-3.5 py-2.5 rounded-xl border focus:outline-none focus:ring-2 text-xs font-semibold text-slate-900 ${
+                  className={`w-full px-3.5 py-2.5 rounded-xl border focus:outline-none focus:ring-2 text-[16px] sm:text-xs font-semibold text-slate-900 ${
                     accountResolved ? 'border-emerald-400 bg-emerald-50/30 ring-emerald-500' : 'border-slate-200 focus:ring-emerald-500'
                   }`}
                 />
@@ -747,7 +840,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
               <div className="pt-2 flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowBankModal(false)}
+                  onClick={handleCloseBankModal}
                   className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold cursor-pointer"
                 >
                   Cancel
@@ -759,6 +852,136 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
                 >
                   {savingBank ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                   <span>Save Bank Account</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Bank Account Security Verification Modal */}
+      {showBankVerificationModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto overscroll-contain">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden my-auto flex flex-col animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-slate-950 text-white p-4 sm:p-5 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-white">Security Verification</h3>
+                  <p className="text-xs text-slate-400">Protecting your payout bank account</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseVerificationModal}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleVerifyBankOtp} className="p-4 sm:p-5 space-y-4 text-xs">
+              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-xs">
+                  <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Authorized Account Verification</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-amber-800">
+                  To protect your repair earnings from fraud, modifying your payout bank account requires security verification. Please enter the 6-digit code sent to your registered account.
+                </p>
+              </div>
+
+              {bankOtpMsg && (
+                <div
+                  className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 ${
+                    bankOtpMsg.type === 'success'
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      : 'bg-rose-50 text-rose-800 border border-rose-200'
+                  }`}
+                >
+                  {bankOtpMsg.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                  <span className="leading-snug">{bankOtpMsg.text}</span>
+                </div>
+              )}
+
+              {bankOtpDevCode && (
+                <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 flex items-center justify-between gap-2">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 block">Security Code</span>
+                    <span className="font-mono text-sm font-black text-blue-950 tracking-widest">{bankOtpDevCode}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setBankOtp(bankOtpDevCode)}
+                    className="text-[11px] font-bold bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg cursor-pointer transition-colors shrink-0"
+                  >
+                    Autofill
+                  </button>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  6-Digit Verification Code
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    enterKeyHint="done"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    value={bankOtp}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                      setBankOtp(val);
+                    }}
+                    placeholder="• • • • • •"
+                    className="w-full text-center px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xl font-bold font-mono tracking-[0.35em] text-slate-900 bg-slate-50"
+                  />
+                  <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[11px] text-slate-500">Didn't receive code?</span>
+                <button
+                  type="button"
+                  onClick={handleRequestOtpCode}
+                  disabled={otpCountdown > 0 || isRequestingOtp}
+                  className="text-xs font-bold text-emerald-600 hover:text-emerald-700 disabled:text-slate-400 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer"
+                >
+                  {isRequestingOtp ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  )}
+                  <span>{otpCountdown > 0 ? `Resend in ${otpCountdown}s` : 'Resend Code'}</span>
+                </button>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={handleCloseVerificationModal}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isVerifyingOtp || bankOtp.length < 6}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isVerifyingOtp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+                  <span>Verify & Unlock</span>
                 </button>
               </div>
             </form>
@@ -836,6 +1059,62 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = ({ on
                             <span className="font-extrabold text-emerald-600">+₦{e.netEarningsNaira.toLocaleString()}</span>
                           </div>
                         ))}
+                      </div>
+                    )}
+                  </div>
+                  {/* Settlement / Payout Bank Account Details */}
+                  <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-emerald-600" />
+                        <h4 className="font-bold text-slate-900 text-xs">Payout Settlement Bank</h4>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleTriggerBankSetup(true)}
+                        className="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 transition-colors cursor-pointer flex items-center gap-1"
+                      >
+                        {technicianProfile?.bankDetails?.accountNumber ? (
+                          <>
+                            <Lock className="w-3 h-3 text-emerald-600" />
+                            <span>Update Bank</span>
+                          </>
+                        ) : (
+                          <span>Add Bank</span>
+                        )}
+                      </button>
+                    </div>
+
+                    {technicianProfile?.bankDetails?.accountNumber ? (
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-900 text-xs">
+                            {technicianProfile.bankDetails.bankName || 'Providus Bank'}
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Verified NUBAN
+                          </span>
+                        </div>
+                        <p className="font-mono text-xs text-slate-700 font-semibold tracking-wider">
+                          {technicianProfile.bankDetails.accountNumber}
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          {technicianProfile.bankDetails.accountName || technicianProfile.businessName}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-2">
+                        <p className="text-[11px]">
+                          No settlement bank account linked yet. Link a Nigerian bank account to automatically receive completed repair earnings.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => handleTriggerBankSetup(true)}
+                          className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Building2 className="w-3.5 h-3.5" />
+                          <span>Link Payout Bank Account</span>
+                        </button>
                       </div>
                     )}
                   </div>

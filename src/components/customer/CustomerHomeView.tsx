@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { RepairJob, RepairRequest, TechnicianProfile, DeviceBrand, CustomerDevice, DeviceType, RepairIssueOption } from '../../types';
+import { RepairJob, RepairRequest, TechnicianProfile, DeviceBrand, DeviceModel, CustomerDevice, DeviceType, RepairIssueOption } from '../../types';
 import { ApiClient } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { StatusBadge } from '../common/StatusBadge';
@@ -60,7 +60,7 @@ export const CustomerHomeView: React.FC<CustomerHomeViewProps> = ({
 
   // Home Quick Search
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [searchResults, setSearchResults] = useState<{ brands: DeviceBrand[]; models: any[] }>({
+  const [searchResults, setSearchResults] = useState<{ brands: DeviceBrand[]; models: DeviceModel[] }>({
     brands: [],
     models: [],
   });

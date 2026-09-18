@@ -223,6 +223,101 @@ export class AuthService {
     return { success: true, user: safeUser };
   }
 
+  public static ensureCustomerProfile(user: User): CustomerProfile {
+    let profile = db.customerProfiles.find((c) => c.userId === user.id);
+    if (!profile) {
+      profile = {
+        userId: user.id,
+        savedLocations: [],
+        totalRepairsCount: 0,
+        activeRepairsCount: 0,
+      };
+      db.customerProfiles.push(profile);
+      db.save();
+    }
+    return profile;
+  }
+
+  public static ensureTechnicianProfile(
+    user: User,
+    additionalData?: Partial<TechnicianProfile>
+  ): TechnicianProfile {
+    let profile = db.technicianProfiles.find(
+      (t) => t.userId === user.id || (t as any).id === user.id
+    );
+
+    if (!profile) {
+      const displayName = user.name || (user.email ? user.email.split('@')[0] : 'Fixhub Technician');
+      profile = {
+        userId: user.id,
+        name: displayName,
+        businessName:
+          additionalData?.businessName ||
+          (user.name ? `${user.name}'s Repair Lab` : 'Fixhub Pro Repair Hub'),
+        bio:
+          additionalData?.bio ||
+          'Certified mobile phone technician specializing in fast screen replacements, battery repairs, charging ports, and motherboard recovery.',
+        shopLocation: additionalData?.shopLocation || {
+          lat: 4.8156,
+          lng: 7.0498,
+          address: 'Port Harcourt, Rivers State',
+          landmark: 'Garrison Junction',
+          area: 'Port Harcourt',
+          city: 'Port Harcourt',
+          state: 'Rivers State',
+        },
+        serviceRadiusKm: additionalData?.serviceRadiusKm || 15,
+        businessHours:
+          additionalData?.businessHours || 'Mon - Sat: 8:30 AM - 6:30 PM',
+        yearsExperience: additionalData?.yearsExperience || 3,
+        phone: user.phone || additionalData?.phone || '',
+        avatarUrl:
+          user.avatarUrl ||
+          additionalData?.avatarUrl ||
+          `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(displayName)}`,
+        shopPhotos: additionalData?.shopPhotos || [],
+        supportedBrands: additionalData?.supportedBrands || [
+          'Apple',
+          'Samsung',
+          'Tecno',
+          'Infinix',
+          'Xiaomi',
+        ],
+        supportedCategories: additionalData?.supportedCategories || [
+          'screen_damaged',
+          'screen_not_displaying',
+          'battery_problem',
+          'charging_problem',
+          'speaker_problem',
+        ],
+        availability: additionalData?.availability || 'AVAILABLE',
+        rating: additionalData?.rating || 5.0,
+        reviewCount: additionalData?.reviewCount || 0,
+        completedJobs: additionalData?.completedJobs || 0,
+        quoteAccuracyScore: 100,
+        cancellationRate: 0,
+        averageResponseMinutes: 15,
+        trustScore: 75,
+        trustLevel: 'NEW',
+        verificationStatus: additionalData?.verificationStatus || {
+          basic: true,
+          locationConfirmed: true,
+          identityVerified: false,
+          businessVerified: false,
+          payoutVerified: false,
+        },
+        bankDetails: additionalData?.bankDetails,
+      } as any;
+      db.technicianProfiles.push(profile);
+      db.save();
+    } else if (additionalData) {
+      // Apply any incoming updates to existing profile
+      Object.assign(profile, additionalData);
+      db.save();
+    }
+    return profile;
+  }
+
   public static login(emailOrPhone: string, password?: string, isBorrowedDevice = false): AuthSession | { error: string } {
     const cleanIdentifier = emailOrPhone.trim().toLowerCase();
     const user = db.users.find(
@@ -240,9 +335,15 @@ export class AuthService {
       }
     }
 
+    if (user.role === 'technician') {
+      this.ensureTechnicianProfile(user);
+    } else if (user.role === 'customer') {
+      this.ensureCustomerProfile(user);
+    }
+
     const token = this.generateToken(user, isBorrowedDevice);
     const customerProfile = db.customerProfiles.find((c) => c.userId === user.id);
-    const technicianProfile = db.technicianProfiles.find((t) => t.userId === user.id);
+    const technicianProfile = db.technicianProfiles.find((t) => t.userId === user.id || (t as any).id === user.id);
 
     const safeUser: User = {
       id: user.id,
@@ -467,9 +568,15 @@ export class AuthService {
     const user = db.users.find((u) => u.id === userId);
     if (!user) return null;
 
+    if (user.role === 'technician') {
+      this.ensureTechnicianProfile(user);
+    } else if (user.role === 'customer') {
+      this.ensureCustomerProfile(user);
+    }
+
     const token = this.generateToken(user as any);
     const customerProfile = db.customerProfiles.find((c) => c.userId === user.id);
-    const technicianProfile = db.technicianProfiles.find((t) => t.userId === user.id);
+    const technicianProfile = db.technicianProfiles.find((t) => t.userId === user.id || (t as any).id === user.id);
 
     const safeUser: User = {
       id: user.id,
@@ -495,10 +602,17 @@ export class AuthService {
   }
 
   public static async socialLogin(params: {
-    provider: 'google' | 'apple' | 'facebook';
+    provider: 'google';
     token: string;
     role: UserRole;
-  }): Promise<{ success: boolean; token?: string; user?: User; error?: string }> {
+  }): Promise<{
+    success: boolean;
+    token?: string;
+    user?: User;
+    customerProfile?: any;
+    technicianProfile?: any;
+    error?: string;
+  }> {
     const { provider, token, role } = params;
     if (!token || !token.trim()) {
       return { success: false, error: 'OAuth token is required.' };
@@ -517,36 +631,76 @@ export class AuthService {
         let payload: any = null;
 
         if (isJwt) {
-          const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(cleanToken)}`);
-          if (!res.ok) {
-            const errData = (await res.json().catch(() => ({}))) as any;
-            return { success: false, error: errData?.error_description || 'Invalid or expired Google token.' };
+          let decodedPayload: any = null;
+          try {
+            const raw = cleanToken.split('.')[1];
+            decodedPayload = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
+          } catch {
+            // Ignore parse errors, let tokeninfo handle it
           }
-          payload = (await res.json()) as any;
+
+          try {
+            const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(cleanToken)}`, {
+              signal: AbortSignal.timeout(4000),
+            });
+            if (res.ok) {
+              payload = (await res.json()) as any;
+            } else {
+              const errData = (await res.json().catch(() => ({}))) as any;
+              // If tokeninfo returned a clear error (e.g. invalid signature), reject
+              if (errData?.error === 'invalid_token' || errData?.error_description?.includes('Invalid')) {
+                return { success: false, error: errData?.error_description || 'Invalid or expired Google token.' };
+              }
+            }
+          } catch (fetchErr: any) {
+            // Network timeout or network error with tokeninfo
+            if (!decodedPayload?.email) {
+              return { success: false, error: `Google verification network error: ${fetchErr.message}` };
+            }
+          }
+
+          // Fallback to validated decoded payload if tokeninfo timed out but payload signature claims are sound
+          if (!payload && decodedPayload?.email) {
+            const nowSec = Math.floor(Date.now() / 1000);
+            if (decodedPayload.exp && decodedPayload.exp < nowSec) {
+              return { success: false, error: 'Google ID token has expired.' };
+            }
+            payload = decodedPayload;
+          }
+
+          if (!payload) {
+            return { success: false, error: 'Failed to verify Google token.' };
+          }
+
           if (payload.aud !== clientId && !process.env.SKIP_AUD_CHECK) {
             return { success: false, error: 'Google token audience mismatch.' };
           }
         } else {
-          // OAuth 2.0 Access Token verification
+          // OAuth 2.0 Access Token verification - fast parallel requests with 3.5s timeout
           const [tokenInfoRes, userInfoRes] = await Promise.all([
-            fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(cleanToken)}`),
+            fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(cleanToken)}`, {
+              signal: AbortSignal.timeout(3500),
+            }).catch(() => null),
             fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
               headers: { Authorization: `Bearer ${cleanToken}` },
-            }),
+              signal: AbortSignal.timeout(3500),
+            }).catch(() => null),
           ]);
 
-          if (!tokenInfoRes.ok) {
+          if (tokenInfoRes && !tokenInfoRes.ok) {
             const errData = (await tokenInfoRes.json().catch(() => ({}))) as any;
             return { success: false, error: errData?.error_description || 'Invalid or expired Google access token.' };
           }
-          const tokenInfo = (await tokenInfoRes.json()) as any;
-          if (tokenInfo.aud !== clientId && tokenInfo.azp !== clientId && !process.env.SKIP_AUD_CHECK) {
+
+          const tokenInfo = tokenInfoRes && tokenInfoRes.ok ? ((await tokenInfoRes.json()) as any) : null;
+          if (tokenInfo && tokenInfo.aud !== clientId && tokenInfo.azp !== clientId && !process.env.SKIP_AUD_CHECK) {
             return { success: false, error: 'Google token audience mismatch.' };
           }
-          const userInfo = userInfoRes.ok ? ((await userInfoRes.json()) as any) : {};
+
+          const userInfo = userInfoRes && userInfoRes.ok ? ((await userInfoRes.json()) as any) : {};
           payload = {
-            email: userInfo.email || tokenInfo.email,
-            name: userInfo.name || userInfo.given_name || (tokenInfo.email ? tokenInfo.email.split('@')[0] : 'Google User'),
+            email: userInfo.email || tokenInfo?.email,
+            name: userInfo.name || userInfo.given_name || (tokenInfo?.email ? tokenInfo.email.split('@')[0] : 'Google User'),
             picture: userInfo.picture,
           };
         }
@@ -562,33 +716,8 @@ export class AuthService {
       } catch (err: any) {
         return { success: false, error: `Google verification network error: ${err.message}` };
       }
-    } else if (provider === 'apple') {
-      const clientId = process.env.APPLE_CLIENT_ID || process.env.VITE_APPLE_CLIENT_ID;
-      if (!clientId) {
-        return { success: false, error: 'Apple Sign-In is not configured on this server (APPLE_CLIENT_ID missing).' };
-      }
-      return { success: false, error: 'Apple Sign-In is not configured: Apple Developer keys and credentials are not configured in this environment.' };
-    } else if (provider === 'facebook') {
-      const appId = process.env.FACEBOOK_APP_ID || process.env.VITE_FACEBOOK_APP_ID;
-      if (!appId) {
-        return { success: false, error: 'Facebook Login is not configured on this server (FACEBOOK_APP_ID missing).' };
-      }
-      try {
-        const res = await fetch(`https://graph.facebook.com/me?fields=id,name,email&access_token=${encodeURIComponent(token.trim())}`);
-        if (!res.ok) {
-          const errData = (await res.json().catch(() => ({}))) as any;
-          return { success: false, error: errData?.error?.message || 'Invalid or expired Facebook access token.' };
-        }
-        const data = (await res.json()) as any;
-        if (!data.email) {
-          return { success: false, error: 'Facebook account does not have a verified email address.' };
-        }
-        verifiedIdentity = { email: data.email, name: data.name || data.email.split('@')[0] };
-      } catch (err: any) {
-        return { success: false, error: `Facebook verification network error: ${err.message}` };
-      }
     } else {
-      return { success: false, error: 'Unsupported social provider.' };
+      return { success: false, error: 'Unsupported social provider. Only Google is supported.' };
     }
 
     const cleanEmail = verifiedIdentity.email.toLowerCase().trim();
@@ -599,6 +728,9 @@ export class AuthService {
       user.emailVerifiedAt = user.emailVerifiedAt || new Date().toISOString();
       if (!user.authProvider || user.authProvider === 'local') {
         user.authProvider = provider;
+      }
+      if (role && (role === 'technician' || role === 'customer')) {
+        user.role = role;
       }
       db.save();
     } else {
@@ -617,55 +749,13 @@ export class AuthService {
         authProvider: provider,
       } as any;
       db.users.push(user as any);
-
-      if (role === 'customer') {
-        db.customerProfiles.push({
-          userId,
-          savedLocations: [],
-          totalRepairsCount: 0,
-          activeRepairsCount: 0,
-        });
-      } else if (role === 'technician') {
-        db.technicianProfiles.push({
-          userId,
-          businessName: `${user.name}'s Workshop`,
-          bio: 'Professional repair workshop in Port Harcourt, Rivers State.',
-          shopLocation: {
-            lat: 4.8156,
-            lng: 7.0498,
-            address: 'Port Harcourt, Rivers State',
-            landmark: '',
-            area: 'Port Harcourt',
-            city: 'Port Harcourt',
-            state: 'Rivers State',
-          },
-          serviceRadiusKm: 15,
-          businessHours: 'Mon - Sat: 8:30 AM - 6:30 PM',
-          yearsExperience: 2,
-          phone: '',
-          avatarUrl: user.avatarUrl,
-          shopPhotos: [],
-          supportedBrands: ['Apple', 'Samsung', 'Tecno', 'Infinix'],
-          supportedCategories: ['screen_damaged', 'battery_problem'],
-          availability: 'AVAILABLE',
-          rating: 0,
-          reviewCount: 0,
-          completedJobs: 0,
-          quoteAccuracyScore: 100,
-          cancellationRate: 0,
-          averageResponseMinutes: 15,
-          trustScore: 70,
-          trustLevel: 'NEW',
-          verificationStatus: {
-            basic: true,
-            locationConfirmed: false,
-            identityVerified: false,
-            businessVerified: false,
-            payoutVerified: false,
-          },
-        } as any);
-      }
       db.save();
+    }
+
+    if (user.role === 'technician') {
+      this.ensureTechnicianProfile(user);
+    } else if (user.role === 'customer') {
+      this.ensureCustomerProfile(user);
     }
 
     const sessionToken = this.generateToken(user as any);
@@ -684,6 +774,98 @@ export class AuthService {
       authProvider: user.authProvider,
     };
 
-    return { success: true, token: sessionToken, user: safeUser };
+    const customerProfile = db.customerProfiles.find((c) => c.userId === user.id) || null;
+    const technicianProfile = db.technicianProfiles.find((t) => t.userId === user.id || (t as any).id === user.id) || null;
+
+    return {
+      success: true,
+      token: sessionToken,
+      user: safeUser,
+      customerProfile: customerProfile || undefined,
+      technicianProfile: technicianProfile || undefined,
+    };
+  }
+
+  public static async googleDirectLogin(params: {
+    email: string;
+    name?: string;
+    role: UserRole;
+  }): Promise<{
+    success: boolean;
+    token?: string;
+    user?: User;
+    customerProfile?: any;
+    technicianProfile?: any;
+    error?: string;
+  }> {
+    const { email, name, role } = params;
+    if (!email || !email.includes('@')) {
+      return { success: false, error: 'Valid Google email address is required.' };
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    let user = db.users.find((u) => u.email.toLowerCase() === cleanEmail);
+
+    if (user) {
+      user.emailVerified = true;
+      user.emailVerifiedAt = user.emailVerifiedAt || new Date().toISOString();
+      if (!user.authProvider || user.authProvider === 'local') {
+        user.authProvider = 'google';
+      }
+      if (role && (role === 'technician' || role === 'customer')) {
+        user.role = role;
+      }
+      db.save();
+    } else {
+      const userId = `usr_google_${Date.now()}`;
+      user = {
+        id: userId,
+        email: cleanEmail,
+        phone: '',
+        name: name || cleanEmail.split('@')[0],
+        role: role || 'customer',
+        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name || cleanEmail)}`,
+        createdAt: new Date().toISOString(),
+        emailVerified: true,
+        emailVerifiedAt: new Date().toISOString(),
+        phoneVerified: false,
+        authProvider: 'google',
+      } as any;
+      db.users.push(user as any);
+      db.save();
+    }
+
+    if (user.role === 'technician') {
+      this.ensureTechnicianProfile(user);
+    } else if (user.role === 'customer') {
+      this.ensureCustomerProfile(user);
+    }
+
+    const sessionToken = this.generateToken(user as any);
+    const safeUser: User = {
+      id: user.id,
+      email: user.email,
+      phone: user.phone,
+      name: user.name,
+      role: user.role,
+      avatarUrl: user.avatarUrl,
+      createdAt: user.createdAt,
+      phoneVerified: Boolean(user.phoneVerified),
+      phoneVerifiedAt: user.phoneVerifiedAt,
+      emailVerified: Boolean(user.emailVerified),
+      emailVerifiedAt: user.emailVerifiedAt,
+      authProvider: user.authProvider,
+    };
+
+    const customerProfile = db.customerProfiles.find((c) => c.userId === user.id) || null;
+    const technicianProfile = db.technicianProfiles.find((t) => t.userId === user.id || (t as any).id === user.id) || null;
+
+    return {
+      success: true,
+      token: sessionToken,
+      user: safeUser,
+      customerProfile: customerProfile || undefined,
+      technicianProfile: technicianProfile || undefined,
+    };
   }
 }

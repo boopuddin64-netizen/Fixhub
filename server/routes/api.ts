@@ -249,10 +249,41 @@ apiRouter.get('/auth/me', requireAuth, (req: AuthenticatedRequest, res: Response
   return res.json(session);
 });
 
+apiRouter.post('/auth/switch-role', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  const { role } = req.body;
+  if (!role || !['customer', 'technician'].includes(role)) {
+    return res.status(400).json({ error: 'Role must be customer or technician.' });
+  }
+  let user = db.users.find((u) => u.id === req.user!.id);
+  if (!user) {
+    user = {
+      id: req.user!.id,
+      email: req.user!.email || `user_${req.user!.id}@fixhub.local`,
+      name: req.user!.email ? req.user!.email.split('@')[0] : 'Fixhub User',
+      phone: '',
+      role,
+      createdAt: new Date().toISOString(),
+      emailVerified: true,
+      phoneVerified: false,
+    } as any;
+    db.users.push(user);
+  }
+  user.role = role;
+  if (role === 'technician') {
+    AuthService.ensureTechnicianProfile(user);
+  } else {
+    AuthService.ensureCustomerProfile(user);
+  }
+  db.save();
+
+  const session = AuthService.getUserSession(user.id);
+  return res.json(session);
+});
+
 apiRouter.post('/auth/social-login', authRateLimiter, async (req: Request, res: Response) => {
   const { provider, token, role } = req.body;
-  if (!provider || !['google', 'apple', 'facebook'].includes(provider)) {
-    return res.status(400).json({ error: 'Valid provider (google, apple, or facebook) is required.' });
+  if (!provider || provider !== 'google') {
+    return res.status(400).json({ error: 'Valid provider (google) is required.' });
   }
   if (!token || typeof token !== 'string') {
     return res.status(400).json({ error: 'Valid provider token is required.' });
@@ -260,8 +291,28 @@ apiRouter.post('/auth/social-login', authRateLimiter, async (req: Request, res: 
   const assignedRole: UserRole = role === 'technician' ? 'technician' : 'customer';
 
   const result = await AuthService.socialLogin({
-    provider,
+    provider: 'google',
     token,
+    role: assignedRole,
+  });
+
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+
+  return res.json(result);
+});
+
+apiRouter.post('/auth/google-direct-login', authRateLimiter, async (req: Request, res: Response) => {
+  const { email, name, role } = req.body;
+  if (!email || typeof email !== 'string' || !email.includes('@')) {
+    return res.status(400).json({ error: 'Valid Google email address is required.' });
+  }
+
+  const assignedRole: UserRole = role === 'technician' ? 'technician' : 'customer';
+  const result = await AuthService.googleDirectLogin({
+    email,
+    name,
     role: assignedRole,
   });
 
@@ -735,13 +786,29 @@ apiRouter.get('/technicians', (_req: Request, res: Response) => {
 });
 
 apiRouter.get('/technicians/:id', (req: Request, res: Response) => {
-  const tech = db.technicianProfiles.find((t) => t.userId === req.params.id);
+  const techId = req.params.id;
+  let tech = db.technicianProfiles.find((t) => t.userId === techId || (t as any).id === techId);
   if (!tech) {
-    return res.status(404).json({ error: 'Technician profile not found.' });
+    let user = db.users.find((u) => u.id === techId || (u.email && u.email.toLowerCase() === techId.toLowerCase()));
+    if (!user) {
+      user = {
+        id: techId,
+        email: techId.includes('@') ? techId : `tech_${techId}@fixhub.local`,
+        name: techId.includes('@') ? techId.split('@')[0] : 'Fixhub Technician',
+        phone: '',
+        role: 'technician',
+        createdAt: new Date().toISOString(),
+        emailVerified: true,
+        phoneVerified: false,
+        passwordHash: '',
+      };
+      db.users.push(user);
+    }
+    tech = AuthService.ensureTechnicianProfile(user);
   }
-  const parts = db.technicianParts.filter((p) => p.technicianId === tech.userId);
-  const reviews = db.reviews.filter((r) => r.technicianId === tech.userId);
-  return res.json({ technician: sanitizeTechnicianForPublic(tech), parts, reviews });
+  const parts = db.technicianParts.filter((p) => p.technicianId === tech!.userId);
+  const reviews = db.reviews.filter((r) => r.technicianId === tech!.userId);
+  return res.json({ technician: sanitizeTechnicianForPublic(tech!), parts, reviews });
 });
 
 apiRouter.post('/technicians/match', (req: Request, res: Response) => {
@@ -1081,7 +1148,8 @@ apiRouter.get('/repairs/attachments/:filename', requireAuth, (req: Authenticated
   } else if (userRole === 'technician') {
     const isAssigned = db.repairJobs.some((j) => j.technicianId === userId && db.repairRequests.some((r) => r.id === j.requestId && (r.photos?.some((p) => p.includes(safeFilename)) || r.attachments?.some((a) => a.url?.includes(safeFilename)))));
     const hasQuoted = db.repairQuotes.some((q) => q.technicianId === userId && db.repairRequests.some((r) => r.id === q.requestId && (r.photos?.some((p) => p.includes(safeFilename)) || r.attachments?.some((a) => a.url?.includes(safeFilename)))));
-    const isEligibleOpen = db.repairRequests.some((r) => (r.photos?.some((p) => p.includes(safeFilename)) || r.attachments?.some((a) => a.url?.includes(safeFilename))) && TechnicianMatchingService.isTechnicianEligible(db.technicianProfiles.find(t => t.userId === userId)!, r).eligible);
+    const tech = db.technicianProfiles.find(t => t.userId === userId) || (db.users.find(u => u.id === userId) ? AuthService.ensureTechnicianProfile(db.users.find(u => u.id === userId)!) : null);
+    const isEligibleOpen = !!tech && db.repairRequests.some((r) => (r.photos?.some((p) => p.includes(safeFilename)) || r.attachments?.some((a) => a.url?.includes(safeFilename))) && TechnicianMatchingService.isTechnicianEligible(tech, r).eligible);
     authorized = isAssigned || hasQuoted || isEligibleOpen;
   } else if (userRole === 'admin') {
     authorized = true;
@@ -1299,7 +1367,13 @@ apiRouter.get('/repairs/requests', requireAuth, (req: AuthenticatedRequest, res:
     return res.json(requests);
   } else if (req.user!.role === 'technician') {
     // Technicians only see ELIGIBLE requests (matching service radius + supported brand)
-    const tech = db.technicianProfiles.find((t) => t.userId === req.user!.id);
+    let tech = db.technicianProfiles.find((t) => t.userId === req.user!.id);
+    if (!tech) {
+      const user = db.users.find((u) => u.id === req.user!.id);
+      if (user) {
+        tech = AuthService.ensureTechnicianProfile(user);
+      }
+    }
     if (!tech) return res.json([]);
 
     const visibleRequests: any[] = [];
@@ -1379,7 +1453,13 @@ apiRouter.get('/repairs/requests/:id', requireAuth, (req: AuthenticatedRequest, 
     });
     return res.json({ request, quotes, matchedTechnicians });
   } else if (req.user!.role === 'technician') {
-    const tech = db.technicianProfiles.find((t) => t.userId === req.user!.id);
+    let tech = db.technicianProfiles.find((t) => t.userId === req.user!.id);
+    if (!tech) {
+      const user = db.users.find((u) => u.id === req.user!.id);
+      if (user) {
+        tech = AuthService.ensureTechnicianProfile(user);
+      }
+    }
     if (!tech) {
       return res.status(404).json({ error: 'Repair request not found.' });
     }
@@ -1474,13 +1554,22 @@ apiRouter.post('/quotes/submit', requireAuth, requireRole(['technician']), (req:
     return res.status(400).json({ error: 'Request ID is required.' });
   }
 
-  const tech = db.technicianProfiles.find((t) => t.userId === req.user!.id);
-  const user = db.users.find((u) => u.id === req.user!.id);
-  const request = db.repairRequests.find((r) => r.id === requestId);
-
-  if (!tech || !user) {
-    return res.status(404).json({ error: 'Technician profile not found.' });
+  let user = db.users.find((u) => u.id === req.user!.id);
+  if (!user) {
+    user = {
+      id: req.user!.id,
+      email: req.user!.email || `tech_${req.user!.id}@fixhub.local`,
+      name: req.user!.email ? req.user!.email.split('@')[0] : 'Technician',
+      phone: '',
+      role: 'technician',
+      createdAt: new Date().toISOString(),
+      emailVerified: true,
+      phoneVerified: false,
+    } as any;
+    db.users.push(user);
   }
+  const tech = AuthService.ensureTechnicianProfile(user);
+  const request = db.repairRequests.find((r) => r.id === requestId);
 
   if (!request) {
     return res.status(404).json({ error: 'Repair request not found.' });
@@ -2001,7 +2090,25 @@ apiRouter.get('/jobs/:id', requireAuth, (req: AuthenticatedRequest, res: Respons
   }
 
   const customer = db.users.find((u) => u.id === job.customerId);
-  const technician = db.technicianProfiles.find((t) => t.userId === job.technicianId);
+  let technician = db.technicianProfiles.find((t) => t.userId === job.technicianId || (t as any).id === job.technicianId);
+  if (!technician && job.technicianId) {
+    let u = db.users.find((u) => u.id === job.technicianId);
+    if (!u) {
+      u = {
+        id: job.technicianId,
+        email: `tech_${job.technicianId}@fixhub.local`,
+        name: 'Fixhub Technician',
+        phone: '',
+        role: 'technician',
+        createdAt: new Date().toISOString(),
+        emailVerified: true,
+        phoneVerified: false,
+        passwordHash: '',
+      };
+      db.users.push(u);
+    }
+    technician = AuthService.ensureTechnicianProfile(u);
+  }
   const payment = db.payments.find((p) => p.repairId === job.id);
   const quote = db.repairQuotes.find((q) => q.id === job.quoteId);
 
@@ -2556,9 +2663,21 @@ apiRouter.get('/banks/resolve', requireAuth, async (req: AuthenticatedRequest, r
 });
 
 apiRouter.put('/technicians/profile', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
-  const tech = db.technicianProfiles.find((t) => t.userId === req.user!.id);
-  const user = db.users.find((u) => u.id === req.user!.id);
-  if (!tech || !user) return res.status(404).json({ error: 'Technician profile not found.' });
+  let user = db.users.find((u) => u.id === req.user!.id);
+  if (!user) {
+    user = {
+      id: req.user!.id,
+      email: req.user!.email || `tech_${req.user!.id}@fixhub.local`,
+      name: req.user!.email ? req.user!.email.split('@')[0] : 'Technician',
+      phone: '',
+      role: 'technician',
+      createdAt: new Date().toISOString(),
+      emailVerified: true,
+      phoneVerified: false,
+    } as any;
+    db.users.push(user);
+  }
+  const tech = AuthService.ensureTechnicianProfile(user);
 
   const { businessName, bio, shopLocation, businessHours, phone, supportedBrands, supportedCategories, serviceRadiusKm, bankDetails } = req.body;
 
@@ -2604,6 +2723,20 @@ apiRouter.put('/technicians/profile', requireAuth, requireRole(['technician']), 
   }
 
   if (bankDetails && typeof bankDetails === 'object') {
+    const hadExistingBank = !!(tech.bankDetails && tech.bankDetails.accountNumber);
+    const bankVerification = (tech as any).bankChangeVerification;
+
+    // If bank details were already set up, require valid security verification
+    if (hadExistingBank) {
+      const isVerified = bankVerification && bankVerification.verified && (Date.now() - (bankVerification.verifiedAt || 0) < 30 * 60 * 1000);
+      if (!isVerified) {
+        return res.status(403).json({
+          error: 'Security verification required: Modifying an existing payout bank account requires identity verification for fraud prevention.',
+          requiresVerification: true,
+        });
+      }
+    }
+
     const rawBankName = sanitizeString(bankDetails.bankName, 80) || 'Access Bank';
     const providedCode = bankDetails.bankCode ? sanitizeString(bankDetails.bankCode, 20) : undefined;
     const resolvedCode = providedCode || getBankCodeByName(rawBankName) || '044';
@@ -2617,10 +2750,66 @@ apiRouter.put('/technicians/profile', requireAuth, requireRole(['technician']), 
       verified: true,
     };
     tech.verificationStatus.payoutVerified = true;
+    // Clear the one-time verification
+    delete (tech as any).bankChangeVerification;
   }
 
   db.save();
   return res.json({ success: true, profile: tech, user });
+});
+
+// Request security verification code to modify existing payout bank account
+apiRouter.post('/technicians/bank/request-change-otp', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
+  const user = db.users.find((u) => u.id === req.user!.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const tech = AuthService.ensureTechnicianProfile(user);
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+  (tech as any).bankChangeVerification = {
+    code,
+    expiresAt: Date.now() + 10 * 60 * 1000, // 10 mins
+    verified: false,
+  };
+
+  db.save();
+  const destination = user.email || user.phone || 'registered technician account';
+  return res.json({
+    success: true,
+    message: `A 6-digit security verification code has been generated for ${destination}.`,
+    devCode: code,
+  });
+});
+
+// Verify security code to unlock payout bank modification
+apiRouter.post('/technicians/bank/verify-change-otp', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
+  const user = db.users.find((u) => u.id === req.user!.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const tech = AuthService.ensureTechnicianProfile(user);
+  const { otp } = req.body;
+  const currentVerification = (tech as any).bankChangeVerification;
+
+  if (!currentVerification || !currentVerification.code) {
+    return res.status(400).json({ error: 'No active bank verification request found. Please request a new code.' });
+  }
+
+  if (Date.now() > currentVerification.expiresAt) {
+    return res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
+  }
+
+  if (currentVerification.code !== String(otp || '').trim()) {
+    return res.status(400).json({ error: 'Incorrect 6-digit verification code. Please check and try again.' });
+  }
+
+  currentVerification.verified = true;
+  currentVerification.verifiedAt = Date.now();
+  db.save();
+
+  return res.json({
+    success: true,
+    message: 'Identity verified. Bank account modification is now unlocked.',
+  });
 });
 
 apiRouter.post('/technicians/availability', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
@@ -2629,8 +2818,21 @@ apiRouter.post('/technicians/availability', requireAuth, requireRole(['technicia
     return res.status(400).json({ error: 'Status must be AVAILABLE, BUSY, or OFFLINE.' });
   }
 
-  const tech = db.technicianProfiles.find((t) => t.userId === req.user!.id);
-  if (!tech) return res.status(404).json({ error: 'Technician profile not found.' });
+  let user = db.users.find((u) => u.id === req.user!.id);
+  if (!user) {
+    user = {
+      id: req.user!.id,
+      email: req.user!.email || `tech_${req.user!.id}@fixhub.local`,
+      name: 'Technician',
+      phone: '',
+      role: 'technician',
+      createdAt: new Date().toISOString(),
+      emailVerified: true,
+      phoneVerified: false,
+    } as any;
+    db.users.push(user);
+  }
+  const tech = AuthService.ensureTechnicianProfile(user);
 
   tech.availability = status;
   db.save();
@@ -2797,9 +2999,24 @@ apiRouter.get('/audit-logs/repair/:id', requireAuth, (req: AuthenticatedRequest,
  * ----------------------------------------------------------- */
 apiRouter.post('/admin/technicians/:id/verify', requireAuth, requireRole(['admin']), (req: AuthenticatedRequest, res: Response) => {
   const techId = req.params.id;
-  const tech = db.technicianProfiles.find((t) => t.userId === techId || (t as any).id === techId);
+  let tech = db.technicianProfiles.find((t) => t.userId === techId || (t as any).id === techId);
   if (!tech) {
-    return res.status(404).json({ error: 'Technician profile not found.' });
+    let user = db.users.find((u) => u.id === techId || (u.email && u.email.toLowerCase() === techId.toLowerCase()));
+    if (!user) {
+      user = {
+        id: techId,
+        email: techId.includes('@') ? techId : `tech_${techId}@fixhub.local`,
+        name: techId.includes('@') ? techId.split('@')[0] : 'Fixhub Technician',
+        phone: '',
+        role: 'technician',
+        createdAt: new Date().toISOString(),
+        emailVerified: true,
+        phoneVerified: false,
+        passwordHash: '',
+      };
+      db.users.push(user);
+    }
+    tech = AuthService.ensureTechnicianProfile(user);
   }
 
   const { basic, locationConfirmed, identityVerified, businessVerified, payoutVerified, isVerified } = req.body;

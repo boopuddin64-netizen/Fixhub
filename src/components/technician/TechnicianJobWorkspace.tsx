@@ -157,7 +157,7 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
       setDropOffSuccess(true);
       onRefresh();
     } catch (err: any) {
-      setErrorMsg(err.message || `Invalid code. Enter customer drop-off code (Demo: ${job.dropOffCode})`);
+      setErrorMsg(err.message || 'Invalid code. Please enter the 6-digit drop-off verification code provided by the customer.');
     } finally {
       setIsUpdating(false);
     }
@@ -175,7 +175,7 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
       setCodeSuccess(true);
       onRefresh();
     } catch (err: any) {
-      setErrorMsg(err.message || `Invalid code. Enter customer pickup code (Demo: ${job.pickupCode})`);
+      setErrorMsg(err.message || 'Invalid code. Please enter the 6-digit pickup verification code provided by the customer.');
     } finally {
       setIsUpdating(false);
     }

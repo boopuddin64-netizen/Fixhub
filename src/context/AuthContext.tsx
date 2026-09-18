@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { User, UserRole, CustomerProfile, TechnicianProfile } from '../types';
+import { User, UserRole, CustomerProfile, TechnicianProfile, RegisterCustomerInput, RegisterTechnicianInput, AuthResponse } from '../types';
 import { ApiClient } from '../api/client';
 import { safeStorage } from '../utils/safeStorage';
 
@@ -11,10 +11,12 @@ interface AuthContextType {
   isLoading: boolean;
   isBorrowedDevice: boolean;
   login: (emailOrPhone: string, password?: string, isBorrowed?: boolean) => Promise<void>;
-  registerCustomer: (data: any) => Promise<void>;
-  registerTechnician: (data: any) => Promise<void>;
-  socialLogin: (provider: 'google' | 'apple' | 'facebook', token: string, role: 'customer' | 'technician') => Promise<{ success: boolean; user: User; token: string }>;
+  registerCustomer: (data: RegisterCustomerInput) => Promise<void>;
+  registerTechnician: (data: RegisterTechnicianInput) => Promise<void>;
+  socialLogin: (provider: 'google', token: string, role: 'customer' | 'technician') => Promise<AuthResponse>;
+  googleDirectLogin: (email: string, name?: string, role?: 'customer' | 'technician') => Promise<AuthResponse>;
   logout: () => void;
+  switchRole: (role: 'customer' | 'technician') => Promise<void>;
   switchDemoUser: (email: string) => Promise<void>;
   refreshUser: () => Promise<void>;
   refreshAuth?: () => Promise<void>;
@@ -74,7 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const registerCustomer = async (formData: any) => {
+  const registerCustomer = async (formData: RegisterCustomerInput) => {
     setIsLoading(true);
     try {
       const data = await ApiClient.registerCustomer(formData);
@@ -89,7 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const registerTechnician = async (formData: any) => {
+  const registerTechnician = async (formData: RegisterTechnicianInput) => {
     setIsLoading(true);
     try {
       const data = await ApiClient.registerTechnician(formData);
@@ -105,7 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const socialLogin = async (
-    provider: 'google' | 'apple' | 'facebook',
+    provider: 'google',
     token: string,
     role: 'customer' | 'technician'
   ) => {
@@ -115,7 +117,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ApiClient.setToken(data.token);
       ApiClient.setBorrowedDevice(false);
       setUser(data.user);
-      await refreshUser();
+      setCustomerProfile(data.customerProfile || null);
+      setTechnicianProfile(data.technicianProfile || null);
+      setIsBorrowedDevice(false);
+      return data;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const googleDirectLogin = async (
+    email: string,
+    name?: string,
+    role: 'customer' | 'technician' = 'customer'
+  ) => {
+    setIsLoading(true);
+    try {
+      const data = await ApiClient.googleDirectLogin(email, name, role);
+      ApiClient.setToken(data.token);
+      ApiClient.setBorrowedDevice(false);
+      setUser(data.user);
+      setCustomerProfile(data.customerProfile || null);
+      setTechnicianProfile(data.technicianProfile || null);
+      setIsBorrowedDevice(false);
       return data;
     } finally {
       setIsLoading(false);
@@ -128,6 +152,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCustomerProfile(null);
     setTechnicianProfile(null);
     setIsBorrowedDevice(false);
+  };
+
+  const switchRole = async (targetRole: 'customer' | 'technician') => {
+    setIsLoading(true);
+    try {
+      const data = await ApiClient.switchRole(targetRole);
+      if (data.token) {
+        ApiClient.setToken(data.token);
+      }
+      setUser(data.user);
+      setCustomerProfile(data.customerProfile || null);
+      setTechnicianProfile(data.technicianProfile || null);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const switchDemoUser = async (email: string) => {
@@ -160,7 +199,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         registerCustomer,
         registerTechnician,
         socialLogin,
+        googleDirectLogin,
         logout,
+        switchRole,
         switchDemoUser,
         refreshUser,
         refreshAuth: refreshUser,

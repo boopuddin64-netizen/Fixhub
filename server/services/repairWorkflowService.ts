@@ -10,6 +10,7 @@ import {
   WarrantyRecord,
 } from '../../src/types/index';
 import { AuditService } from './auditService';
+import { AuthService } from './authService';
 import { NotificationService } from './notificationService';
 import { PaymentService } from './paymentService';
 import { QuoteAccuracyService } from './quoteAccuracyService';
@@ -119,8 +120,25 @@ export class RepairWorkflowService {
         return { error: `Quote is no longer available (current status: ${quote.status}).` };
       }
 
-      const tech = db.technicianProfiles.find((t) => t.userId === quote.technicianId);
-      if (!tech) return { error: 'Technician profile associated with quote not found.' };
+      let tech = db.technicianProfiles.find((t) => t.userId === quote.technicianId || (t as any).id === quote.technicianId);
+      if (!tech) {
+        let u = db.users.find((u) => u.id === quote.technicianId);
+        if (!u) {
+          u = {
+            id: quote.technicianId,
+            email: `tech_${quote.technicianId}@fixhub.local`,
+            name: quote.technicianName || 'Certified Technician',
+            phone: '',
+            role: 'technician',
+            createdAt: new Date().toISOString(),
+            emailVerified: true,
+            phoneVerified: false,
+            passwordHash: '',
+          };
+          db.users.push(u);
+        }
+        tech = AuthService.ensureTechnicianProfile(u, { businessName: quote.technicianName });
+      }
 
       quote.status = 'ACCEPTED';
       quote.updatedAt = now.toISOString();

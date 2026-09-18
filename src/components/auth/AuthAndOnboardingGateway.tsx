@@ -503,101 +503,103 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
 
         {/* ======================= VIEW A: LOGIN FORM ======================= */}
         {authMode === 'login' && (
-          <form onSubmit={handleLoginSubmit} className="space-y-4 text-xs animate-in fade-in duration-150">
-            <div>
-              <h3 className="font-extrabold text-sm text-white">
-                {selectedRole === 'customer' ? 'Customer Sign In' : 'Technician Workshop Sign In'}
-              </h3>
-              <p className="text-[11px] text-slate-400">
-                {selectedRole === 'customer'
-                  ? 'Log in to track repairs, approve quotes & view warranty passports'
-                  : 'Log in to manage your workshop workbench & payouts'}
-              </p>
-            </div>
-
-            <div>
-              <label className="font-bold text-slate-300 block mb-1">
-                {selectedRole === 'customer' ? 'Email Address or Phone' : 'Store Email or Phone'}
-              </label>
-              <input
-                type="text"
-                value={loginIdentifier}
-                onChange={(e) => setLoginIdentifier(e.target.value)}
-                required
-                autoComplete="username"
-                placeholder={
-                  selectedRole === 'customer'
-                    ? 'you@example.com or +234...'
-                    : 'yourshop@example.com or +234...'
-                }
-                className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="font-bold text-slate-300">Password</label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMode('forgot_password');
-                    setForgotStep('request');
-                    setErrorMsg(null);
-                    setForgotSuccessMsg(null);
-                  }}
-                  className="text-[11px] font-semibold text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
-                >
-                  Forgot password?
-                </button>
+          <div className="space-y-4 text-xs animate-in fade-in duration-150">
+            <form onSubmit={handleLoginSubmit} className="space-y-4">
+              <div>
+                <h3 className="font-extrabold text-sm text-white">
+                  {selectedRole === 'customer' ? 'Customer Sign In' : 'Technician Workshop Sign In'}
+                </h3>
+                <p className="text-[11px] text-slate-400">
+                  {selectedRole === 'customer'
+                    ? 'Log in to track repairs, approve quotes & view warranty passports'
+                    : 'Log in to manage your workshop workbench & payouts'}
+                </p>
               </div>
-              <div className="relative">
-                <input
-                  type={showLoginPassword ? 'text' : 'password'}
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  className="w-full p-2.5 pr-10 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowLoginPassword(!showLoginPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
-                >
-                  {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
 
-            {selectedRole === 'customer' && (
-              <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={loginIsBorrowed}
-                    onChange={(e) => setLoginIsBorrowed(e.target.checked)}
-                    className="rounded text-blue-600 bg-slate-900 border-slate-700"
-                  />
-                  <span className="text-xs">
-                    Borrowed Device Protection (temporary emergency session with quick wipe)
-                  </span>
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">
+                  {selectedRole === 'customer' ? 'Email Address or Phone' : 'Store Email or Phone'}
                 </label>
+                <input
+                  type="text"
+                  value={loginIdentifier}
+                  onChange={(e) => setLoginIdentifier(e.target.value)}
+                  required
+                  autoComplete="username"
+                  placeholder={
+                    selectedRole === 'customer'
+                      ? 'you@example.com or +234...'
+                      : 'yourshop@example.com or +234...'
+                  }
+                  className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className={`w-full py-3 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${
-                selectedRole === 'customer'
-                  ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/20'
-                  : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/20'
-              }`}
-            >
-              <span>{isLoading ? 'Authenticating...' : `Sign In as ${selectedRole === 'customer' ? 'Customer' : 'Technician'}`}</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-300">Password</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('forgot_password');
+                      setForgotStep('request');
+                      setErrorMsg(null);
+                      setForgotSuccessMsg(null);
+                    }}
+                    className="text-[11px] font-semibold text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type={showLoginPassword ? 'text' : 'password'}
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    required
+                    autoComplete="current-password"
+                    placeholder="••••••••"
+                    className="w-full p-2.5 pr-10 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowLoginPassword(!showLoginPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+                  >
+                    {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {selectedRole === 'customer' && (
+                <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={loginIsBorrowed}
+                      onChange={(e) => setLoginIsBorrowed(e.target.checked)}
+                      className="rounded text-blue-600 bg-slate-900 border-slate-700"
+                    />
+                    <span className="text-xs">
+                      Borrowed Device Protection (temporary emergency session with quick wipe)
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className={`w-full py-3 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${
+                  selectedRole === 'customer'
+                    ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/20'
+                    : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/20'
+                }`}
+              >
+                <span>{isLoading ? 'Authenticating...' : `Sign In as ${selectedRole === 'customer' ? 'Customer' : 'Technician'}`}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
 
             {/* Social Authentication */}
             <div className="pt-1">
@@ -623,7 +625,7 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
                 Don't have an account yet? Register here →
               </button>
             </div>
-          </form>
+          </div>
         )}
 
         {/* ======================= VIEW B: FORGOT PASSWORD FORM ======================= */}
@@ -742,8 +744,9 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
 
         {/* ======================= VIEW B: CUSTOMER REGISTER FORM ======================= */}
         {authMode === 'register' && selectedRole === 'customer' && (
-          <form onSubmit={handleCustomerRegisterSubmit} className="space-y-4 text-xs animate-in fade-in duration-150">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+          <div className="space-y-4 text-xs animate-in fade-in duration-150">
+            <form onSubmit={handleCustomerRegisterSubmit} className="space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <div>
                 <h3 className="font-extrabold text-sm text-white">Create Customer Account</h3>
                 <p className="text-[11px] text-slate-400">Join the trusted repair network</p>
@@ -952,38 +955,40 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
               <span>{isLoading ? 'Creating Account...' : 'Register Account & Request Repair'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
-
-            {/* Social Authentication */}
-            <div className="pt-1">
-              <div className="relative flex py-2 items-center">
-                <div className="flex-grow border-t border-slate-700/80"></div>
-                <span className="flex-shrink mx-3 text-slate-400 text-[10px] uppercase font-bold tracking-wider">Or register with</span>
-                <div className="flex-grow border-t border-slate-700/80"></div>
-              </div>
-              <SocialLoginButtons
-                role={selectedRole}
-                onSuccess={handleSocialSuccess}
-                onError={(msg) => setErrorMsg(msg)}
-                disabled={isLoading}
-              />
-            </div>
-
-            <div className="text-center pt-2">
-              <button
-                type="button"
-                onClick={() => setAuthMode('login')}
-                className="text-slate-400 hover:text-white text-xs underline cursor-pointer"
-              >
-                Already have an account? Sign in here →
-              </button>
-            </div>
           </form>
-        )}
+
+          {/* Social Authentication */}
+          <div className="pt-1">
+            <div className="relative flex py-2 items-center">
+              <div className="flex-grow border-t border-slate-700/80"></div>
+              <span className="flex-shrink mx-3 text-slate-400 text-[10px] uppercase font-bold tracking-wider">Or register with</span>
+              <div className="flex-grow border-t border-slate-700/80"></div>
+            </div>
+            <SocialLoginButtons
+              role={selectedRole}
+              onSuccess={handleSocialSuccess}
+              onError={(msg) => setErrorMsg(msg)}
+              disabled={isLoading}
+            />
+          </div>
+
+          <div className="text-center pt-2">
+            <button
+              type="button"
+              onClick={() => setAuthMode('login')}
+              className="text-slate-400 hover:text-white text-xs underline cursor-pointer"
+            >
+              Already have an account? Sign in here →
+            </button>
+          </div>
+        </div>
+      )}
 
         {/* ======================= VIEW C: TECHNICIAN REGISTER FORM ======================= */}
         {authMode === 'register' && selectedRole === 'technician' && (
-          <form onSubmit={handleTechnicianRegisterSubmit} className="space-y-4 text-xs animate-in fade-in duration-150">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+          <div className="space-y-4 text-xs animate-in fade-in duration-150">
+            <form onSubmit={handleTechnicianRegisterSubmit} className="space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <div>
                 <h3 className="font-extrabold text-sm text-white">Register Repair Workshop / Store</h3>
                 <p className="text-[11px] text-slate-400">Join verified technicians in Port Harcourt & Rivers State</p>
@@ -1231,33 +1236,34 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
               <span>{isLoading ? 'Registering Store...' : 'Register Workshop & Configure Store Wizard'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
-
-            {/* Social Authentication */}
-            <div className="pt-1">
-              <div className="relative flex py-2 items-center">
-                <div className="flex-grow border-t border-slate-700/80"></div>
-                <span className="flex-shrink mx-3 text-slate-400 text-[10px] uppercase font-bold tracking-wider">Or register with</span>
-                <div className="flex-grow border-t border-slate-700/80"></div>
-              </div>
-              <SocialLoginButtons
-                role={selectedRole}
-                onSuccess={handleSocialSuccess}
-                onError={(msg) => setErrorMsg(msg)}
-                disabled={isLoading}
-              />
-            </div>
-
-            <div className="text-center pt-2">
-              <button
-                type="button"
-                onClick={() => setAuthMode('login')}
-                className="text-slate-400 hover:text-white text-xs underline cursor-pointer"
-              >
-                Already have a technician account? Sign in here →
-              </button>
-            </div>
           </form>
-        )}
+
+          {/* Social Authentication */}
+          <div className="pt-1">
+            <div className="relative flex py-2 items-center">
+              <div className="flex-grow border-t border-slate-700/80"></div>
+              <span className="flex-shrink mx-3 text-slate-400 text-[10px] uppercase font-bold tracking-wider">Or register with</span>
+              <div className="flex-grow border-t border-slate-700/80"></div>
+            </div>
+            <SocialLoginButtons
+              role={selectedRole}
+              onSuccess={handleSocialSuccess}
+              onError={(msg) => setErrorMsg(msg)}
+              disabled={isLoading}
+            />
+          </div>
+
+          <div className="text-center pt-2">
+            <button
+              type="button"
+              onClick={() => setAuthMode('login')}
+              className="text-slate-400 hover:text-white text-xs underline cursor-pointer"
+            >
+              Already have a technician account? Sign in here →
+            </button>
+          </div>
+        </div>
+      )}
       </div>
 
       {/* Trust Badges Footer */}
