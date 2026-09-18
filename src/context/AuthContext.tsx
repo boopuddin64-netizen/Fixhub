@@ -14,7 +14,6 @@ interface AuthContextType {
   registerCustomer: (data: RegisterCustomerInput) => Promise<void>;
   registerTechnician: (data: RegisterTechnicianInput) => Promise<void>;
   socialLogin: (provider: 'google', token: string, role: 'customer' | 'technician') => Promise<AuthResponse>;
-  googleDirectLogin: (email: string, name?: string, role?: 'customer' | 'technician') => Promise<AuthResponse>;
   logout: () => void;
   switchRole: (role: 'customer' | 'technician') => Promise<void>;
   switchDemoUser: (email: string) => Promise<void>;
@@ -126,26 +125,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const googleDirectLogin = async (
-    email: string,
-    name?: string,
-    role: 'customer' | 'technician' = 'customer'
-  ) => {
-    setIsLoading(true);
-    try {
-      const data = await ApiClient.googleDirectLogin(email, name, role);
-      ApiClient.setToken(data.token);
-      ApiClient.setBorrowedDevice(false);
-      setUser(data.user);
-      setCustomerProfile(data.customerProfile || null);
-      setTechnicianProfile(data.technicianProfile || null);
-      setIsBorrowedDevice(false);
-      return data;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const logout = () => {
     ApiClient.removeToken();
     setUser(null);
@@ -199,7 +178,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         registerCustomer,
         registerTechnician,
         socialLogin,
-        googleDirectLogin,
         logout,
         switchRole,
         switchDemoUser,

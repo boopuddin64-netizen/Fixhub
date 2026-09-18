@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { db } from '../db';
 import { User, UserRole, CustomerProfile, TechnicianProfile } from '../../src/types/index';
 import { sendSms } from './smsService';
@@ -16,22 +17,32 @@ export interface AuthSession {
 export class AuthService {
   public static generateToken(user: User, isBorrowedDevice = false): string {
     const expiresIn = isBorrowedDevice ? '2h' : '30d'; // Shorter expiry on borrowed devices
+    const sessionVersion = (user as any).sessionVersion || 1;
     return jwt.sign(
       {
         id: user.id,
         email: user.email,
         role: user.role,
         isBorrowedDevice,
+        sessionVersion,
       },
       JWT_SECRET,
-      { expiresIn }
+      { algorithm: 'HS256', expiresIn }
     );
   }
 
-  public static verifyToken(token: string): { id: string; email: string; role: UserRole; isBorrowedDevice?: boolean } | null {
+  public static verifyToken(token: string): { id: string; email: string; role: UserRole; isBorrowedDevice?: boolean; sessionVersion?: number } | null {
+    if (!token || typeof token !== 'string') return null;
     if (this.isTokenRevoked(token)) return null;
     try {
-      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as any;
+      if (!decoded || !decoded.id) return null;
+      const user = db.users.find((u) => u.id === decoded.id);
+      if (!user) return null;
+      const userSessionVersion = (user as any).sessionVersion || 1;
+      if (decoded.sessionVersion !== undefined && decoded.sessionVersion < userSessionVersion) {
+        return null;
+      }
       return decoded;
     } catch {
       return null;
@@ -54,13 +65,13 @@ export class AuthService {
   public static async requestPasswordReset(emailOrPhone: string): Promise<{ success: boolean; message: string }> {
     const clean = emailOrPhone.trim().toLowerCase();
     const user = db.users.find(
-      (u) => u.email.toLowerCase() === clean || u.phone.replace(/\s+/g, '') === clean.replace(/\s+/g, '')
+      (u) => u.email.toLowerCase() === clean || (u.phone && u.phone.replace(/\s+/g, '') === clean.replace(/\s+/g, ''))
     );
     if (!user) {
       return { success: true, message: 'If an account exists with this credential, a password reset code has been sent.' };
     }
 
-    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const resetCode = crypto.randomInt(100000, 1000000).toString();
     this.resetTokens.set(resetCode, {
       userId: user.id,
       expiresAt: Date.now() + 15 * 60 * 1000,
@@ -94,17 +105,52 @@ export class AuthService {
     }
 
     user.passwordHash = bcrypt.hashSync(newPassword, 8);
+    (user as any).sessionVersion = ((user as any).sessionVersion || 1) + 1;
     this.resetTokens.delete(code);
     db.save();
 
     return { success: true };
   }
 
+  public static changePassword(
+    userId: string,
+    currentPassword: string | undefined,
+    newPassword: string
+  ): { success: boolean; message?: string; error?: string } {
+    const user = db.users.find((u) => u.id === userId);
+    if (!user) {
+      return { success: false, error: 'User account not found.' };
+    }
+
+    if (user.passwordHash && user.passwordHash.length > 0) {
+      if (!currentPassword) {
+        return { success: false, error: 'Current password is required to update your password.' };
+      }
+      const isMatch = bcrypt.compareSync(currentPassword, user.passwordHash);
+      if (!isMatch) {
+        return { success: false, error: 'The current password you entered is incorrect.' };
+      }
+    }
+
+    if (!newPassword || newPassword.length < 8 || !/\d/.test(newPassword)) {
+      return {
+        success: false,
+        error: 'New password must be at least 8 characters long and contain at least one number.',
+      };
+    }
+
+    user.passwordHash = bcrypt.hashSync(newPassword, 8);
+    (user as any).sessionVersion = ((user as any).sessionVersion || 1) + 1;
+    db.save();
+
+    return { success: true, message: 'Password updated successfully.' };
+  }
+
   public static async requestEmailVerification(userId: string): Promise<{ success: boolean; message: string }> {
     const user = db.users.find((u) => u.id === userId);
     if (!user) return { success: false, message: 'User not found.' };
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const code = crypto.randomInt(100000, 1000000).toString();
     this.emailVerifyTokens.set(code, {
       userId: user.id,
       email: user.email,
@@ -138,10 +184,10 @@ export class AuthService {
   public static async requestPhoneVerification(phoneOrUserId: string, authenticatedUserId?: string): Promise<{ success: boolean; message: string }> {
     const clean = phoneOrUserId.trim();
     const user = (authenticatedUserId ? db.users.find((u) => u.id === authenticatedUserId) : null) ||
-      db.users.find((u) => u.id === clean || u.phone.replace(/\s+/g, '') === clean.replace(/\s+/g, ''));
+      db.users.find((u) => u.id === clean || (u.phone && u.phone.replace(/\s+/g, '') === clean.replace(/\s+/g, '')));
     const targetPhone = user?.phone ? user.phone : clean;
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const code = crypto.randomInt(100000, 1000000).toString();
     const phoneKey = targetPhone.replace(/\s+/g, '');
     const userKey = user ? user.id : phoneKey;
 
@@ -231,9 +277,40 @@ export class AuthService {
         savedLocations: [],
         totalRepairsCount: 0,
         activeRepairsCount: 0,
+        defaultLocation: {
+          lat: 4.8156,
+          lng: 7.0498,
+          address: '',
+          landmark: '',
+          city: 'Port Harcourt',
+          state: 'Rivers State',
+        },
+        notificationPreferences: {
+          repairUpdates: true,
+          paymentUpdates: true,
+          promotional: false,
+        },
       };
       db.customerProfiles.push(profile);
       db.save();
+    } else {
+      if (!profile.defaultLocation) {
+        profile.defaultLocation = {
+          lat: 4.8156,
+          lng: 7.0498,
+          address: '',
+          landmark: '',
+          city: 'Port Harcourt',
+          state: 'Rivers State',
+        };
+      }
+      if (!profile.notificationPreferences) {
+        profile.notificationPreferences = {
+          repairUpdates: true,
+          paymentUpdates: true,
+          promotional: false,
+        };
+      }
     }
     return profile;
   }
@@ -604,7 +681,7 @@ export class AuthService {
   public static async socialLogin(params: {
     provider: 'google';
     token: string;
-    role: UserRole;
+    role?: UserRole;
   }): Promise<{
     success: boolean;
     token?: string;
@@ -613,7 +690,7 @@ export class AuthService {
     technicianProfile?: any;
     error?: string;
   }> {
-    const { provider, token, role } = params;
+    const { provider, token, role = 'customer' } = params;
     if (!token || !token.trim()) {
       return { success: false, error: 'OAuth token is required.' };
     }
@@ -631,59 +708,37 @@ export class AuthService {
         let payload: any = null;
 
         if (isJwt) {
-          let decodedPayload: any = null;
-          try {
-            const raw = cleanToken.split('.')[1];
-            decodedPayload = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
-          } catch {
-            // Ignore parse errors, let tokeninfo handle it
-          }
-
           try {
             const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(cleanToken)}`, {
-              signal: AbortSignal.timeout(4000),
+              signal: AbortSignal.timeout(5000),
             });
             if (res.ok) {
               payload = (await res.json()) as any;
             } else {
               const errData = (await res.json().catch(() => ({}))) as any;
-              // If tokeninfo returned a clear error (e.g. invalid signature), reject
-              if (errData?.error === 'invalid_token' || errData?.error_description?.includes('Invalid')) {
-                return { success: false, error: errData?.error_description || 'Invalid or expired Google token.' };
-              }
+              return { success: false, error: errData?.error_description || 'Invalid or expired Google token.' };
             }
           } catch (fetchErr: any) {
-            // Network timeout or network error with tokeninfo
-            if (!decodedPayload?.email) {
-              return { success: false, error: `Google verification network error: ${fetchErr.message}` };
-            }
-          }
-
-          // Fallback to validated decoded payload if tokeninfo timed out but payload signature claims are sound
-          if (!payload && decodedPayload?.email) {
-            const nowSec = Math.floor(Date.now() / 1000);
-            if (decodedPayload.exp && decodedPayload.exp < nowSec) {
-              return { success: false, error: 'Google ID token has expired.' };
-            }
-            payload = decodedPayload;
+            return { success: false, error: `Google verification network error: ${fetchErr.message}` };
           }
 
           if (!payload) {
             return { success: false, error: 'Failed to verify Google token.' };
           }
 
-          if (payload.aud !== clientId && !process.env.SKIP_AUD_CHECK) {
+          const isDev = process.env.NODE_ENV !== 'production';
+          if (payload.aud !== clientId && !(isDev && process.env.SKIP_AUD_CHECK)) {
             return { success: false, error: 'Google token audience mismatch.' };
           }
         } else {
-          // OAuth 2.0 Access Token verification - fast parallel requests with 3.5s timeout
+          // OAuth 2.0 Access Token verification
           const [tokenInfoRes, userInfoRes] = await Promise.all([
             fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(cleanToken)}`, {
-              signal: AbortSignal.timeout(3500),
+              signal: AbortSignal.timeout(4000),
             }).catch(() => null),
             fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
               headers: { Authorization: `Bearer ${cleanToken}` },
-              signal: AbortSignal.timeout(3500),
+              signal: AbortSignal.timeout(4000),
             }).catch(() => null),
           ]);
 
@@ -693,7 +748,8 @@ export class AuthService {
           }
 
           const tokenInfo = tokenInfoRes && tokenInfoRes.ok ? ((await tokenInfoRes.json()) as any) : null;
-          if (tokenInfo && tokenInfo.aud !== clientId && tokenInfo.azp !== clientId && !process.env.SKIP_AUD_CHECK) {
+          const isDev = process.env.NODE_ENV !== 'production';
+          if (tokenInfo && tokenInfo.aud !== clientId && tokenInfo.azp !== clientId && !(isDev && process.env.SKIP_AUD_CHECK)) {
             return { success: false, error: 'Google token audience mismatch.' };
           }
 
@@ -729,107 +785,23 @@ export class AuthService {
       if (!user.authProvider || user.authProvider === 'local') {
         user.authProvider = provider;
       }
-      if (role && (role === 'technician' || role === 'customer')) {
-        user.role = role;
-      }
+      // Preserve existing user role if already registered
       db.save();
     } else {
+      const targetRole = role === 'technician' ? 'technician' : 'customer';
       const userId = `usr_social_${Date.now()}`;
       user = {
         id: userId,
         email: cleanEmail,
         phone: '',
         name: verifiedIdentity.name || cleanEmail.split('@')[0],
-        role,
+        role: targetRole,
         avatarUrl: verifiedIdentity.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(verifiedIdentity.name || cleanEmail)}`,
         createdAt: new Date().toISOString(),
         emailVerified: true,
         emailVerifiedAt: new Date().toISOString(),
         phoneVerified: false,
         authProvider: provider,
-      } as any;
-      db.users.push(user as any);
-      db.save();
-    }
-
-    if (user.role === 'technician') {
-      this.ensureTechnicianProfile(user);
-    } else if (user.role === 'customer') {
-      this.ensureCustomerProfile(user);
-    }
-
-    const sessionToken = this.generateToken(user as any);
-    const safeUser: User = {
-      id: user.id,
-      email: user.email,
-      phone: user.phone,
-      name: user.name,
-      role: user.role,
-      avatarUrl: user.avatarUrl,
-      createdAt: user.createdAt,
-      phoneVerified: Boolean(user.phoneVerified),
-      phoneVerifiedAt: user.phoneVerifiedAt,
-      emailVerified: Boolean(user.emailVerified),
-      emailVerifiedAt: user.emailVerifiedAt,
-      authProvider: user.authProvider,
-    };
-
-    const customerProfile = db.customerProfiles.find((c) => c.userId === user.id) || null;
-    const technicianProfile = db.technicianProfiles.find((t) => t.userId === user.id || (t as any).id === user.id) || null;
-
-    return {
-      success: true,
-      token: sessionToken,
-      user: safeUser,
-      customerProfile: customerProfile || undefined,
-      technicianProfile: technicianProfile || undefined,
-    };
-  }
-
-  public static async googleDirectLogin(params: {
-    email: string;
-    name?: string;
-    role: UserRole;
-  }): Promise<{
-    success: boolean;
-    token?: string;
-    user?: User;
-    customerProfile?: any;
-    technicianProfile?: any;
-    error?: string;
-  }> {
-    const { email, name, role } = params;
-    if (!email || !email.includes('@')) {
-      return { success: false, error: 'Valid Google email address is required.' };
-    }
-
-    const cleanEmail = email.toLowerCase().trim();
-    let user = db.users.find((u) => u.email.toLowerCase() === cleanEmail);
-
-    if (user) {
-      user.emailVerified = true;
-      user.emailVerifiedAt = user.emailVerifiedAt || new Date().toISOString();
-      if (!user.authProvider || user.authProvider === 'local') {
-        user.authProvider = 'google';
-      }
-      if (role && (role === 'technician' || role === 'customer')) {
-        user.role = role;
-      }
-      db.save();
-    } else {
-      const userId = `usr_google_${Date.now()}`;
-      user = {
-        id: userId,
-        email: cleanEmail,
-        phone: '',
-        name: name || cleanEmail.split('@')[0],
-        role: role || 'customer',
-        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name || cleanEmail)}`,
-        createdAt: new Date().toISOString(),
-        emailVerified: true,
-        emailVerifiedAt: new Date().toISOString(),
-        phoneVerified: false,
-        authProvider: 'google',
       } as any;
       db.users.push(user as any);
       db.save();

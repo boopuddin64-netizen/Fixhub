@@ -106,13 +106,6 @@ export class ApiClient {
     });
   }
 
-  public static googleDirectLogin(email: string, name?: string, role: 'customer' | 'technician' = 'customer') {
-    return this.request<AuthResponse>('/auth/google-direct-login', {
-      method: 'POST',
-      body: JSON.stringify({ email, name, role }),
-    });
-  }
-
   public static switchRole(role: 'customer' | 'technician') {
     return this.request<AuthResponse>('/auth/switch-role', {
       method: 'POST',
@@ -159,6 +152,23 @@ export class ApiClient {
     return this.request<any>('/auth/reset-password', {
       method: 'POST',
       body: JSON.stringify({ code, newPassword }),
+    });
+  }
+
+  public static changePassword(data: { currentPassword?: string; newPassword: string }) {
+    return this.request<{ success: boolean; message: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public static exportAccountData() {
+    return this.request<any>('/account/export-data');
+  }
+
+  public static deleteAccount() {
+    return this.request<{ success: boolean; message: string }>('/account/me', {
+      method: 'DELETE',
     });
   }
 

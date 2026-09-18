@@ -214,7 +214,19 @@ export function getInitialSeedData(): SeedDataResult {
           state: 'Lagos State',
         },
       ],
-      defaultLocation: undefined,
+      defaultLocation: {
+        lat: 6.4281,
+        lng: 3.4219,
+        address: 'Plot 12 Adetokunbo Ademola Street, Victoria Island',
+        landmark: 'Near Eko Hotel',
+        city: 'Lagos',
+        state: 'Lagos State',
+      },
+      notificationPreferences: {
+        repairUpdates: true,
+        paymentUpdates: true,
+        promotional: false,
+      },
     },
     {
       userId: 'usr_customer_2',
@@ -231,6 +243,19 @@ export function getInitialSeedData(): SeedDataResult {
           state: 'Lagos State',
         },
       ],
+      defaultLocation: {
+        lat: 6.5158,
+        lng: 3.3718,
+        address: 'Commercial Avenue, Sabo Yaba',
+        landmark: 'Close to E-Center',
+        city: 'Lagos',
+        state: 'Lagos State',
+      },
+      notificationPreferences: {
+        repairUpdates: true,
+        paymentUpdates: true,
+        promotional: false,
+      },
     },
   ];
 

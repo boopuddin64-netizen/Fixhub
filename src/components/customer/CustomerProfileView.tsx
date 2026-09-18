@@ -4,15 +4,12 @@ import { ApiClient } from '../../api/client';
 import {
   User,
   ShieldCheck,
-  MapPin,
   Smartphone,
   LogOut,
   AlertTriangle,
   ChevronRight,
-  Sparkles,
   Lock,
   Edit2,
-  Bell,
   Star,
   HelpCircle,
   X,
@@ -20,9 +17,12 @@ import {
   Loader2,
   Phone,
   Mail,
-  FileText,
-  Clock,
-  Wrench
+  Download,
+  Trash2,
+  KeyRound,
+  ShieldAlert,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 interface CustomerProfileViewProps {
@@ -38,7 +38,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
 
   // Modals & Drawers
   const [showEditProfile, setShowEditProfile] = useState<boolean>(false);
-  const [showNotifications, setShowNotifications] = useState<boolean>(false);
+  const [showAccountSecurity, setShowAccountSecurity] = useState<boolean>(false);
   const [showReviews, setShowReviews] = useState<boolean>(false);
   const [showHelp, setShowHelp] = useState<boolean>(false);
 
@@ -53,20 +53,22 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
   const [savingProfile, setSavingProfile] = useState<boolean>(false);
   const [profileMsg, setProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Notification Preferences State
-  const [notifError, setNotifError] = useState<string | null>(null);
-  const [repairUpdatesNotif, setRepairUpdatesNotif] = useState<boolean>(
-    customerProfile?.notificationPreferences?.repairUpdates ?? true
-  );
-  const [paymentUpdatesNotif, setPaymentUpdatesNotif] = useState<boolean>(
-    customerProfile?.notificationPreferences?.paymentUpdates ?? true
-  );
-  const [promotionalNotif, setPromotionalNotif] = useState<boolean>(
-    customerProfile?.notificationPreferences?.promotional ?? false
-  );
-  const [savingNotifs, setSavingNotifs] = useState<boolean>(false);
+  // Account & Security State
+  const [currentPassword, setCurrentPassword] = useState<string>('');
+  const [newPassword, setNewPassword] = useState<string>('');
+  const [confirmPassword, setConfirmPassword] = useState<string>('');
+  const [savingPassword, setSavingPassword] = useState<boolean>(false);
+  const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [exportingData, setExportingData] = useState<boolean>(false);
+  const [copiedId, setCopiedId] = useState<boolean>(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
+  const [deletingAccount, setDeletingAccount] = useState<boolean>(false);
 
-  // My Reviews
+  // Email/Phone verification in Security Modal
+  const [emailVerifying, setEmailVerifying] = useState<boolean>(false);
+  const [emailVerifyMsg, setEmailVerifyMsg] = useState<string | null>(null);
+
+  // My Reviews State
   const [myReviews, setMyReviews] = useState<any[]>([]);
   const [loadingReviews, setLoadingReviews] = useState<boolean>(false);
 
@@ -81,9 +83,6 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
       setLandmark(customerProfile.defaultLocation?.landmark || '');
       setCity(customerProfile.defaultLocation?.city || 'Port Harcourt');
       setState(customerProfile.defaultLocation?.state || 'Rivers State');
-      setRepairUpdatesNotif(customerProfile.notificationPreferences?.repairUpdates ?? true);
-      setPaymentUpdatesNotif(customerProfile.notificationPreferences?.paymentUpdates ?? true);
-      setPromotionalNotif(customerProfile.notificationPreferences?.promotional ?? false);
     }
   }, [user, customerProfile]);
 
@@ -136,38 +135,109 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
     }
   };
 
-  const handleSaveNotifications = async () => {
-    setSavingNotifs(true);
-    setNotifError(null);
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordMsg(null);
+
+    if (newPassword.length < 8) {
+      setPasswordMsg({ type: 'error', text: 'New password must be at least 8 characters.' });
+      return;
+    }
+    if (!/\d/.test(newPassword)) {
+      setPasswordMsg({ type: 'error', text: 'New password must contain at least one number.' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMsg({ type: 'error', text: 'New passwords do not match.' });
+      return;
+    }
+
+    setSavingPassword(true);
     try {
-      await ApiClient.updateCustomerProfile({
-        notificationPreferences: {
-          repairUpdates: repairUpdatesNotif,
-          paymentUpdates: paymentUpdatesNotif,
-          promotional: promotionalNotif,
-        },
+      const res = await ApiClient.changePassword({
+        currentPassword: currentPassword || undefined,
+        newPassword,
       });
-      if (refreshAuth) await refreshAuth();
-      setShowNotifications(false);
+
+      setPasswordMsg({ type: 'success', text: res.message || 'Password changed successfully!' });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => {
+        setPasswordMsg(null);
+      }, 3000);
     } catch (err: any) {
-      setNotifError(err.message || 'Failed to update notification settings');
+      setPasswordMsg({ type: 'error', text: err.message || 'Failed to update password' });
     } finally {
-      setSavingNotifs(false);
+      setSavingPassword(false);
+    }
+  };
+
+  const handleExportData = async () => {
+    setExportingData(true);
+    try {
+      const data = await ApiClient.exportAccountData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fixhub-account-data-${user?.id || 'export'}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert('Failed to export account data: ' + (err.message || 'Unknown error'));
+    } finally {
+      setExportingData(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeletingAccount(true);
+    try {
+      await ApiClient.deleteAccount();
+      logout();
+    } catch (err: any) {
+      alert('Failed to delete account: ' + (err.message || 'Please contact support'));
+      setDeletingAccount(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  const handleSendEmailVerification = async () => {
+    setEmailVerifying(true);
+    setEmailVerifyMsg(null);
+    try {
+      const res = await ApiClient.requestEmailVerification();
+      setEmailVerifyMsg(res.message || 'Verification link sent to your email.');
+    } catch (err: any) {
+      setEmailVerifyMsg(err.message || 'Failed to send verification email.');
+    } finally {
+      setEmailVerifying(false);
+    }
+  };
+
+  const handleCopyId = () => {
+    if (user?.id) {
+      navigator.clipboard?.writeText(user.id);
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 2000);
     }
   };
 
   return (
     <div id="customer-profile-view" className="space-y-6 pb-8">
-      {/* Profile Header */}
-      <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-xl flex items-center justify-between gap-4">
+      {/* Profile Header & Card */}
+      <div id="profile-card" className="bg-slate-900 text-white p-6 rounded-2xl shadow-xl flex items-center justify-between gap-4">
         <div className="flex items-center gap-4 min-w-0">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center font-extrabold text-2xl text-white shadow-md shrink-0">
             {user?.name?.charAt(0) || 'U'}
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="text-xl font-black text-white truncate">{user?.name}</h2>
+            <h2 className="text-xl font-black text-white truncate">{user?.name || 'Customer'}</h2>
             <p className="text-xs text-slate-400 truncate">{user?.email}</p>
-            <p className="text-xs text-cyan-300 mt-0.5">{user?.phone}</p>
+            <p className="text-xs text-cyan-300 mt-0.5">{user?.phone || 'No phone set'}</p>
           </div>
         </div>
         <button
@@ -180,9 +250,9 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
         </button>
       </div>
 
-      {/* Borrowed Phone Notice */}
+      {/* Borrowed Phone Notice (Conditional) */}
       {isBorrowedDevice && (
-        <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-2">
+        <div id="borrowed-phone-protection-banner" className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-2">
           <div className="flex items-center gap-2 font-bold text-xs text-amber-900">
             <AlertTriangle className="w-4 h-4 text-amber-600" />
             <span>Borrowed Phone Protection Active</span>
@@ -199,109 +269,121 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
         </div>
       )}
 
-      {/* Quick Navigation Items */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs divide-y divide-slate-100">
-        {onOpenDevicesManager && (
+      {/* SECTION 1: MY FIXHUB */}
+      <div className="space-y-2">
+        <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 px-1">
+          MY FIXHUB
+        </h3>
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs divide-y divide-slate-100">
+          {onOpenDevicesManager && (
+            <button
+              id="profile-my-devices-btn"
+              onClick={onOpenDevicesManager}
+              className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center shrink-0">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-900">My Saved Devices</p>
+                  <p className="text-xs text-slate-500">Manage registered phones, colors & storage</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+            </button>
+          )}
+
           <button
-            id="profile-my-devices-btn"
-            onClick={onOpenDevicesManager}
+            id="profile-warranties-btn"
+            onClick={onViewWarranties}
             className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left cursor-pointer"
           >
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center">
-                <Smartphone className="w-5 h-5" />
+              <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-sm font-bold text-slate-900">My Saved Devices</p>
-                <p className="text-xs text-slate-500">Manage registered phones, colors, and storage</p>
+                <p className="text-sm font-bold text-slate-900">Repair Passport & Warranties</p>
+                <p className="text-xs text-slate-500">View coverage and service records</p>
               </div>
             </div>
-            <ChevronRight className="w-4 h-4 text-slate-400" />
+            <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
           </button>
-        )}
 
-        <button
-          onClick={onViewWarranties}
-          className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left cursor-pointer"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-              <ShieldCheck className="w-5 h-5" />
+          <button
+            id="profile-my-reviews-btn"
+            onClick={handleOpenReviews}
+            className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                <Star className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-900">My Reviews</p>
+                <p className="text-xs text-slate-500">View ratings and comments for completed repairs</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-bold text-slate-900">Digital Repair Passport & Warranties</p>
-              <p className="text-xs text-slate-500">View active coverage and authentic parts log</p>
-            </div>
-          </div>
-          <ChevronRight className="w-4 h-4 text-slate-400" />
-        </button>
-
-        <button
-          onClick={handleOpenReviews}
-          className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left cursor-pointer"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-              <Star className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-slate-900">My Submitted Reviews</p>
-              <p className="text-xs text-slate-500">View ratings and comments for completed repairs</p>
-            </div>
-          </div>
-          <ChevronRight className="w-4 h-4 text-slate-400" />
-        </button>
-
-        <button
-          onClick={() => setShowNotifications(true)}
-          className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left cursor-pointer"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
-              <Bell className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-slate-900">Notification Preferences</p>
-              <p className="text-xs text-slate-500">Configure repair, payment, and promotional alerts</p>
-            </div>
-          </div>
-          <ChevronRight className="w-4 h-4 text-slate-400" />
-        </button>
-
-        <button
-          onClick={() => setShowHelp(true)}
-          className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left cursor-pointer"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <HelpCircle className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-slate-900">Help & Support Center</p>
-              <p className="text-xs text-slate-500">Payment security rules, pickup codes & FAQs</p>
-            </div>
-          </div>
-          <ChevronRight className="w-4 h-4 text-slate-400" />
-        </button>
-
-        <div className="p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center">
-              <MapPin className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-slate-900">Default Service Location</p>
-              <p className="text-xs text-slate-500">
-                {customerProfile?.defaultLocation?.address || 'Aba Road, Garrison'}, {customerProfile?.defaultLocation?.city || 'Port Harcourt'}
-              </p>
-            </div>
-          </div>
+            <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+          </button>
         </div>
       </div>
 
-      {/* Logout Action */}
+      {/* SECTION 2: ACCOUNT & SECURITY */}
+      <div className="space-y-2">
+        <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 px-1">
+          ACCOUNT & SECURITY
+        </h3>
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+          <button
+            id="profile-account-security-btn"
+            onClick={() => setShowAccountSecurity(true)}
+            className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-900">Account & Security</p>
+                <p className="text-xs text-slate-500">Password & verified account details</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+          </button>
+        </div>
+      </div>
+
+      {/* SECTION 3: SUPPORT */}
+      <div className="space-y-2">
+        <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 px-1">
+          SUPPORT
+        </h3>
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+          <button
+            id="profile-help-support-btn"
+            onClick={() => setShowHelp(true)}
+            className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <HelpCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-900">Help & Support</p>
+                <p className="text-xs text-slate-500">Payment, repair, warranty & FAQs</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+          </button>
+        </div>
+      </div>
+
+      {/* Final Action: Log Out */}
       <div className="pt-2">
         <button
+          id="profile-logout-btn"
           onClick={logout}
           className="w-full py-3.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
         >
@@ -310,7 +392,9 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
         </button>
       </div>
 
-      {/* Edit Profile Modal */}
+      {/* ================= MODALS & DRAWERS ================= */}
+
+      {/* 1. Edit Profile Modal */}
       {showEditProfile && (
         <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden my-6">
@@ -465,101 +549,248 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
         </div>
       )}
 
-      {/* Notification Preferences Modal */}
-      {showNotifications && (
+      {/* 2. Account & Security Modal */}
+      {showAccountSecurity && (
         <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden my-6">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden my-6">
             <div className="bg-slate-950 text-white p-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-purple-600/30 border border-purple-500/40 flex items-center justify-center text-purple-300">
-                  <Bell className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-xl bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-indigo-300">
+                  <Lock className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-white">Notification Settings</h3>
-                  <p className="text-xs text-slate-400">Control alerts and service notifications</p>
+                  <h3 className="font-bold text-base text-white">Account & Security</h3>
+                  <p className="text-xs text-slate-400">Password & verified account details</p>
                 </div>
               </div>
               <button
-                onClick={() => setShowNotifications(false)}
+                onClick={() => setShowAccountSecurity(false)}
                 className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
-              {notifError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold flex items-center justify-between gap-2">
-                  <span>{notifError}</span>
-                  <button onClick={() => setNotifError(null)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
+            <div className="p-5 space-y-6 max-h-[32rem] overflow-y-auto text-xs">
+              {/* Verified Account Details */}
+              <div className="space-y-3">
+                <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                  <span>Verified Credentials</span>
+                </h4>
 
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-bold text-slate-900">Repair Status Alerts</p>
-                    <p className="text-[11px] text-slate-500">Quotes, drop-off, diagnosis & pickup readiness</p>
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                  {/* Email row */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-bold text-slate-500">Email Address</p>
+                      <p className="text-xs font-bold text-slate-900 truncate">{user?.email}</p>
+                    </div>
+                    {user?.emailVerified ? (
+                      <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase tracking-wide flex items-center gap-1 shrink-0">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Verified
+                      </span>
+                    ) : (
+                      <button
+                        onClick={handleSendEmailVerification}
+                        disabled={emailVerifying}
+                        className="px-2.5 py-1 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-extrabold uppercase tracking-wide flex items-center gap-1 shrink-0 cursor-pointer"
+                      >
+                        {emailVerifying ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
+                        Verify Email
+                      </button>
+                    )}
                   </div>
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase tracking-wide">
-                    Transactional (Mandatory)
-                  </span>
-                </div>
+                  {emailVerifyMsg && (
+                    <p className="text-[11px] text-blue-600 bg-blue-50 p-2 rounded-lg">{emailVerifyMsg}</p>
+                  )}
 
-                <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-                  <div>
-                    <p className="text-xs font-bold text-slate-900">Payment & Order Alerts</p>
-                    <p className="text-[11px] text-slate-500">Payment confirmations & repair status updates</p>
+                  {/* Phone row */}
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200/80">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-bold text-slate-500">Phone Number</p>
+                      <p className="text-xs font-bold text-slate-900 truncate">{user?.phone || 'Not provided'}</p>
+                    </div>
+                    {user?.phoneVerified ? (
+                      <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase tracking-wide flex items-center gap-1 shrink-0">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Verified
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold uppercase tracking-wide shrink-0">
+                        Active
+                      </span>
+                    )}
                   </div>
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase tracking-wide">
-                    Transactional (Mandatory)
-                  </span>
-                </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-                  <div>
-                    <p className="text-xs font-bold text-slate-900">Promotional & Repeat Reminders</p>
-                    <p className="text-[11px] text-slate-500">Seasonal discount offers & maintenance tips</p>
+                  {/* Account ID row */}
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200/80">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-bold text-slate-500">Customer Identifier</p>
+                      <p className="text-[11px] font-mono font-semibold text-slate-700 truncate">{user?.id}</p>
+                    </div>
+                    <button
+                      onClick={handleCopyId}
+                      className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer shrink-0"
+                      title="Copy Customer ID"
+                    >
+                      {copiedId ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setPromotionalNotif(!promotionalNotif)}
-                    className={`w-11 h-6 rounded-full p-1 transition-colors cursor-pointer ${
-                      promotionalNotif ? 'bg-purple-600' : 'bg-slate-300'
-                    }`}
-                  >
-                    <div
-                      className={`w-4 h-4 rounded-full bg-white shadow-xs transition-transform ${
-                        promotionalNotif ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
                 </div>
               </div>
 
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button
-                  onClick={() => setShowNotifications(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveNotifications}
-                  disabled={savingNotifs}
-                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer"
-                >
-                  {savingNotifs ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                  <span>Save Settings</span>
-                </button>
+              {/* Password Management */}
+              <form onSubmit={handleChangePassword} className="space-y-3">
+                <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <KeyRound className="w-4 h-4 text-indigo-600" />
+                  <span>Update Password</span>
+                </h4>
+
+                {passwordMsg && (
+                  <div
+                    className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                      passwordMsg.type === 'success'
+                        ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                        : 'bg-rose-50 border border-rose-200 text-rose-800'
+                    }`}
+                  >
+                    {passwordMsg.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    )}
+                    <span>{passwordMsg.text}</span>
+                  </div>
+                )}
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                      Current Password (Optional if signed in via Google)
+                    </label>
+                    <input
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="Enter current password"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-xs text-slate-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                      New Password (min 8 chars, 1 number)
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Enter new strong password"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-xs text-slate-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                      Confirm New Password
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Re-enter new password"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-xs text-slate-900"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={savingPassword}
+                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {savingPassword ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4" />
+                    )}
+                    <span>Save New Password</span>
+                  </button>
+                </div>
+              </form>
+
+              {/* Data & Privacy (NDPR Compliance) */}
+              <div className="space-y-3 pt-2">
+                <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <ShieldAlert className="w-4 h-4 text-indigo-600" />
+                  <span>Privacy & NDPR Data Rights</span>
+                </h4>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">Export My Account Data</p>
+                      <p className="text-[11px] text-slate-500">Download complete repair, passport, and profile history (JSON)</p>
+                    </div>
+                    <button
+                      onClick={handleExportData}
+                      disabled={exportingData}
+                      className="px-3 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer"
+                    >
+                      {exportingData ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                      <span>Export</span>
+                    </button>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-200">
+                    {!showDeleteConfirm ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-bold text-rose-800">Delete Account & Erasure</p>
+                          <p className="text-[11px] text-slate-500">Permanently delete personal profile and revoke access</p>
+                        </div>
+                        <button
+                          onClick={() => setShowDeleteConfirm(true)}
+                          className="px-3 py-2 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shrink-0 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-2">
+                        <p className="text-xs font-bold text-rose-900">Are you absolutely sure?</p>
+                        <p className="text-[11px] text-rose-800 leading-relaxed">
+                          This will immediately delete your customer profile and revoke session access. This action cannot be undone.
+                        </p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            onClick={() => setShowDeleteConfirm(false)}
+                            className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleDeleteAccount}
+                            disabled={deletingAccount}
+                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1 cursor-pointer"
+                          >
+                            {deletingAccount ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                            <span>Yes, Delete Account</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Submitted Reviews Modal */}
+      {/* 3. My Reviews Modal */}
       {showReviews && (
         <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden my-6">
@@ -569,8 +800,8 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
                   <Star className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-white">My Submitted Reviews</h3>
-                  <p className="text-xs text-slate-400">Verified repair ratings & technician feedback</p>
+                  <h3 className="font-bold text-base text-white">My Reviews</h3>
+                  <p className="text-xs text-slate-400">View ratings and comments for completed repairs</p>
                 </div>
               </div>
               <button
@@ -626,7 +857,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
         </div>
       )}
 
-      {/* Help & Support Modal */}
+      {/* 4. Help & Support Modal */}
       {showHelp && (
         <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden my-6">
@@ -636,8 +867,8 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
                   <HelpCircle className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-white">Fixhub Help & Support</h3>
-                  <p className="text-xs text-slate-400">Everything you need to know about secure repairs</p>
+                  <h3 className="font-bold text-base text-white">Help & Support</h3>
+                  <p className="text-xs text-slate-400">Payment, repair, warranty & FAQs</p>
                 </div>
               </div>
               <button

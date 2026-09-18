@@ -303,26 +303,6 @@ apiRouter.post('/auth/social-login', authRateLimiter, async (req: Request, res: 
   return res.json(result);
 });
 
-apiRouter.post('/auth/google-direct-login', authRateLimiter, async (req: Request, res: Response) => {
-  const { email, name, role } = req.body;
-  if (!email || typeof email !== 'string' || !email.includes('@')) {
-    return res.status(400).json({ error: 'Valid Google email address is required.' });
-  }
-
-  const assignedRole: UserRole = role === 'technician' ? 'technician' : 'customer';
-  const result = await AuthService.googleDirectLogin({
-    email,
-    name,
-    role: assignedRole,
-  });
-
-  if (!result.success) {
-    return res.status(400).json({ error: result.error });
-  }
-
-  return res.json(result);
-});
-
 apiRouter.post('/auth/logout', requireAuth, (req: AuthenticatedRequest, res: Response) => {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -354,6 +334,25 @@ apiRouter.post('/auth/reset-password', authRateLimiter, (req: Request, res: Resp
   }
 
   return res.json({ success: true, message: 'Password reset successfully. You can now sign in with your new password.' });
+});
+
+apiRouter.post('/auth/change-password', requireAuth, authRateLimiter, (req: AuthenticatedRequest, res: Response) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!isNonEmptyString(newPassword)) {
+    return res.status(400).json({ error: 'New password is required.' });
+  }
+
+  const result = AuthService.changePassword(
+    req.user!.id,
+    currentPassword ? String(currentPassword) : undefined,
+    String(newPassword)
+  );
+
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+
+  return res.json({ success: true, message: result.message || 'Password changed successfully.' });
 });
 
 apiRouter.post('/auth/verify-email/request', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
@@ -475,10 +474,11 @@ apiRouter.delete('/account/me', requireAuth, (req: AuthenticatedRequest, res: Re
 
 apiRouter.put('/customer/profile', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
   const user = db.users.find((u) => u.id === req.user!.id);
-  const cust = db.customerProfiles.find((c) => c.userId === req.user!.id);
   if (!user) {
     return res.status(404).json({ error: 'Customer user record not found.' });
   }
+
+  const cust = AuthService.ensureCustomerProfile(user);
 
   const { name, phone, email, address, landmark, city, state, notificationPreferences } = req.body;
 
@@ -493,6 +493,16 @@ apiRouter.put('/customer/profile', requireAuth, requireRole(['customer']), (req:
   }
 
   if (cust) {
+    if (!cust.defaultLocation) {
+      cust.defaultLocation = {
+        lat: 4.8156,
+        lng: 7.0498,
+        address: '',
+        landmark: '',
+        city: 'Port Harcourt',
+        state: 'Rivers State',
+      };
+    }
     if (address !== undefined) cust.defaultLocation.address = sanitizeString(address, 200);
     if (landmark !== undefined) cust.defaultLocation.landmark = sanitizeString(landmark, 100);
     if (city !== undefined) cust.defaultLocation.city = sanitizeString(city, 80);
@@ -1984,7 +1994,7 @@ apiRouter.post('/payments/reconcile', requireAuth, requireRole(['admin']), async
   return res.json(result);
 });
 
-apiRouter.post('/payments/refund', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/payments/refund', requireAuth, requireRole(['admin']), async (req: AuthenticatedRequest, res: Response) => {
   const { paymentId, amountNaira, reason } = req.body;
   if (!paymentId || !reason) {
     return res.status(400).json({ error: 'Payment ID and Refund Reason are required.' });

@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* FixHub Touch, Zoom Prevention & Smooth Scrolling System */
+/* FixHub Mobile Viewport, Native Scrolling & Keyboard Zoom Prevention System */
 
 :root {
   -webkit-text-size-adjust: 100%;
@@ -13,8 +13,8 @@ html {
   min-height: 100dvh;
   width: 100%;
   overflow-x: hidden;
-  touch-action: pan-y pan-x;
-  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: auto;
   overscroll-behavior-x: none;
 }
 
@@ -23,28 +23,22 @@ body {
   min-height: 100dvh;
   width: 100%;
   overflow-x: hidden;
-  touch-action: pan-y pan-x;
+  -webkit-overflow-scrolling: touch;
   -webkit-tap-highlight-color: transparent;
-  overscroll-behavior-y: none;
+  overscroll-behavior-y: auto;
   overscroll-behavior-x: none;
 }
 
-/* 1. PREVENT FOCUS ZOOM ON MOBILE: Force 16px min font size for inputs on touch/mobile screens */
-@media screen and (max-width: 1024px) {
-  input[type="text"],
-  input[type="number"],
-  input[type="email"],
-  input[type="password"],
-  input[type="search"],
-  input[type="tel"],
-  input[type="url"],
+/* 1. PREVENT iOS FOCUS ZOOM & ZOOM-LOCK: Force 16px min font size for ALL inputs, textareas, selects on touch/mobile screens */
+@media screen and (max-width: 1024px), (pointer: coarse) {
+  input,
   select,
   textarea {
     font-size: 16px !important;
   }
 }
 
-/* 2. NON-CLASHING SMOOTH SCROLL CONTAINERS */
+/* 2. NATIVE MOMENTUM SCROLL CONTAINERS */
 .overflow-x-auto,
 .overflow-x-scroll {
   overscroll-behavior-x: contain;
@@ -80,4 +74,5 @@ textarea,
 [role="button"] {
   touch-action: manipulation;
 }
+
 
