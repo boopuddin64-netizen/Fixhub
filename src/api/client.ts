@@ -381,6 +381,33 @@ export class ApiClient {
     });
   }
 
+  public static verifyGovernmentId(data: { idType: 'DRIVERS_LICENSE' | 'VOTERS_CARD' | 'NIN'; idNumber: string; dob?: string }) {
+    return this.request<{
+      success: boolean;
+      message: string;
+      verifiedName: string;
+      idNumberMasked: string;
+      profile: TechnicianProfile;
+    }>('/technicians/verify/government-id', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public static verifyCac(data: { cacNumber: string; companyType?: string }) {
+    return this.request<{
+      success: boolean;
+      message: string;
+      companyName: string;
+      rcNumber: string;
+      classification: string;
+      profile: TechnicianProfile;
+    }>('/technicians/verify/cac', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   public static updateRepairRequestLocation(id: string, customerLocation: LocationCoordinates) {
     return this.request<{
       success: boolean;

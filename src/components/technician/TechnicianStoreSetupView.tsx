@@ -53,6 +53,41 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
   const [accountResolved, setAccountResolved] = useState(!!technicianProfile?.bankDetails?.accountNumber);
   const [bankError, setBankError] = useState<string | null>(null);
 
+  // Step 2: Government ID Verification (Required before bank details)
+  const [setupIdType, setSetupIdType] = useState<'DRIVERS_LICENSE' | 'VOTERS_CARD' | 'NIN'>('DRIVERS_LICENSE');
+  const [setupIdNumber, setSetupIdNumber] = useState('');
+  const [setupIdDob, setSetupIdDob] = useState('');
+  const [isVerifyingId, setIsVerifyingId] = useState(false);
+  const [idVerifySuccess, setIdVerifySuccess] = useState<string | null>(null);
+  const [idVerifyError, setIdVerifyError] = useState<string | null>(null);
+
+  const handleVerifyIdInSetup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!setupIdNumber.trim()) {
+      setIdVerifyError('Please enter your document ID number.');
+      return;
+    }
+    setIsVerifyingId(true);
+    setIdVerifyError(null);
+    setIdVerifySuccess(null);
+    try {
+      const res = await ApiClient.verifyGovernmentId({
+        idType: setupIdType,
+        idNumber: setupIdNumber.trim(),
+        dob: setupIdDob || undefined,
+      });
+      if (res.success) {
+        setIdVerifySuccess(`Government ID verified for ${res.verifiedName}! You may now link your settlement bank account below.`);
+        await refreshUser();
+        forceResetViewportZoom();
+      }
+    } catch (err: any) {
+      setIdVerifyError(err.message || 'Could not verify Government ID. Please check details.');
+    } finally {
+      setIsVerifyingId(false);
+    }
+  };
+
   const handleResolveAccount = async (num: string, bCode: string) => {
     const cleanNum = num.replace(/\D/g, '');
     if (cleanNum.length !== 10 || !bCode) {
@@ -141,7 +176,16 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
   };
 
   const handleSaveBankDetails = async () => {
+    if (!technicianProfile?.verificationStatus?.identityVerified) {
+      setBankError("Government ID verification must be completed first before linking a payout bank account.");
+      return;
+    }
+    if (!accountNumber || accountNumber.length !== 10) {
+      setBankError("Please enter a valid 10-digit NUBAN account number.");
+      return;
+    }
     setIsSaving(true);
+    setBankError(null);
     try {
       const resolvedCode = bankCode || getBankCodeByName(bankName) || '044';
       const resolvedName = getBankNameByCode(resolvedCode) || bankName;
@@ -155,8 +199,8 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
       });
       await refreshUser();
       setStep(3);
-    } catch (err) {
-      console.error('Failed to save bank details:', err);
+    } catch (err: any) {
+      setBankError(err.message || 'Failed to save bank details.');
     } finally {
       setIsSaving(false);
     }
@@ -392,120 +436,299 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
         </div>
       )}
 
-      {/* ================= STEP 2: BANK SETTLEMENT SETUP ================= */}
+      {/* ================= STEP 2: ID VERIFICATION & BANK SETTLEMENT ================= */}
       {step === 2 && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl animate-in fade-in duration-200">
           <div className="flex items-center gap-3 pb-3 border-b border-slate-800">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center">
-              <CreditCard className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-2xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center">
+              <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-extrabold text-white">Direct Payout Settlement Bank Account</h2>
-              <p className="text-xs text-slate-400">Where you receive direct withdrawals upon customer repair completion</p>
+              <h2 className="text-base font-extrabold text-white">Identity Verification & Settlement Bank</h2>
+              <p className="text-xs text-slate-400">Verify your official government credentials and link your direct payout account</p>
             </div>
           </div>
 
-          <div className="space-y-4 text-xs">
-            {bankError && (
-              <div className="p-3 bg-rose-900/30 border border-rose-500/40 text-rose-300 rounded-xl text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{bankError}</span>
-              </div>
-            )}
-
-            <div className="p-4 rounded-2xl bg-blue-950/40 border border-blue-500/30 text-blue-200 space-y-1">
-              <span className="font-bold flex items-center gap-1.5 text-blue-300">
-                <ShieldCheck className="w-4 h-4" />
-                Guaranteed Payout Protocol:
-              </span>
-              <p className="text-[11px] text-blue-200/80">
-                When a customer verifies the repair at pickup and confirms completion, your net earnings (8.5% platform fee deducted) become instantly eligible for withdrawal to your bank account.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="font-bold text-slate-300 block mb-1">Bank Name</label>
-                <SearchableBankSelect
-                  id="store-setup-bank-select"
-                  banks={banksList}
-                  selectedBankCode={bankCode}
-                  selectedBankName={bankName}
-                  theme="dark"
-                  onSelectBank={(code, name) => {
-                    setBankCode(code);
-                    setBankName(name);
-                    if (accountNumber.length === 10) {
-                      handleResolveAccount(accountNumber, code);
-                    }
-                  }}
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="font-bold text-slate-300">10-Digit NUBAN Account Number</label>
-                  {isResolvingAccount && (
-                    <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-1">
-                      <Loader2 className="w-3 h-3 animate-spin" /> Resolving...
-                    </span>
-                  )}
+          <div className="space-y-5 text-xs">
+            {/* --- SECTION 2A: GOVERNMENT ID VERIFICATION --- */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-slate-800/80 border border-slate-700/80 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-xs">
+                    2A
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-sm">Official Government ID Verification</h3>
+                    <p className="text-[11px] text-slate-400">Driver's License or Voter's Card (or NIN) required before bank setup</p>
+                  </div>
                 </div>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  enterKeyHint="done"
-                  autoComplete="off"
-                  value={accountNumber}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
-                    setAccountNumber(val);
-                    if (val.length === 10) {
-                      handleResolveAccount(val, bankCode);
-                    } else {
-                      setAccountResolved(false);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.currentTarget.blur();
-                      forceResetViewportZoom();
-                    }
-                  }}
-                  placeholder="0123456789"
-                  maxLength={10}
-                  className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base"
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="font-bold text-slate-300">Verified Account Name</label>
-                {accountResolved && (
-                  <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-400" /> NUBAN Verified
+                {technicianProfile?.verificationStatus?.identityVerified && (
+                  <span className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-bold text-xs flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> ID Verified
                   </span>
                 )}
               </div>
-              <input
-                type="text"
-                inputMode="text"
-                enterKeyHint="done"
-                value={accountName}
-                onChange={(e) => setAccountName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.currentTarget.blur();
-                    forceResetViewportZoom();
-                  }
-                }}
-                placeholder="Emeka Okafor Enterprises"
-                className={`w-full p-3 bg-slate-800 border rounded-xl text-white text-base focus:outline-none focus:ring-2 ${
-                  accountResolved ? 'border-emerald-500/50 ring-emerald-500/30' : 'border-slate-700 focus:ring-indigo-500'
-                }`}
-              />
+
+              {idVerifyError && (
+                <div className="p-3 bg-rose-900/30 border border-rose-500/40 text-rose-300 rounded-xl text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{idVerifyError}</span>
+                </div>
+              )}
+
+              {idVerifySuccess && (
+                <div className="p-3 bg-emerald-900/30 border border-emerald-500/40 text-emerald-300 rounded-xl text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                  <span>{idVerifySuccess}</span>
+                </div>
+              )}
+
+              {technicianProfile?.verificationStatus?.identityVerified ? (
+                <div className="p-3.5 bg-emerald-950/40 border border-emerald-500/30 rounded-xl text-emerald-200 text-xs flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <span className="font-bold block text-emerald-300">
+                      Verified Legal Name: {(technicianProfile?.verificationStatus as any)?.idDetails?.verifiedName || user?.name}
+                    </span>
+                    <span className="text-[11px] text-emerald-400/80 font-mono">
+                      Document: {(technicianProfile?.verificationStatus as any)?.idDetails?.idType?.replace('_', ' ') || 'Government ID'} • {(technicianProfile?.verificationStatus as any)?.idDetails?.idNumberMasked || 'Verified'}
+                    </span>
+                  </div>
+                  <Check className="w-5 h-5 text-emerald-400 shrink-0" />
+                </div>
+              ) : (
+                <form onSubmit={handleVerifyIdInSetup} className="space-y-3 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSetupIdType('DRIVERS_LICENSE')}
+                      className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                        setupIdType === 'DRIVERS_LICENSE'
+                          ? 'bg-indigo-600/30 border-indigo-500 text-white font-bold'
+                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      <div className="font-bold text-xs">Driver's License</div>
+                      <div className="text-[10px] text-slate-400">FRSC Official Card</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSetupIdType('VOTERS_CARD')}
+                      className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                        setupIdType === 'VOTERS_CARD'
+                          ? 'bg-indigo-600/30 border-indigo-500 text-white font-bold'
+                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      <div className="font-bold text-xs">Voter's Card</div>
+                      <div className="text-[10px] text-slate-400">INEC Voter VIN</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSetupIdType('NIN')}
+                      className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                        setupIdType === 'NIN'
+                          ? 'bg-indigo-600/30 border-indigo-500 text-white font-bold'
+                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      <div className="font-bold text-xs">National ID (NIN)</div>
+                      <div className="text-[10px] text-slate-400">11-Digit Identity Slip</div>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="font-bold text-slate-300 block mb-1">
+                        {setupIdType === 'DRIVERS_LICENSE'
+                          ? "FRSC License Number"
+                          : setupIdType === 'VOTERS_CARD'
+                          ? "INEC VIN Number"
+                          : "11-Digit NIN Number"}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={setupIdNumber}
+                        onChange={(e) => setSetupIdNumber(e.target.value.toUpperCase())}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.currentTarget.blur();
+                            forceResetViewportZoom();
+                          }
+                        }}
+                        placeholder={
+                          setupIdType === 'DRIVERS_LICENSE'
+                            ? "e.g. AAA12345AA01"
+                            : setupIdType === 'VOTERS_CARD'
+                            ? "e.g. 90F5B0123456789"
+                            : "e.g. 12345678901"
+                        }
+                        className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-slate-300 block mb-1">
+                        Date of Birth <span className="text-slate-400 font-normal">(Optional / Match Registry)</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={setupIdDob}
+                        onChange={(e) => setSetupIdDob(e.target.value)}
+                        className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={isVerifyingId}
+                      className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-50 text-xs shadow-xs"
+                    >
+                      {isVerifyingId ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                      <span>{isVerifyingId ? 'Verifying Identity...' : 'Verify Government ID Instantly'}</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+
+            {/* --- SECTION 2B: SETTLEMENT BANK ACCOUNT --- */}
+            <div className={`p-4 sm:p-5 rounded-2xl border space-y-4 transition-all ${
+              technicianProfile?.verificationStatus?.identityVerified
+                ? 'bg-slate-800/80 border-slate-700/80'
+                : 'bg-slate-800/40 border-slate-800/80 opacity-70'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">
+                    2B
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-sm">Direct Payout Settlement Bank Account</h3>
+                    <p className="text-[11px] text-slate-400">Where you receive direct withdrawals upon customer repair completion</p>
+                  </div>
+                </div>
+                {!technicianProfile?.verificationStatus?.identityVerified && (
+                  <span className="px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 font-bold text-[11px] flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> Locked
+                  </span>
+                )}
+              </div>
+
+              {!technicianProfile?.verificationStatus?.identityVerified ? (
+                <div className="p-3 bg-amber-950/40 border border-amber-500/30 text-amber-200 rounded-xl text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                  <span>Government ID verification (Driver's License or Voter's Card) must be completed above first before linking your payout bank account.</span>
+                </div>
+              ) : (
+                <>
+                  {bankError && (
+                    <div className="p-3 bg-rose-900/30 border border-rose-500/40 text-rose-300 rounded-xl text-xs flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{bankError}</span>
+                    </div>
+                  )}
+
+                  <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-500/30 text-blue-200 space-y-1">
+                    <span className="font-bold flex items-center gap-1.5 text-blue-300 text-[11px]">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      Anti-Fraud Match Rule:
+                    </span>
+                    <p className="text-[10px] text-blue-200/80 leading-relaxed">
+                      Your settlement account name must match your verified Government ID legal name. Payouts are transferred automatically within 24 hours of customer completion.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="font-bold text-slate-300 block mb-1">Bank Name</label>
+                      <SearchableBankSelect
+                        id="store-setup-bank-select"
+                        banks={banksList}
+                        selectedBankCode={bankCode}
+                        selectedBankName={bankName}
+                        theme="dark"
+                        onSelectBank={(code, name) => {
+                          setBankCode(code);
+                          setBankName(name);
+                          if (accountNumber.length === 10) {
+                            handleResolveAccount(accountNumber, code);
+                          }
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="font-bold text-slate-300">10-Digit NUBAN Account Number</label>
+                        {isResolvingAccount && (
+                          <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-1">
+                            <Loader2 className="w-3 h-3 animate-spin" /> Resolving...
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        enterKeyHint="done"
+                        autoComplete="off"
+                        value={accountNumber}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          setAccountNumber(val);
+                          if (val.length === 10) {
+                            handleResolveAccount(val, bankCode);
+                          } else {
+                            setAccountResolved(false);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.currentTarget.blur();
+                            forceResetViewportZoom();
+                          }
+                        }}
+                        placeholder="0123456789"
+                        maxLength={10}
+                        className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-bold text-slate-300">Verified Account Name</label>
+                      {accountResolved && (
+                        <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400" /> NUBAN Verified
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      inputMode="text"
+                      enterKeyHint="done"
+                      value={accountName}
+                      onChange={(e) => setAccountName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.currentTarget.blur();
+                          forceResetViewportZoom();
+                        }
+                      }}
+                      placeholder="Emeka Okafor"
+                      className={`w-full p-3 bg-slate-800 border rounded-xl text-white text-base focus:outline-none focus:ring-2 ${
+                        accountResolved ? 'border-emerald-500/50 ring-emerald-500/30' : 'border-slate-700 focus:ring-indigo-500'
+                      }`}
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="flex items-center justify-between pt-4">
@@ -518,7 +741,7 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
 
               <button
                 onClick={handleSaveBankDetails}
-                disabled={isSaving}
+                disabled={isSaving || !technicianProfile?.verificationStatus?.identityVerified}
                 className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl flex items-center gap-2 transition-all shadow-md shadow-indigo-600/30 cursor-pointer disabled:opacity-50"
               >
                 <span>{isSaving ? 'Verifying Account...' : 'Confirm Bank & Setup Parts'}</span>

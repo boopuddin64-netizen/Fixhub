@@ -10,6 +10,7 @@ import { AuditService } from '../services/auditService';
 import { NotificationService } from '../services/notificationService';
 import { InventoryService } from '../services/inventoryService';
 import { PaystackClient } from '../services/paystackClient';
+import { IdentityVerificationService } from '../services/identityVerificationService';
 import { getBankCodeByName, getBankNameByCode } from '../data/nigerianBanks';
 import { calculateDistanceKm } from '../services/technicianMatchingService';
 import { authRateLimiter, paymentRateLimiter, webhookRateLimiter } from '../middleware/rateLimiters';
@@ -2736,6 +2737,14 @@ apiRouter.put('/technicians/profile', requireAuth, requireRole(['technician']), 
   }
 
   if (bankDetails && typeof bankDetails === 'object') {
+    // Enforcement rule: Government ID verification must come first before bank account setup
+    if (!tech.verificationStatus?.identityVerified) {
+      return res.status(403).json({
+        error: "Government ID verification (Driver's License, Voter's Card, or NIN) must be completed before setting up a payout bank account.",
+        requiresIdentityVerification: true,
+      });
+    }
+
     const hadExistingBank = !!(tech.bankDetails && tech.bankDetails.accountNumber);
     const bankVerification = (tech as any).bankChangeVerification;
 
@@ -2754,12 +2763,24 @@ apiRouter.put('/technicians/profile', requireAuth, requireRole(['technician']), 
     const providedCode = bankDetails.bankCode ? sanitizeString(bankDetails.bankCode, 20) : undefined;
     const resolvedCode = providedCode || getBankCodeByName(rawBankName) || '044';
     const resolvedName = getBankNameByCode(resolvedCode) || rawBankName;
+    const providedAccountName = sanitizeString(bankDetails.accountName, 120) || tech.businessName || user.name;
+
+    // Cross-check resolved bank account name against verified Government ID name
+    const idVerifiedName = (tech.verificationStatus as any)?.idDetails?.verifiedName;
+    if (idVerifiedName && providedAccountName) {
+      const isMatch = IdentityVerificationService.isPersonalNameMatch(idVerifiedName, providedAccountName);
+      if (!isMatch) {
+        return res.status(400).json({
+          error: `Settlement bank account name ('${providedAccountName}') does not match your verified Government ID holder name ('${idVerifiedName}'). The payout bank account must belong to the verified technician.`,
+        });
+      }
+    }
 
     tech.bankDetails = {
       bankName: resolvedName,
       bankCode: resolvedCode,
       accountNumber: sanitizeString(bankDetails.accountNumber, 30),
-      accountName: sanitizeString(bankDetails.accountName, 120) || tech.businessName || user.name,
+      accountName: providedAccountName,
       verified: true,
     };
     tech.verificationStatus.payoutVerified = true;
@@ -2823,6 +2844,116 @@ apiRouter.post('/technicians/bank/verify-change-otp', requireAuth, requireRole([
     success: true,
     message: 'Identity verified. Bank account modification is now unlocked.',
   });
+});
+
+// Automated Government ID Verification (Driver's License, Voter's Card, NIN)
+apiRouter.post('/technicians/verify/government-id', requireAuth, requireRole(['technician']), async (req: AuthenticatedRequest, res: Response) => {
+  const user = db.users.find((u) => u.id === req.user!.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const tech = AuthService.ensureTechnicianProfile(user);
+  const { idType, idNumber, dob } = req.body;
+
+  if (!idType || !['DRIVERS_LICENSE', 'VOTERS_CARD', 'NIN'].includes(idType)) {
+    return res.status(400).json({ error: "Invalid ID type. Must be 'DRIVERS_LICENSE', 'VOTERS_CARD', or 'NIN'." });
+  }
+
+  if (!idNumber || typeof idNumber !== 'string') {
+    return res.status(400).json({ error: 'Document ID number is required.' });
+  }
+
+  try {
+    const result = await IdentityVerificationService.verifyGovernmentId(user, tech, {
+      idType,
+      idNumber,
+      dob,
+    });
+
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    // Mark Government ID as verified
+    tech.verificationStatus.identityVerified = true;
+    (tech.verificationStatus as any).idDetails = {
+      idType: result.idType,
+      idNumberMasked: result.idNumberMasked,
+      verifiedName: result.verifiedName,
+      verifiedAt: new Date().toISOString(),
+    };
+
+    // Update overall verified badge if location and business are also confirmed
+    (tech as any).isVerified = Boolean(
+      tech.verificationStatus.identityVerified &&
+      tech.verificationStatus.businessVerified &&
+      tech.verificationStatus.locationConfirmed
+    );
+
+    db.save();
+
+    return res.json({
+      success: true,
+      message: result.message,
+      verifiedName: result.verifiedName,
+      idNumberMasked: result.idNumberMasked,
+      profile: tech,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || 'Error processing government ID verification.' });
+  }
+});
+
+// Automated CAC Business Registration Verification (RC / BN Number)
+apiRouter.post('/technicians/verify/cac', requireAuth, requireRole(['technician']), async (req: AuthenticatedRequest, res: Response) => {
+  const user = db.users.find((u) => u.id === req.user!.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const tech = AuthService.ensureTechnicianProfile(user);
+  const { cacNumber, companyType } = req.body;
+
+  if (!cacNumber || typeof cacNumber !== 'string') {
+    return res.status(400).json({ error: 'CAC RC or BN registration number is required.' });
+  }
+
+  try {
+    const result = await IdentityVerificationService.verifyCac(user, tech, {
+      cacNumber,
+      companyType,
+    });
+
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    // Mark CAC Business as verified
+    tech.verificationStatus.businessVerified = true;
+    (tech.verificationStatus as any).cacDetails = {
+      rcNumber: result.rcNumber,
+      companyName: result.companyName,
+      classification: result.classification,
+      verifiedAt: new Date().toISOString(),
+    };
+
+    // Update overall verified badge
+    (tech as any).isVerified = Boolean(
+      tech.verificationStatus.identityVerified &&
+      tech.verificationStatus.businessVerified &&
+      tech.verificationStatus.locationConfirmed
+    );
+
+    db.save();
+
+    return res.json({
+      success: true,
+      message: result.message,
+      companyName: result.companyName,
+      rcNumber: result.rcNumber,
+      classification: result.classification,
+      profile: tech,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || 'Error processing CAC verification.' });
+  }
 });
 
 apiRouter.post('/technicians/availability', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {

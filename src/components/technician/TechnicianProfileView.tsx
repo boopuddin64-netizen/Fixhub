@@ -63,11 +63,25 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
     return () => clearInterval(timer);
   }, [otpCountdown]);
 
+  const [verificationModalTab, setVerificationModalTab] = useState<'id' | 'location' | 'business' | 'bank'>('id');
+
+  const openVerificationModal = (tab: 'id' | 'location' | 'business' | 'bank' = 'id') => {
+    setVerificationModalTab(tab);
+    setShowVerificationModal(true);
+  };
+
   const handleTriggerBankSetup = (fromFinances = false) => {
     if (fromFinances) {
       setOpenedBankFromFinances(true);
       setShowFinances(false);
     }
+
+    // Gating rule: Government ID verification must come first before bank account setup
+    if (!technicianProfile?.verificationStatus?.identityVerified) {
+      openVerificationModal('id');
+      return;
+    }
+
     // If bank account was already set up and is not yet verified/unlocked in this session:
     if (hasExistingBank && !isBankUnlocked) {
       setBankOtp('');
@@ -359,11 +373,42 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
      technicianProfile?.verificationStatus?.businessVerified)
   );
 
-  const verificationStages = [
-    { label: 'Government ID & Identity Verified', done: Boolean(technicianProfile?.verificationStatus?.identityVerified) },
-    { label: 'Physical Shop / Counter Inspected in Computer Village', done: Boolean(technicianProfile?.verificationStatus?.locationConfirmed) },
-    { label: 'CAC Business Registration Confirmed', done: Boolean(technicianProfile?.verificationStatus?.businessVerified) },
-    { label: 'Dedicated Settlement Account Active', done: !!technicianProfile?.bankDetails?.accountNumber },
+  const idDetails = (technicianProfile?.verificationStatus as any)?.idDetails;
+  const cacDetails = (technicianProfile?.verificationStatus as any)?.cacDetails;
+
+  const verificationStages: {
+    track: 'id' | 'location' | 'business' | 'bank';
+    label: string;
+    sublabel?: string;
+    done: boolean;
+  }[] = [
+    {
+      track: 'id',
+      label: 'Government ID & Identity Verified',
+      sublabel: idDetails?.verifiedName ? `Verified: ${idDetails.verifiedName}` : undefined,
+      done: Boolean(technicianProfile?.verificationStatus?.identityVerified),
+    },
+    {
+      track: 'business',
+      label: 'CAC Business Registration Confirmed',
+      sublabel: cacDetails?.companyName ? `Registered: ${cacDetails.companyName}` : undefined,
+      done: Boolean(technicianProfile?.verificationStatus?.businessVerified),
+    },
+    {
+      track: 'location',
+      label: 'Physical Shop / Counter Inspected in Computer Village',
+      done: Boolean(technicianProfile?.verificationStatus?.locationConfirmed),
+    },
+    {
+      track: 'bank',
+      label: 'Dedicated Settlement Account Active',
+      sublabel: technicianProfile?.bankDetails?.accountNumber
+        ? `${technicianProfile.bankDetails.bankName} (${technicianProfile.bankDetails.accountNumber})`
+        : !technicianProfile?.verificationStatus?.identityVerified
+        ? 'Locked: Requires Government ID First'
+        : undefined,
+      done: !!technicianProfile?.bankDetails?.accountNumber,
+    },
   ];
 
   return (
@@ -448,18 +493,56 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
           </h3>
           <button
             type="button"
-            onClick={() => setShowVerificationModal(true)}
+            onClick={() => openVerificationModal('id')}
             className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-200/60 transition-colors cursor-pointer"
           >
-            {isVerifiedPro ? 'View Credentials' : 'Manage 4-Track Verification'}
+            {isVerifiedPro ? 'View Credentials' : 'Manage Verification'}
           </button>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {verificationStages.map((st, i) => (
-            <div key={i} className="flex items-center gap-2.5 text-xs font-semibold text-slate-800">
-              <CheckCircle2 className={`w-4 h-4 shrink-0 ${st.done ? 'text-emerald-600' : 'text-slate-300'}`} />
-              <span className={st.done ? 'text-slate-800' : 'text-slate-400'}>{st.label}</span>
+            <div key={i} className="flex items-center justify-between gap-3 text-xs p-2 rounded-xl hover:bg-slate-50 transition-colors">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <CheckCircle2 className={`w-4 h-4 shrink-0 ${st.done ? 'text-emerald-600' : 'text-slate-300'}`} />
+                <div className="min-w-0">
+                  <span className={`block font-semibold truncate ${st.done ? 'text-slate-900' : 'text-slate-500'}`}>
+                    {st.label}
+                  </span>
+                  {st.sublabel && (
+                    <span className={`text-[10px] block truncate ${st.done ? 'text-emerald-700 font-medium' : 'text-amber-700 font-medium'}`}>
+                      {st.sublabel}
+                    </span>
+                  )}
+                </div>
+              </div>
+              {!st.done && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (st.track === 'bank') {
+                      handleTriggerBankSetup(false);
+                    } else {
+                      openVerificationModal(st.track);
+                    }
+                  }}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg shrink-0 transition-colors cursor-pointer ${
+                    st.track === 'bank' && !technicianProfile?.verificationStatus?.identityVerified
+                      ? 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+                      : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
+                  }`}
+                >
+                  {st.track === 'id'
+                    ? 'Verify ID'
+                    : st.track === 'business'
+                    ? 'Verify CAC'
+                    : st.track === 'location'
+                    ? 'Verify Shop'
+                    : !technicianProfile?.verificationStatus?.identityVerified
+                    ? 'Locked (Verify ID)'
+                    : 'Link Bank'}
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -1101,6 +1184,11 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
                             <Lock className="w-3 h-3 text-emerald-600" />
                             <span>Update Bank</span>
                           </>
+                        ) : !technicianProfile?.verificationStatus?.identityVerified ? (
+                          <>
+                            <Lock className="w-3 h-3 text-amber-600" />
+                            <span className="text-amber-700">Locked (Verify ID)</span>
+                          </>
                         ) : (
                           <span>Add Bank</span>
                         )}
@@ -1124,10 +1212,31 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
                           {technicianProfile.bankDetails.accountName || technicianProfile.businessName}
                         </p>
                       </div>
+                    ) : !technicianProfile?.verificationStatus?.identityVerified ? (
+                      <div className="p-3.5 rounded-xl bg-amber-50/90 border border-amber-200 text-amber-950 space-y-2.5">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800">
+                          <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                          <span>Government ID Verification Required First</span>
+                        </div>
+                        <p className="text-[11px] text-amber-900 leading-relaxed">
+                          To protect platform funds and prevent fraud, you must verify your Driver's License, Voter's Card, or NIN before adding payout bank details.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowFinances(false);
+                            openVerificationModal('id');
+                          }}
+                          className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>Verify Government ID First</span>
+                        </button>
+                      </div>
                     ) : (
                       <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-2">
                         <p className="text-[11px]">
-                          No settlement bank account linked yet. Link a Nigerian bank account to automatically receive completed repair earnings.
+                          Government ID verified! Link your Nigerian bank account to automatically receive completed repair earnings.
                         </p>
                         <button
                           type="button"
@@ -1151,6 +1260,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
       {showVerificationModal && (
         <TechnicianVerificationModal
           technicianProfile={technicianProfile}
+          initialTab={verificationModalTab}
           onClose={() => setShowVerificationModal(false)}
           onSuccess={() => {
             refreshUser?.();
