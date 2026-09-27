@@ -3,10 +3,20 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import './index.css';
+import { initMobileViewportZoomFix } from './utils/mobileViewport';
 
-// Prevent unwanted pinch-to-zoom gestures safely on iOS Safari
+// Initialize global iOS keyboard zoom prevention & viewport restoration
+if (typeof window !== 'undefined') {
+  initMobileViewportZoomFix();
+}
+
+// Prevent unwanted pinch-to-zoom gestures when at normal scale, but allow resetting
 if (typeof document !== 'undefined') {
   const safePrevent = (e: Event) => {
+    // Only prevent zoom-in beyond 1.0; if already zoomed in, allow gestures so user can zoom back out
+    if (window.visualViewport && window.visualViewport.scale > 1.02) {
+      return;
+    }
     if (e.cancelable) {
       e.preventDefault();
     }

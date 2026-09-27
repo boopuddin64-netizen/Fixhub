@@ -58,6 +58,24 @@ export const SocialLoginButtons: React.FC<SocialLoginButtonsProps> = ({
       try {
         // 1. Initialize Google Identity Services (One Tap & Credential ID Token flow)
         if (window.google.accounts.id && googleClientId) {
+          const isIframe = typeof window !== 'undefined' && window.self !== window.top;
+          const isFedCmAllowed = (() => {
+            if (typeof document === 'undefined') return false;
+            if (!isIframe) return true;
+            try {
+              const docAny = document as any;
+              if (docAny.permissionsPolicy?.allowsFeature) {
+                return docAny.permissionsPolicy.allowsFeature('identity-credentials-get');
+              }
+              if (docAny.featurePolicy?.allowsFeature) {
+                return docAny.featurePolicy.allowsFeature('identity-credentials-get');
+              }
+            } catch {
+              // ignore
+            }
+            return false;
+          })();
+
           window.google.accounts.id.initialize({
             client_id: googleClientId,
             callback: async (response: any) => {
@@ -83,6 +101,7 @@ export const SocialLoginButtons: React.FC<SocialLoginButtonsProps> = ({
             auto_select: false,
             cancel_on_tap_outside: true,
             itp_support: true,
+            use_fedcm_for_prompt: isFedCmAllowed,
           });
 
           // Render official Google button into container if container ref exists
@@ -103,11 +122,17 @@ export const SocialLoginButtons: React.FC<SocialLoginButtonsProps> = ({
             }
           }
 
-          // Trigger One Tap if supported
-          try {
-            window.google.accounts.id.prompt();
-          } catch {
-            // Non-blocking One-Tap attempt
+          // Trigger One Tap only if not inside an iframe lacking FedCM permissions
+          if (!isIframe || isFedCmAllowed) {
+            try {
+              window.google.accounts.id.prompt((notification: any) => {
+                if (notification?.isNotDisplayed?.()) {
+                  // Prompt not displayed or suppressed by browser policy
+                }
+              });
+            } catch {
+              // Non-blocking One-Tap attempt
+            }
           }
         }
 

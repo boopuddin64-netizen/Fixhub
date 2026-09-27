@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { ApiClient } from '../../api/client';
 import { NIGERIAN_BANKS, NigerianBank, getBankCodeByName, getBankNameByCode } from '../../data/nigerianBanks';
 import { SearchableBankSelect } from '../common/SearchableBankSelect';
+import { forceResetViewportZoom } from '../../utils/mobileViewport';
 import {
   Building2,
   Clock,
@@ -62,13 +63,16 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
     setBankError(null);
     try {
       const res = await ApiClient.resolveBankAccount(cleanNum, bCode);
-      if (res.accountName) {
-        setAccountName(res.accountName);
+      if (res && res.accountName) {
+        setAccountName(res.accountName.toUpperCase());
         setAccountResolved(true);
+        setBankError(null);
+      } else {
+        throw new Error('Could not resolve account name. Check parameters or try again.');
       }
     } catch (err: any) {
       setAccountResolved(false);
-      setBankError(err.message || 'Could not verify account name. Please check account number and bank.');
+      setBankError(err.message || 'Could not resolve account name. Please check bank and account number.');
     } finally {
       setIsResolvingAccount(false);
     }
@@ -463,9 +467,15 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
                       setAccountResolved(false);
                     }
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                      forceResetViewportZoom();
+                    }
+                  }}
                   placeholder="0123456789"
                   maxLength={10}
-                  className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 text-[16px] sm:text-xs"
+                  className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base"
                 />
               </div>
             </div>
@@ -485,8 +495,14 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
                 enterKeyHint="done"
                 value={accountName}
                 onChange={(e) => setAccountName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur();
+                    forceResetViewportZoom();
+                  }
+                }}
                 placeholder="Emeka Okafor Enterprises"
-                className={`w-full p-3 bg-slate-800 border rounded-xl text-white text-[16px] sm:text-xs focus:outline-none focus:ring-2 ${
+                className={`w-full p-3 bg-slate-800 border rounded-xl text-white text-base focus:outline-none focus:ring-2 ${
                   accountResolved ? 'border-emerald-500/50 ring-emerald-500/30' : 'border-slate-700 focus:ring-indigo-500'
                 }`}
               />

@@ -29,12 +29,19 @@ body {
   overscroll-behavior-x: none;
 }
 
-/* 1. PREVENT iOS FOCUS ZOOM & ZOOM-LOCK: Force 16px min font size for ALL inputs, textareas, selects on touch/mobile screens */
-@media screen and (max-width: 1024px), (pointer: coarse) {
-  input,
-  select,
-  textarea {
-    font-size: 16px !important;
+/* 1. PREVENT iOS FOCUS ZOOM & ZOOM-LOCK: Force 16px min font size for ALL inputs, textareas, selects */
+input,
+select,
+textarea,
+[contenteditable="true"] {
+  font-size: 16px !important;
+}
+
+@media screen and (min-width: 1025px) and (pointer: fine) {
+  input.desktop-sm,
+  select.desktop-sm,
+  textarea.desktop-sm {
+    font-size: 14px !important;
   }
 }
 

@@ -681,7 +681,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
                       setPayoutAmountInput(val);
                     }}
                     placeholder={financials.availablePayoutNaira > 0 ? `Max: ₦${financials.availablePayoutNaira.toLocaleString()}` : '0'}
-                    className="w-full pl-8 pr-28 py-2.5 text-[16px] sm:text-xs font-bold border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white"
+                    className="w-full pl-8 pr-28 py-2.5 text-base sm:text-sm font-bold border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white"
                   />
                   {financials.availablePayoutNaira > 0 && (
                     <button

@@ -5,6 +5,7 @@ import { NIGERIAN_BANKS, NigerianBank, getBankCodeByName, getBankNameByCode } fr
 import { SearchableBankSelect } from '../common/SearchableBankSelect';
 import { TechnicianVerificationModal } from './TechnicianVerificationModal';
 import { WheelPicker } from '../common/WheelPicker';
+import { forceResetViewportZoom } from '../../utils/mobileViewport';
 import {
   Wrench,
   ShieldCheck,
@@ -127,6 +128,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
       setShowFinances(true);
       setOpenedBankFromFinances(false);
     }
+    forceResetViewportZoom();
   };
 
   const handleCloseBankModal = () => {
@@ -135,6 +137,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
       setShowFinances(true);
       setOpenedBankFromFinances(false);
     }
+    forceResetViewportZoom();
   };
 
   // Status & Availability
@@ -177,13 +180,16 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
     setBankError(null);
     try {
       const res = await ApiClient.resolveBankAccount(cleanNum, bCode);
-      if (res.accountName) {
-        setAccountName(res.accountName);
+      if (res && res.accountName) {
+        setAccountName(res.accountName.toUpperCase());
         setAccountResolved(true);
+        setBankError(null);
+      } else {
+        throw new Error('Could not resolve account name. Check parameters or try again.');
       }
     } catch (err: any) {
       setAccountResolved(false);
-      setBankError(err.message || 'Could not verify account name. Please check account number and bank.');
+      setBankError(err.message || 'Could not resolve account name. Please verify your 10-digit account number and bank.');
     } finally {
       setIsResolvingAccount(false);
     }
@@ -332,6 +338,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
       if (refreshAuth) await refreshAuth();
       setIsBankUnlocked(false);
       handleCloseBankModal();
+      forceResetViewportZoom();
     } catch (err: any) {
       setBankError(err.message || 'Failed to update settlement bank details');
       if (err.requiresVerification) {
@@ -573,7 +580,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
                   required
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-[16px] sm:text-xs font-semibold text-slate-900"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-base sm:text-sm font-semibold text-slate-900"
                 />
               </div>
 
@@ -587,7 +594,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   placeholder="e.g. Master iPhone motherboard micro-soldering & Samsung screen replacements."
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-[16px] sm:text-xs font-semibold text-slate-900"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-base sm:text-sm font-semibold text-slate-900"
                 />
               </div>
 
@@ -603,7 +610,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
                     required
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-[16px] sm:text-xs font-semibold text-slate-900"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-base sm:text-sm font-semibold text-slate-900"
                   />
                 </div>
 
@@ -618,7 +625,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
                     required
                     value={businessHours}
                     onChange={(e) => setBusinessHours(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-[16px] sm:text-xs font-semibold text-slate-900"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-base sm:text-sm font-semibold text-slate-900"
                   />
                 </div>
               </div>
@@ -634,7 +641,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
                   required
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-[16px] sm:text-xs font-semibold text-slate-900"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-base sm:text-sm font-semibold text-slate-900"
                 />
               </div>
 
@@ -650,7 +657,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
                     required
                     value={area}
                     onChange={(e) => setArea(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-[16px] sm:text-xs font-semibold text-slate-900"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-base sm:text-sm font-semibold text-slate-900"
                   />
                 </div>
 
@@ -665,7 +672,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
                     required
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-[16px] sm:text-xs font-semibold text-slate-900"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-base sm:text-sm font-semibold text-slate-900"
                   />
                 </div>
 
@@ -803,8 +810,14 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
                       setAccountResolved(false);
                     }
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                      forceResetViewportZoom();
+                    }
+                  }}
                   placeholder="0123456789"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-[16px] sm:text-xs font-semibold text-slate-900 tracking-wider font-mono"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-base font-semibold text-slate-900 tracking-wider font-mono"
                 />
               </div>
 
@@ -826,8 +839,14 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
                   required
                   value={accountName}
                   onChange={(e) => setAccountName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                      forceResetViewportZoom();
+                    }
+                  }}
                   placeholder="e.g. Emeka Okafor Enterprises"
-                  className={`w-full px-3.5 py-2.5 rounded-xl border focus:outline-none focus:ring-2 text-[16px] sm:text-xs font-semibold text-slate-900 ${
+                  className={`w-full px-3.5 py-2.5 rounded-xl border focus:outline-none focus:ring-2 text-base font-semibold text-slate-900 ${
                     accountResolved ? 'border-emerald-400 bg-emerald-50/30 ring-emerald-500' : 'border-slate-200 focus:ring-emerald-500'
                   }`}
                 />
@@ -1004,7 +1023,10 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
                 </div>
               </div>
               <button
-                onClick={() => setShowFinances(false)}
+                onClick={() => {
+                  setShowFinances(false);
+                  forceResetViewportZoom();
+                }}
                 className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />

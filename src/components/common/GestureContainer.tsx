@@ -31,14 +31,20 @@ export const GestureContainer: React.FC<GestureContainerProps> = ({
   const REFRESH_THRESHOLD = 75; // px to trigger pull-to-refresh
   const EDGE_SWIPE_THRESHOLD = 44; // px from left edge to qualify for native-feel edge back swipe
 
-  // Prevent multi-touch pinch zoom globally
+  // Prevent multi-touch pinch zoom beyond 1.0, but allow zooming back out if accidentally zoomed
   useEffect(() => {
     const preventZoom = (e: TouchEvent) => {
+      if (typeof window !== 'undefined' && window.visualViewport && window.visualViewport.scale > 1.02) {
+        return;
+      }
       if (e.touches.length > 1) {
         if (e.cancelable) e.preventDefault();
       }
     };
     const preventGesture = (e: Event) => {
+      if (typeof window !== 'undefined' && window.visualViewport && window.visualViewport.scale > 1.02) {
+        return;
+      }
       if (e.cancelable) e.preventDefault();
     };
 

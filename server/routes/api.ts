@@ -2650,16 +2650,19 @@ apiRouter.get('/banks/resolve', requireAuth, async (req: AuthenticatedRequest, r
   const bankCode = String(req.query.bankCode || '').trim();
 
   if (!accountNumber || accountNumber.length !== 10) {
-    return res.status(400).json({ error: 'Account number must be exactly 10 digits.' });
+    return res.status(400).json({ success: false, error: 'Account number must be exactly 10 digits.' });
   }
   if (!bankCode) {
-    return res.status(400).json({ error: 'Bank code is required.' });
+    return res.status(400).json({ success: false, error: 'Bank code is required.' });
   }
 
   try {
     const result = await PaystackClient.resolveAccountNumber(accountNumber, bankCode);
     if (!result.success) {
-      return res.status(400).json({ error: result.message });
+      return res.status(422).json({
+        success: false,
+        error: result.message || 'Could not resolve account name. Check parameters or try again.',
+      });
     }
     return res.json({
       success: true,
@@ -2668,7 +2671,7 @@ apiRouter.get('/banks/resolve', requireAuth, async (req: AuthenticatedRequest, r
       bankCode,
     });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message || 'Error resolving bank account details.' });
+    return res.status(500).json({ success: false, error: err.message || 'Error resolving bank account details.' });
   }
 });
 

@@ -568,7 +568,7 @@ export class PaystackClient {
     const secretKey = this.getSecretKey();
     if (isLive || (!secretKey.toLowerCase().includes('mock') && !secretKey.startsWith('sk_test_mock'))) {
       try {
-        const response = await fetch('https://api.paystack.co/bank?country=nigeria&perPage=100', {
+        const response = await fetch('https://api.paystack.co/bank?country=nigeria&perPage=300', {
           headers: {
             Authorization: `Bearer ${secretKey}`,
           },
@@ -599,24 +599,28 @@ export class PaystackClient {
     return NIGERIAN_BANKS;
   }
 
+  /**
+   * Resolves a Nigerian 10-digit NUBAN bank account using Paystack / NIBSS Name Enquiry.
+   * Matches the accurate verification standards used by Nigerian fintechs like OPay and PalmPay.
+   */
   static async resolveAccountNumber(
     accountNumber: string,
     bankCode: string
-  ): Promise<{ success: boolean; accountName?: string; message: string }> {
+  ): Promise<{ success: boolean; accountName: string; message: string }> {
     const cleanAccount = (accountNumber || '').trim().replace(/\D/g, '');
     const cleanBankCode = (bankCode || '').trim();
 
     if (cleanAccount.length !== 10) {
-      return { success: false, message: 'Account number must be exactly 10 digits.' };
+      return { success: false, accountName: '', message: 'Account number must be exactly 10 digits.' };
     }
     if (!cleanBankCode) {
-      return { success: false, message: 'Bank code is required.' };
+      return { success: false, accountName: '', message: 'Bank code is required.' };
     }
 
     const secretKey = this.getSecretKey();
-    const isLive = this.isLiveMode();
     const isDummyKey = this.isSimulatedTestKey(secretKey);
 
+    // Call live Paystack / NIBSS Name Enquiry API
     if (!isDummyKey) {
       try {
         const response = await fetch(
@@ -634,29 +638,37 @@ export class PaystackClient {
             accountName: data.data.account_name,
             message: 'Account resolved successfully',
           };
-        } else if (isLive) {
+        } else {
           return {
             success: false,
-            message: data?.message || 'Could not resolve account details. Please check the account number and bank.',
+            accountName: '',
+            message: data?.message || 'Could not resolve account name. Check parameters or try again.',
           };
         }
       } catch (err: any) {
-        if (isLive) {
-          return {
-            success: false,
-            message: err.message || 'Network error resolving bank account.',
-          };
-        }
+        return {
+          success: false,
+          accountName: '',
+          message: err.message || 'Network error communicating with banking network.',
+        };
       }
     }
 
-    // Sandbox / Development simulation
-    const bankObj = NIGERIAN_BANKS.find((b) => b.code === cleanBankCode);
-    const bankName = bankObj ? bankObj.name : 'Commercial Bank';
+    // In local simulated development mode with dummy mock key:
+    if (cleanAccount === '0123456789' || cleanAccount === '0001234567') {
+      const bankObj = NIGERIAN_BANKS.find((b) => b.code === cleanBankCode);
+      const bankName = bankObj ? bankObj.name : 'Commercial Bank';
+      return {
+        success: true,
+        accountName: `TEST ACCOUNT (${bankName.toUpperCase()})`,
+        message: 'Account resolved successfully in test environment',
+      };
+    }
+
     return {
-      success: true,
-      accountName: `VERIFIED TECH (${bankName.toUpperCase()})`,
-      message: 'Account resolved in sandbox environment',
+      success: false,
+      accountName: '',
+      message: 'Could not resolve account name. Check parameters or try again.',
     };
   }
 }

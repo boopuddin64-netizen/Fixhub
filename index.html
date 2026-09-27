@@ -2,11 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <!-- Suppress third-party browser extension unhandled exceptions (e.g. MetaMask, Phantom, Web3 wallet injection) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" id="fixhub-viewport" />
+    <!-- Suppress third-party browser extension and iframe policy unhandled exceptions (e.g. MetaMask, FedCM identity-credentials-get) -->
     <script>
       (function() {
-        var isExtensionError = function(err) {
+        var isIgnoredError = function(err) {
           if (!err) return false;
           var msg = typeof err === 'string' ? err : (err.message || err.reason || (err.error && err.error.message) || '');
           msg = String(msg).toLowerCase();
@@ -16,14 +16,17 @@
             msg.indexOf('ethereum') !== -1 ||
             msg.indexOf('chrome-extension://') !== -1 ||
             msg.indexOf('moz-extension://') !== -1 ||
-            (msg.indexOf('wallet') !== -1 && msg.indexOf('connect') !== -1)
+            (msg.indexOf('wallet') !== -1 && msg.indexOf('connect') !== -1) ||
+            msg.indexOf('identity-credentials-get') !== -1 ||
+            msg.indexOf('gsi_logger') !== -1 ||
+            msg.indexOf('fedcm') !== -1
           );
         };
 
         window.addEventListener(
           'error',
           function(event) {
-            if (isExtensionError(event.error) || isExtensionError(event.message)) {
+            if (isIgnoredError(event.error) || isIgnoredError(event.message)) {
               event.preventDefault();
               event.stopImmediatePropagation();
               return true;
@@ -35,7 +38,7 @@
         window.addEventListener(
           'unhandledrejection',
           function(event) {
-            if (isExtensionError(event.reason)) {
+            if (isIgnoredError(event.reason)) {
               event.preventDefault();
               event.stopImmediatePropagation();
               return true;
@@ -43,6 +46,33 @@
           },
           true
         );
+
+        // Filter out GSI FedCM logger warnings in iframe sandbox environments
+        var origConsoleError = console.error;
+        console.error = function() {
+          var first = arguments[0];
+          if (typeof first === 'string' && (
+            first.indexOf('identity-credentials-get') !== -1 ||
+            first.indexOf('[GSI_LOGGER]') !== -1 ||
+            first.indexOf('FedCM') !== -1
+          )) {
+            return;
+          }
+          origConsoleError.apply(console, arguments);
+        };
+
+        var origConsoleWarn = console.warn;
+        console.warn = function() {
+          var first = arguments[0];
+          if (typeof first === 'string' && (
+            first.indexOf('identity-credentials-get') !== -1 ||
+            first.indexOf('[GSI_LOGGER]') !== -1 ||
+            first.indexOf('FedCM') !== -1
+          )) {
+            return;
+          }
+          origConsoleWarn.apply(console, arguments);
+        };
       })();
     </script>
     <title>FixHub — Find. Fix. Done.</title>

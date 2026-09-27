@@ -16,6 +16,7 @@ import { runRealPersonOrderFlowTest } from './order_flow_real_person.test';
 import { runDatabaseAndSecretsStabilizationTests } from './database_and_secrets_stabilization.test';
 import { runGoogleAuthTests } from './google_auth.test';
 import { runWheelPickerTests } from './wheel_picker.test';
+import { runBankResolutionAndViewportTests } from './bank_resolution_and_viewport_fix.test';
 import {
   validateNumber,
   isValidCoordinates,
@@ -911,6 +912,11 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   // Run Global iOS Wheel Picker tests
   await runWheelPickerTests();
   passed += 5;
+
+  // Run Bank Resolution & Mobile Viewport tests
+  const bankViewportResults = await runBankResolutionAndViewportTests();
+  passed += bankViewportResults.passed;
+  failed += bankViewportResults.failed;
 
   console.log('\n===============================================================');
   console.log(`   GLOBAL TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);
