@@ -462,3 +462,18 @@ CREATE TABLE IF NOT EXISTS bank_otps (
   expires_at_ms BIGINT NOT NULL,
   verified_at_ms BIGINT
 );
+
+-- Password-reset / e-mail / phone verification codes. Only an HMAC of the code is stored, never the code itself.
+-- reset & email codes are looked up by their hash (code_key = code_hash); phone codes by user id / phone number.
+CREATE TABLE IF NOT EXISTS verification_codes (
+  purpose TEXT NOT NULL,
+  code_key TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  user_id TEXT,
+  email TEXT,
+  phone TEXT,
+  created_at_ms BIGINT NOT NULL,
+  expires_at_ms BIGINT NOT NULL,
+  PRIMARY KEY (purpose, code_key)
+);
+CREATE INDEX IF NOT EXISTS idx_verification_codes_expiry ON verification_codes(expires_at_ms);

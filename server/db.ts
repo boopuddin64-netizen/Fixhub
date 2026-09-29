@@ -41,6 +41,18 @@ export interface BankOtpState {
   verifiedAt?: number;
 }
 
+/** Password-reset / e-mail / phone verification code. Only an HMAC of the code is kept. */
+export interface VerificationCodeState {
+  purpose: 'reset' | 'email' | 'phone';
+  codeKey: string;
+  codeHash: string;
+  userId?: string;
+  email?: string;
+  phone?: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
 /** Longest a verified OTP can still matter (30 min unlock window) — used to prune old rows. */
 const BANK_OTP_RETENTION_MS = 45 * 60 * 1000;
 
@@ -140,6 +152,8 @@ export class Database {
   public revokedTokenHashes: Set<string> = new Set();
   /** Bank-change OTP state by technician id. Durable via the `bank_otps` table. */
   public bankOtps: Map<string, BankOtpState> = new Map();
+  /** Reset / e-mail / phone verification codes, keyed `${purpose}:${codeKey}`. Durable via `verification_codes`. */
+  public verificationCodes: Map<string, VerificationCodeState> = new Map();
 
   private readonly store = new EntityStore(
     (name) => (this as any)[name] as any[],
@@ -217,9 +231,11 @@ export class Database {
     this.store.reset();
     this.revokedTokenHashes = new Set();
     this.bankOtps = new Map();
+    this.verificationCodes = new Map();
     if (this.persistenceActive) {
       this.store.queueWrite('DELETE FROM revoked_tokens', []);
       this.store.queueWrite('DELETE FROM bank_otps', []);
+      this.store.queueWrite('DELETE FROM verification_codes', []);
       this.scheduleFlush();
     }
   }
@@ -238,6 +254,7 @@ export class Database {
     // Drop expired side-store rows first (cheap housekeeping, idempotent).
     await this.pg.query('DELETE FROM revoked_tokens WHERE expires_at <= $1', [new Date().toISOString()]);
     await this.pg.query('DELETE FROM bank_otps WHERE expires_at_ms < $1', [Date.now() - BANK_OTP_RETENTION_MS]);
+    await this.pg.query('DELETE FROM verification_codes WHERE expires_at_ms < $1', [Date.now()]);
 
     const hydrated = await this.store.hydrate(this.pg);
     if (!hydrated) {
@@ -262,6 +279,22 @@ export class Database {
       });
     }
 
+    const codes = await this.pg.query('SELECT * FROM verification_codes');
+    this.verificationCodes = new Map();
+    for (const r of codes.rows || []) {
+      const purpose = String(r.purpose) as VerificationCodeState['purpose'];
+      this.verificationCodes.set(`${purpose}:${r.code_key}`, {
+        purpose,
+        codeKey: String(r.code_key),
+        codeHash: String(r.code_hash),
+        userId: r.user_id ?? undefined,
+        email: r.email ?? undefined,
+        phone: r.phone ?? undefined,
+        createdAt: Number(r.created_at_ms),
+        expiresAt: Number(r.expires_at_ms),
+      });
+    }
+
     this.persistenceActive = true;
     if (!hydrated) await this.flush();
     return { hydrated };
@@ -278,6 +311,7 @@ export class Database {
     for (const spec of PERSISTED_COLLECTIONS) (this as any)[spec.name] = [];
     this.revokedTokenHashes = new Set();
     this.bankOtps = new Map();
+    this.verificationCodes = new Map();
     this.store.reset();
     return this.init();
   }

@@ -152,15 +152,20 @@ export async function runGoogleAuthTests(): Promise<{ passed: number; failed: nu
 
     // 4. Authenticated phone verification
     const testPhone = '+2348099887766';
+    const capturedSms: string[] = [];
+    const origLog = console.log;
+    console.log = (...a: any[]) => { capturedSms.push(a.map(String).join(' ')); origLog(...a); };
     const reqRes = await AuthService.requestPhoneVerification(testPhone, result1.user?.id);
+    console.log = origLog;
     assert(reqRes.success === true, 'Phone verification request initiated for social user');
 
-    const record = (AuthService as any).phoneVerifyTokens.get(result1.user?.id) ||
-      (AuthService as any).phoneVerifyTokens.get(testPhone.replace(/\s+/g, ''));
-    assert(!!record, 'Phone verification token recorded');
+    // Codes are stored hashed (never in clear); read the code the way an SMS-capturing test would.
+    const captured = capturedSms.filter((m) => m.includes('verification code')).pop();
+    const code = captured?.match(/code is: (\d{6})/)?.[1];
+    assert(!!code, 'Phone verification code was issued (captured from the SMS log)');
 
-    if (record) {
-      const confirmRes = AuthService.confirmPhoneVerification(testPhone, record.code, result1.user?.id);
+    if (code) {
+      const confirmRes = AuthService.confirmPhoneVerification(testPhone, code, result1.user?.id);
       assert(confirmRes.success === true, 'Phone verification confirmed');
       assert(confirmRes.user?.phoneVerified === true, 'User phoneVerified flag set to true');
       assert(confirmRes.user?.phone === testPhone, 'User phone updated to verified phone');

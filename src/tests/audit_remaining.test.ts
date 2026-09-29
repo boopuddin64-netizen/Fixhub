@@ -172,6 +172,56 @@ export async function runAuditRemainingTests(): Promise<{ passed: number; failed
     const sDel = await call('DELETE', '/account/me', { password: 'anything1' }, sTok);
     assert(sDel.status === 403 && sDel.json?.code === 'PASSWORD_NOT_SET' && db.users.some((u) => u.id === 'usr_social_reauth'), 'password-less (social) account gets PASSWORD_NOT_SET and is not deleted');
     (db.users as any[]).splice((db.users as any[]).findIndex((u) => u.id === 'usr_social_reauth'), 1);
+
+    // ---------------------------------------------------------------- durable verification codes
+    console.log('Item 7: reset / e-mail / phone codes are hashed and survive a restart');
+    const capture = async <T>(fn: () => Promise<T>): Promise<{ result: T; logs: string[] }> => {
+      const logs: string[] = [];
+      const orig = console.log;
+      console.log = (...a: any[]) => { logs.push(a.map(String).join(' ')); };
+      try { return { result: await fn(), logs }; } finally { console.log = orig; }
+    };
+    const { AuthService: Auth } = await import('../../server/services/authService');
+    const reg2 = Auth.registerCustomer({ name: 'Code User', phone: '+2348055500003', email: 'code.user@example.com', password: 'Passw0rdX1' });
+    assert(!('error' in reg2), 'code test user registers');
+    const codeUser = db.users.find((u) => u.email === 'code.user@example.com')!;
+
+    const resetReq = await capture(() => Auth.requestPasswordReset('code.user@example.com'));
+    const resetCode = resetReq.logs.join('\n').match(/reset code is: (\d{6})/)?.[1] || '';
+    const emailReq = await capture(() => Auth.requestEmailVerification(codeUser.id));
+    const emailCode = emailReq.logs.join('\n').match(/code for code\.user@example\.com: (\d{6})/)?.[1] || '';
+    const phoneReq = await capture(() => Auth.requestPhoneVerification('+2348055500003', codeUser.id));
+    const phoneCode = phoneReq.logs.join('\n').match(/verification code is: (\d{6})/)?.[1] || '';
+    assert(!!resetCode && !!emailCode && !!phoneCode, 'reset, email and phone codes issued', `${resetCode}/${emailCode}/${phoneCode}`);
+
+    await db.flush();
+    const rows = (await db.query('SELECT purpose, code_key, code_hash FROM verification_codes')).rows;
+    const dump = JSON.stringify(rows);
+    assert(rows.length >= 3, 'codes are persisted in verification_codes', String(rows.length));
+    assert(![resetCode, emailCode, phoneCode].some((c) => dump.includes(`"${c}"`) || rows.some((r: any) => r.code_key === c || r.code_hash === c)), 'raw codes are never stored (HMAC only)');
+    assert(rows.every((r: any) => String(r.code_hash).length === 64), 'stored hashes are 64-char HMAC-SHA256 digests');
+
+    await db.simulateRestartForTests();
+    assert(db.verificationCodes.size >= 3, 'codes are reloaded from PostgreSQL after a restart');
+    const wrongReset = Auth.resetPasswordWithCode(resetCode === '123456' ? '654321' : '123456', 'Newpass123');
+    assert(wrongReset.success === false, 'a wrong reset code is still rejected after restart');
+    const okReset = Auth.resetPasswordWithCode(resetCode, 'Newpass123');
+    assert(okReset.success === true, 'the reset code issued before the restart still works');
+    assert(Auth.resetPasswordWithCode(resetCode, 'Another123').success === false, 'a reset code is single-use');
+    assert((await login('code.user@example.com', 'Newpass123')) !== undefined, 'user can log in with the new password');
+    const okEmail = Auth.confirmEmailVerification(emailCode);
+    assert(okEmail.success === true && (db.users.find((u) => u.id === codeUser.id) as any).emailVerified === true, 'email code issued before the restart still works');
+    assert(Auth.confirmPhoneVerification('+2348055500003', phoneCode === '111111' ? '222222' : '111111', codeUser.id).success === false, 'wrong phone code rejected after restart');
+    const okPhone = Auth.confirmPhoneVerification('+2348055500003', phoneCode, codeUser.id);
+    assert(okPhone.success === true && okPhone.user?.phoneVerified === true, 'phone code issued before the restart still works');
+    await db.flush();
+    const left = Number((await db.query("SELECT COUNT(*) AS n FROM verification_codes WHERE purpose IN ('reset','email')")).rows[0].n);
+    assert(left === 0, 'consumed codes are deleted from the database');
+
+    // expiry is enforced from the stored timestamp
+    const { VerificationCodeService } = await import('../../server/services/verificationCodeService');
+    VerificationCodeService.issueByCode('reset', '424242', { userId: codeUser.id }, 1000, Date.now() - 5000);
+    assert(Auth.resetPasswordWithCode('424242', 'Newpass123').success === false, 'expired reset code is rejected');
   } finally {
     await app.close();
   }
