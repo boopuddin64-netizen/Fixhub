@@ -274,6 +274,11 @@ export class PaystackClient {
 
     const secretKey = this.getSecretKey();
 
+    // Never accept webhooks signed with the public default/mock key in production.
+    if (process.env.NODE_ENV === 'production' && this.isSimulatedTestKey(secretKey)) {
+      return false;
+    }
+
     try {
       const computedHash = crypto
         .createHmac('sha512', secretKey)

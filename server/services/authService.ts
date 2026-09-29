@@ -5,7 +5,23 @@ import { db } from '../db';
 import { User, UserRole, CustomerProfile, TechnicianProfile } from '../../src/types/index';
 import { sendSms } from './smsService';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fixhub-dev-secret-key-production-change-me';
+const DEFAULT_DEV_JWT_SECRET = 'fixhub-dev-secret-key-production-change-me';
+
+/**
+ * Returns the JWT signing secret. In production a missing / default / weak secret is a hard error
+ * (the public default value would let anyone mint valid admin tokens). Outside production the dev
+ * default is still used for convenience.
+ */
+export function getJwtSecret(env: NodeJS.ProcessEnv = process.env): string {
+  const secret = env.JWT_SECRET?.trim();
+  if (env.NODE_ENV === 'production') {
+    if (!secret || secret === DEFAULT_DEV_JWT_SECRET || secret.toLowerCase().includes('dev-secret') || secret.length < 32) {
+      throw new Error('FATAL: A secure JWT_SECRET (minimum 32 characters, not the default) is required in production.');
+    }
+    return secret;
+  }
+  return secret || DEFAULT_DEV_JWT_SECRET;
+}
 
 export interface AuthSession {
   token: string;
@@ -26,7 +42,7 @@ export class AuthService {
         isBorrowedDevice,
         sessionVersion,
       },
-      JWT_SECRET,
+      getJwtSecret(),
       { algorithm: 'HS256', expiresIn }
     );
   }
@@ -35,7 +51,7 @@ export class AuthService {
     if (!token || typeof token !== 'string') return null;
     if (this.isTokenRevoked(token)) return null;
     try {
-      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as any;
+      const decoded = jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] }) as any;
       if (!decoded || !decoded.id) return null;
       const user = db.users.find((u) => u.id === decoded.id);
       if (!user) return null;

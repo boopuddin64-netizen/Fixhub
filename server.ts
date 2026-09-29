@@ -7,6 +7,7 @@ import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './server/routes/api';
 import { validateProductionSecrets } from './server/config/envValidator';
 import { db } from './server/db';
+import { getJwtSecret } from './server/services/authService';
 import { globalErrorHandler, installProcessSafeguards } from './server/middleware/errorHandler';
 
 installProcessSafeguards();
@@ -50,12 +51,12 @@ export function validateProductionStartup(
 }
 
 async function startServer() {
-  // Production Secret & Database Validation - Warn on missing secrets, don't crash container
-  try {
-    validateProductionStartup(process.env, false);
-  } catch (err: any) {
-    console.warn('⚠️ Production environment configuration warning:', err.message || err);
-    console.warn('⚠️ Server will continue booting to ensure Cloud Run container health checks pass on port 3000.');
+  // Production Secret & Database Validation - fail fast: a misconfigured production deploy must not
+  // boot (default JWT secret / mock Paystack key / missing DB would be exploitable). validateProductionStartup
+  // logs the reason and exits with a non-zero status.
+  validateProductionStartup(process.env, true);
+  if (process.env.NODE_ENV === 'production') {
+    getJwtSecret(); // throws (and the startServer catch below exits) if unusable
   }
 
   const app = express();
@@ -199,4 +200,6 @@ async function startServer() {
 
 startServer().catch((err) => {
   console.error('Failed to start Fix Hub server:', err);
+  // Never keep a half-started server alive (e.g. bad production config or schema failure).
+  process.exit(1);
 });

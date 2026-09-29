@@ -3,6 +3,7 @@
  * Route-level tests mount the real apiRouter on an ephemeral Express app (port 0).
  */
 import express from 'express';
+import { spawnSync } from 'child_process';
 import type { AddressInfo } from 'net';
 import { db } from '../../server/db';
 import { apiRouter } from '../../server/routes/api';
@@ -286,6 +287,33 @@ export async function runSecurityAuditFixTests(): Promise<{ passed: number; fail
       assert(techHttp.status === 400, 'HTTP: technician verify of a customer payment is rejected', String(techHttp.status));
       const custHttp = await call('POST', '/payments/verify', { reference: initHttp.json.reference }, custTok);
       assert(custHttp.status === 200 && custHttp.json?.payment?.status === 'SUCCESS', 'HTTP: owning customer can verify (sandbox outside production)');
+    }
+
+    // ---- Fix 6: production fail-fast ----
+    console.log('Fix 6: production boot fails fast on missing/default secrets');
+    {
+      const { getJwtSecret } = await import('../../server/services/authService');
+      const th = (env: any) => { try { getJwtSecret(env); return false; } catch { return true; } };
+      assert(th({ NODE_ENV: 'production' }), 'getJwtSecret throws in production when JWT_SECRET is missing');
+      assert(th({ NODE_ENV: 'production', JWT_SECRET: 'fixhub-dev-secret-key-production-change-me' }), 'getJwtSecret throws in production for the default secret');
+      assert(th({ NODE_ENV: 'production', JWT_SECRET: 'short' }), 'getJwtSecret throws in production for a short secret');
+      assert(!th({ NODE_ENV: 'production', JWT_SECRET: 'z'.repeat(40) }), 'getJwtSecret accepts a strong secret in production');
+      assert(!th({ NODE_ENV: 'development' }), 'getJwtSecret keeps the dev default outside production');
+
+      const root = process.cwd();
+      const runBoot = (env: Record<string, string>) =>
+        spawnSync(process.execPath, ['--import', 'tsx', 'server.ts'], {
+          cwd: root,
+          env: { PATH: process.env.PATH || '', HOME: process.env.HOME || '', NODE_ENV: 'production', PORT: '0', ...env },
+          timeout: 45000,
+          encoding: 'utf-8',
+        });
+      const bare = runBoot({});
+      assert(bare.status === 1, 'Real server boot with NODE_ENV=production and no secrets exits with status 1', `status=${bare.status} signal=${bare.signal}`);
+      const noJwt = runBoot({ PAYSTACK_SECRET_KEY: 'sk_live_' + 'a'.repeat(30), DATABASE_URL: 'postgres://u:p@127.0.0.1:1/x', SMS_PROVIDER_API_KEY: 'k' });
+      assert(noJwt.status === 1 && /JWT_SECRET/.test(noJwt.stderr + noJwt.stdout), 'Boot without JWT_SECRET exits 1 and names JWT_SECRET', `status=${noJwt.status}`);
+      const defJwt = runBoot({ PAYSTACK_SECRET_KEY: 'sk_live_' + 'a'.repeat(30), DATABASE_URL: 'postgres://u:p@127.0.0.1:1/x', SMS_PROVIDER_API_KEY: 'k', JWT_SECRET: 'fixhub-dev-secret-key-production-change-me' });
+      assert(defJwt.status === 1, 'Boot with the default JWT_SECRET exits 1', `status=${defJwt.status}`);
     }
 
     // <<FIXES>>
