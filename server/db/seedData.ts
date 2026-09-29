@@ -27,6 +27,19 @@ export interface SeedDataResult {
   technicianParts: TechnicianInventoryItem[];
 }
 
+/**
+ * Demo accounts (shared `password123` password), demo profiles, devices and inventory are only
+ * seeded outside production, or when SEED_DEMO_DATA=true is set explicitly.
+ * SEED_DEMO_DATA=false always disables them. The reference catalog (brands/families/models/issues)
+ * is always seeded because the application needs it.
+ */
+export function shouldSeedDemoData(env: NodeJS.ProcessEnv = process.env): boolean {
+  const flag = (env.SEED_DEMO_DATA || '').trim().toLowerCase();
+  if (flag === 'true' || flag === '1') return true;
+  if (flag === 'false' || flag === '0') return false;
+  return env.NODE_ENV !== 'production';
+}
+
 export function getInitialSeedData(): SeedDataResult {
   const defaultPasswordHash = bcrypt.hashSync('password123', 8);
   const pastDate = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
@@ -913,16 +926,18 @@ export function getInitialSeedData(): SeedDataResult {
     },
   ];
 
+  const seedDemo = shouldSeedDemoData();
+
   return {
-    users,
-    customerProfiles,
-    technicianProfiles,
+    users: seedDemo ? users : [],
+    customerProfiles: seedDemo ? customerProfiles : [],
+    technicianProfiles: seedDemo ? technicianProfiles : [],
     deviceBrands,
     deviceFamilies,
     deviceModels,
-    customerDevices,
+    customerDevices: seedDemo ? customerDevices : [],
     repairIssues,
     repairIssueCatalog: [...standardRepairIssues],
-    technicianParts,
+    technicianParts: seedDemo ? technicianParts : [],
   };
 }

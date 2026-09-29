@@ -87,6 +87,30 @@ export async function runSecurityAuditFixTests(): Promise<{ passed: number; fail
     const soc = await call('POST', '/auth/social-login', { provider: 'google', token: 'invalid-token' });
     assert(soc.status !== 200 && !soc.json?.token && soc.status !== 404, 'Social login route is separate and still verifies provider tokens');
 
+    // ---- Fix 2: no demo accounts in production ----
+    console.log('Fix 2: demo seed data is not created in production');
+    const { getInitialSeedData, shouldSeedDemoData } = await import('../../server/db/seedData');
+    const prevEnv = { NODE_ENV: process.env.NODE_ENV, SEED: process.env.SEED_DEMO_DATA };
+    try {
+      process.env.NODE_ENV = 'production';
+      delete process.env.SEED_DEMO_DATA;
+      const prodSeed = getInitialSeedData();
+      assert(prodSeed.users.length === 0, 'Production seed contains no users');
+      assert(!prodSeed.users.some((u: any) => String(u.email).endsWith('@test.fixhub.local')), 'Production seed has no @test.fixhub.local demo accounts');
+      assert(prodSeed.technicianProfiles.length === 0 && prodSeed.customerProfiles.length === 0, 'Production seed has no demo profiles');
+      assert(prodSeed.deviceBrands.length > 0 && prodSeed.deviceModels.length > 0, 'Production seed still includes the device catalog');
+      process.env.SEED_DEMO_DATA = 'true';
+      assert(getInitialSeedData().users.length === 8, 'SEED_DEMO_DATA=true explicitly re-enables the 8 demo users in production');
+      process.env.NODE_ENV = 'development';
+      process.env.SEED_DEMO_DATA = 'false';
+      assert(shouldSeedDemoData() === false, 'SEED_DEMO_DATA=false disables demo data in development');
+      delete process.env.SEED_DEMO_DATA;
+      assert(getInitialSeedData().users.length === 8, 'Development still seeds the 8 demo users by default');
+    } finally {
+      if (prevEnv.NODE_ENV === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = prevEnv.NODE_ENV;
+      if (prevEnv.SEED === undefined) delete process.env.SEED_DEMO_DATA; else process.env.SEED_DEMO_DATA = prevEnv.SEED;
+    }
+
     // <<FIXES>>
   } catch (err: any) {
     assert(false, 'Security audit regression suite threw', err?.stack || err?.message);
