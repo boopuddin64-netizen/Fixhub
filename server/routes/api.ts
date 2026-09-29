@@ -13,6 +13,7 @@ import { PaystackClient } from '../services/paystackClient';
 import { IdentityVerificationService } from '../services/identityVerificationService';
 import { getBankCodeByName, getBankNameByCode } from '../data/nigerianBanks';
 import { calculateDistanceKm } from '../services/technicianMatchingService';
+import { makeAsyncSafe } from '../utils/asyncRouter';
 import { authRateLimiter, paymentRateLimiter, webhookRateLimiter } from '../middleware/rateLimiters';
 import {
   UserRole,
@@ -110,7 +111,7 @@ export function geocodeCustomerLocation(customerLocation: any) {
   }
 }
 
-export const apiRouter = Router();
+export const apiRouter = makeAsyncSafe(Router());
 
 // 0. HEALTH CHECK ENDPOINT (Includes DB connectivity check)
 apiRouter.get('/health', async (req: Request, res: Response) => {

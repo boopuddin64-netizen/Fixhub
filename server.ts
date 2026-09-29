@@ -7,6 +7,9 @@ import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './server/routes/api';
 import { validateProductionSecrets } from './server/config/envValidator';
 import { db } from './server/db';
+import { globalErrorHandler, installProcessSafeguards } from './server/middleware/errorHandler';
+
+installProcessSafeguards();
 
 // Production Environment & Secret Validation - Fail fast before booting server
 export function validateProductionStartup(
@@ -186,11 +189,8 @@ async function startServer() {
     });
   }
 
-  // Global Error Handler
-  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error('Unhandled Server Error:', err);
-    res.status(500).json({ error: 'Internal Server Error', message: err.message || 'Unknown error' });
-  });
+  // Global Error Handler (client errors keep their status, everything else is a generic 500)
+  app.use(globalErrorHandler);
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Fix Hub Server running on http://0.0.0.0:${PORT}`);
