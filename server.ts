@@ -8,8 +8,10 @@ import { apiRouter } from './server/routes/api';
 import { validateProductionSecrets } from './server/config/envValidator';
 import { db } from './server/db';
 import { buildCorsOptions } from './server/config/cors';
+import { cspReportRateLimiter } from './server/middleware/rateLimiters';
 import { pgDb } from './server/db/pgClient';
 import { getJwtSecret } from './server/services/authService';
+import { buildCspMiddleware } from './server/config/csp';
 import { globalErrorHandler, installProcessSafeguards } from './server/middleware/errorHandler';
 
 installProcessSafeguards();
@@ -77,13 +79,30 @@ async function startServer() {
   // Security Headers via helmet
   app.use(
     helmet({
-      contentSecurityPolicy: false, // Vite dev server and iframe preview compatibility
+      contentSecurityPolicy: false, // set below by buildCspMiddleware (production only; Vite dev needs inline scripts + HMR)
       crossOriginEmbedderPolicy: false,
       crossOriginOpenerPolicy: false, // Essential for Google OAuth popups and mobile WebKit
       crossOriginResourcePolicy: false, // Allow external assets (Google Maps, Google Identity Services, Fonts)
       frameguard: false, // Allow iframe preview in AI Studio
     })
   );
+
+  // Content-Security-Policy (production only). Default is report-only; set CSP_MODE=enforce once verified
+  // against your real Google/Paystack/Maps configuration. See README "Content-Security-Policy".
+  const csp = buildCspMiddleware(process.env);
+  if (csp) {
+    app.use(csp);
+    app.post(
+      '/api/csp-report',
+      cspReportRateLimiter,
+      express.json({ type: ['application/csp-report', 'application/reports+json', 'application/json'], limit: '16kb' }),
+      (req, res) => {
+        const r = (req.body && (req.body['csp-report'] || (Array.isArray(req.body) ? req.body[0]?.body : req.body))) || {};
+        console.warn('[csp-report]', JSON.stringify(r).slice(0, 600));
+        res.status(204).end();
+      }
+    );
+  }
 
   // CORS: strict allow-list from ALLOWED_ORIGINS / APP_URL (+ localhost in non-production). See server/config/cors.ts
   app.use(cors(buildCorsOptions(process.env)));

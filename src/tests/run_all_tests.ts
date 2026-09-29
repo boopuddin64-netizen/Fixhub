@@ -21,6 +21,7 @@ import { runBankResolutionAndViewportTests } from './bank_resolution_and_viewpor
 import { runTechnicianIdAndCacVerificationTests } from './technician_id_and_cac_verification.test';
 import { runSecurityAuditFixTests } from './security_audit_fixes.test';
 import { runPostgresPersistenceTests } from './postgres_persistence.test';
+import { runCspTests } from './csp.test';
 import {
   validateNumber,
   isValidCoordinates,
@@ -937,6 +938,10 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   const persistenceResults = await runPostgresPersistenceTests();
   passed += persistenceResults.passed;
   failed += persistenceResults.failed;
+
+  const cspResults = await runCspTests();
+  passed += cspResults.passed;
+  failed += cspResults.failed;
 
   console.log('\n===============================================================');
   console.log(`   GLOBAL TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);
