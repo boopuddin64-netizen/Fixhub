@@ -326,6 +326,8 @@ export class Database {
       console.error('[db] final flush failed:', e?.message || e);
     }
     this.persistenceActive = false;
+    if (this.writerLockTimer) clearInterval(this.writerLockTimer);
+    this.writerLockTimer = null;
     this.writerLockClient?.release();
     this.writerLockClient = null;
   }
@@ -343,27 +345,91 @@ export class Database {
   }
 
   /**
-   * Best-effort single-writer guard. Memory is the working copy of each process, so two processes writing
-   * the same database would overwrite each other's entities. We hold a session advisory lock while
-   * running and warn loudly if someone else already has it. (Real PostgreSQL only.)
+   * Single-writer guard. Memory is the working copy of each process, so two processes writing the same
+   * database would overwrite each other's entities. We hold a session-level PostgreSQL advisory lock for the
+   * whole life of the process (real PostgreSQL only).
+   *
+   *  - Production: if another instance holds the lock we wait up to WRITER_LOCK_WAIT_MS (default 30s, so a
+   *    rolling deploy where the old instance is draining can hand over) and then REFUSE TO START (init()
+   *    rejects -> the server exits 1) instead of silently corrupting data. ALLOW_MULTI_INSTANCE=true
+   *    downgrades this to a loud warning (unsupported: last writer wins).
+   *  - Elsewhere: loud warning only.
+   *  - A heartbeat on the lock connection detects a lost lock (connection dropped, failover) and re-acquires
+   *    it; if another instance has taken it meanwhile in production, this process exits rather than keep writing.
    */
   private async acquireWriterLock(): Promise<void> {
     if (this.pg.isMemoryMode || this.writerLockClient) return;
-    try {
-      const client = await this.pg.pool.connect();
-      const res = await client.query('SELECT pg_try_advisory_lock($1) AS ok', [727463002]);
-      if (!res.rows?.[0]?.ok) {
-        console.error(
-          '[db] WARNING: another Fixhub instance holds the writer lock on this database. Running more than one ' +
-            'instance against the same database is NOT supported yet (state is cached per process) — data can be lost.'
-        );
+    const isProd = process.env.NODE_ENV === 'production';
+    const allowMulti = /^(1|true)$/i.test(process.env.ALLOW_MULTI_INSTANCE || '');
+    const waitMs = isProd && !allowMulti ? Math.max(0, Number(process.env.WRITER_LOCK_WAIT_MS ?? 30_000) || 0) : 0;
+    const deadline = Date.now() + waitMs;
+    let announced = false;
+    for (;;) {
+      let client: any;
+      try {
+        client = await this.pg.pool.connect();
+        const res = await client.query('SELECT pg_try_advisory_lock($1) AS ok', [Database.WRITER_LOCK_KEY]);
+        if (res.rows?.[0]?.ok) {
+          client.on?.('error', (e: any) => console.error('[db] writer-lock connection error:', e?.message || e));
+          this.writerLockClient = {
+            release: () => {
+              // Session locks outlive release() (the connection returns to the pool): unlock explicitly.
+              client.query('SELECT pg_advisory_unlock($1)', [Database.WRITER_LOCK_KEY]).catch(() => {}).finally(() => client.release());
+            },
+          };
+          this.startWriterLockHeartbeat(client);
+          return;
+        }
         client.release();
-        return;
+      } catch (e: any) {
+        try { client?.release(true); } catch { /* ignore */ }
+        console.error('[db] could not acquire writer lock:', e?.message || e);
+        return; // DB problems surface elsewhere (schema / hydrate); do not mask them here
       }
-      this.writerLockClient = { release: () => client.release() };
-    } catch (e: any) {
-      console.error('[db] could not acquire writer lock:', e?.message || e);
+      if (Date.now() >= deadline) break;
+      if (!announced) {
+        console.warn(`[db] another Fixhub instance holds the writer lock; waiting up to ${Math.round(waitMs / 1000)}s for it to exit...`);
+        announced = true;
+      }
+      await new Promise((r) => setTimeout(r, 1000));
     }
+    const msg =
+      'another Fixhub instance holds the writer lock on this database. Running more than one instance against the ' +
+      'same database is NOT supported (state is cached per process; data would be overwritten).';
+    if (isProd && !allowMulti) {
+      throw new Error(`FATAL: ${msg} Stop the other instance (or set ALLOW_MULTI_INSTANCE=true to override at your own risk).`);
+    }
+    console.error(`[db] WARNING: ${msg}`);
+  }
+
+  private static readonly WRITER_LOCK_KEY = 727463002;
+  private writerLockTimer: NodeJS.Timeout | null = null;
+
+  private startWriterLockHeartbeat(client: any, intervalMs = Number(process.env.WRITER_LOCK_HEARTBEAT_MS) || 10_000): void {
+    if (this.writerLockTimer) clearInterval(this.writerLockTimer);
+    this.writerLockTimer = setInterval(async () => {
+      try {
+        // The lock lives and dies with this connection; a cheap round trip proves it is still alive.
+        const res = await client.query('SELECT pg_try_advisory_lock($1) AS ok', [Database.WRITER_LOCK_KEY]);
+        if (res.rows?.[0]?.ok) {
+          // Re-entrant on the same session: we still own it (or just re-took it). Balance the extra count.
+          await client.query('SELECT pg_advisory_unlock($1)', [Database.WRITER_LOCK_KEY]);
+        }
+      } catch (e: any) {
+        console.error('[db] writer lock connection lost:', e?.message || e);
+        if (this.writerLockTimer) clearInterval(this.writerLockTimer);
+        this.writerLockTimer = null;
+        try { client.release(true); } catch { /* ignore */ }
+        this.writerLockClient = null;
+        try {
+          await this.acquireWriterLock();
+        } catch (fatal: any) {
+          console.error(String(fatal?.message || fatal));
+          process.exit(1);
+        }
+      }
+    }, intervalMs);
+    this.writerLockTimer.unref?.();
   }
 
   private waitForTransactions(): Promise<void> {
