@@ -49,7 +49,9 @@ export class AuthService {
         sessionVersion,
       },
       getJwtSecret(),
-      { algorithm: 'HS256', expiresIn }
+      // jti makes every token unique: without it a login in the same second as a logout would mint the byte-identical
+      // (already revoked) token.
+      { algorithm: 'HS256', expiresIn, jwtid: crypto.randomUUID() }
     );
   }
 
