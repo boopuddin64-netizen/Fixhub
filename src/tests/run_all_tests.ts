@@ -18,6 +18,7 @@ import { runGoogleAuthTests } from './google_auth.test';
 import { runWheelPickerTests } from './wheel_picker.test';
 import { runBankResolutionAndViewportTests } from './bank_resolution_and_viewport_fix.test';
 import { runTechnicianIdAndCacVerificationTests } from './technician_id_and_cac_verification.test';
+import { runSecurityAuditFixTests } from './security_audit_fixes.test';
 import {
   validateNumber,
   isValidCoordinates,
@@ -923,6 +924,10 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   const idCacResults = await runTechnicianIdAndCacVerificationTests();
   passed += idCacResults.passed;
   failed += idCacResults.failed;
+
+  const securityFixResults = await runSecurityAuditFixTests();
+  passed += securityFixResults.passed;
+  failed += securityFixResults.failed;
 
   console.log('\n===============================================================');
   console.log(`   GLOBAL TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);

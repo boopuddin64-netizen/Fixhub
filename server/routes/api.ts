@@ -234,7 +234,11 @@ apiRouter.post('/auth/login', authRateLimiter, (req: Request, res: Response) => 
     return res.status(400).json({ error: 'Email or phone number is required.' });
   }
 
-  const result = AuthService.login(sanitizeString(emailOrPhone, 120), password ? String(password) : undefined, !!isBorrowedDevice);
+  if (typeof password !== 'string' || password.length === 0) {
+    return res.status(400).json({ error: 'Password is required.' });
+  }
+
+  const result = AuthService.login(sanitizeString(emailOrPhone, 120), password, !!isBorrowedDevice);
   if ('error' in result) {
     return res.status(400).json({ error: result.error });
   }

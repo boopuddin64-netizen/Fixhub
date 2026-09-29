@@ -405,11 +405,13 @@ export class AuthService {
       return { error: 'Invalid credentials. User not found.' };
     }
 
-    if (password) {
-      const valid = bcrypt.compareSync(password, user.passwordHash);
-      if (!valid) {
-        return { error: 'Invalid password. Please check and retry.' };
-      }
+    // A password is ALWAYS required on this path. Social (Google) logins go through
+    // AuthService.socialLogin / POST /auth/social-login, which verify a provider token instead.
+    if (typeof password !== 'string' || password.length === 0) {
+      return { error: 'Password is required.' };
+    }
+    if (!user.passwordHash || !bcrypt.compareSync(password, user.passwordHash)) {
+      return { error: 'Invalid password. Please check and retry.' };
     }
 
     if (user.role === 'technician') {
