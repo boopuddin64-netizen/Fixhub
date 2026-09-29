@@ -475,6 +475,16 @@ export class PaymentService {
 
     let earnings: TechnicianEarnings | undefined;
 
+    // Duplicate-charge guard (in-process check; the database additionally enforces it with the partial unique
+    // index uq_payments_one_confirmed_per_repair, which also holds across processes).
+    const alreadyConfirmed = db.payments.find(
+      (p) => p.id !== payment.id && p.repairId === payment.repairId && (p.status === 'SUCCESS' || p.status === 'ESCROW_HELD')
+    );
+    if (alreadyConfirmed) {
+      return { success: false, error: 'This repair job has already been paid for and confirmed.' };
+    }
+
+    let duplicateRejected = false;
     await db.transaction(async (tx) => {
       payment.status = 'SUCCESS';
       payment.paidAt = paidAt;
@@ -585,8 +595,8 @@ export class PaymentService {
 
       // Upsert payment record
       await tx.query(
-        `INSERT INTO payments (id, repair_id, customer_id, quote_id, amount_naira, platform_fee_naira, technician_payout_naira, escrow_held, status, payment_method, transaction_ref, provider_reference, paid_at, channel, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        `INSERT INTO payments (id, repair_id, customer_id, quote_id, amount_naira, platform_fee_naira, technician_payout_naira, escrow_held, status, payment_method, transaction_ref, provider_reference, paid_at, channel, created_at, updated_at, idempotency_key)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
          ON CONFLICT (id) DO UPDATE SET status = 'SUCCESS', paid_at = $13, channel = $14, updated_at = $16`,
         [
           payment.id,
@@ -605,6 +615,7 @@ export class PaymentService {
           payment.channel,
           payment.createdAt || paidAt,
           paidAt,
+          payment.idempotencyKey || null,
         ]
       );
 
@@ -631,7 +642,20 @@ export class PaymentService {
           ]
         );
       }
+    }).catch((err: any) => {
+      // 23505 = unique_violation: the database refused a second confirmed payment for this job (or a reused
+      // transaction reference). db.transaction already rolled memory back; nothing was persisted.
+      const guard = /uq_payments_one_confirmed_per_repair|uq_payments_transaction_ref/;
+      if (err?.code === '23505' && (guard.test(String(err?.constraint || '')) || guard.test(String(err?.message || '')))) {
+        console.warn('[payments] duplicate payment rejected by database constraint:', String(err?.message).split('\n')[0]);
+        duplicateRejected = true;
+        return;
+      }
+      throw err;
     });
+    if (duplicateRejected) {
+      return { success: false, error: 'This repair job has already been paid for and confirmed.' };
+    }
 
     // 11. Audit Logging
     AuditService.log({
