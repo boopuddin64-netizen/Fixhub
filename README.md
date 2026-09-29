@@ -62,6 +62,7 @@ API and therefore needs a real key + network. Set `SKIP_LIVE_NETWORK_TESTS=1` to
 | `PAYMENT_MODE` | Must be `live` (or unset) in production; `sandbox` is rejected at boot because it simulates payments. |
 | `APP_URL` | Public URL of the app (also allowed as a CORS origin and iframe ancestor). |
 | `PORT` | Defaults to `3000`. |
+| `WRITER_LOCK_WAIT_MS`, `ALLOW_MULTI_INSTANCE` | Single-writer guard tuning; see "Single instance only". |
 | `CSP_MODE` | `report-only` (default in production) or `enforce`; see below. |
 | `SEED_DEMO_DATA` | Demo accounts are never seeded in production unless this is `true`. Leave unset. |
 | `PLATFORM_COMMISSION_PERCENT` | Platform fee, default `8.5`. |
@@ -87,8 +88,10 @@ Application state is cached in memory per process and written through to Postgre
 `revoked_tokens`, `bank_otps`, …). Rate limiters (`express-rate-limit`) are in-process as well. Consequently:
 
 - Run **exactly one instance per database** (Cloud Run: `--max-instances=1`, or a single replica).
-- A second instance detects the writer advisory lock and **refuses to start in production** (set
-  `ALLOW_MULTI_INSTANCE=true` only if you accept that data written by the instances can overwrite each other).
+- A second instance detects the writer advisory lock, waits up to `WRITER_LOCK_WAIT_MS` (default 30000, lets a rolling
+  deploy hand over) and then **refuses to start in production**. A heartbeat re-acquires the lock if the DB connection drops
+  and exits the process if another instance took it meanwhile. `ALLOW_MULTI_INSTANCE=true` downgrades this to a warning
+  (unsupported: instances overwrite each other's data; rate limits are per instance).
 - Horizontal scaling needs shared state (Redis-backed limiters/sessions and row-level persistence); not implemented yet.
 
 ### Content-Security-Policy
@@ -100,10 +103,26 @@ browsed your deployment (login, Google button, map, checkout) with no reports, s
 `frame-ancestors` defaults to `'self'` plus `ALLOWED_ORIGINS` (add more via `CSP_FRAME_ANCESTORS`). The single inline
 script in `index.html` is allowed by SHA-256 hash computed at boot from `dist/index.html`.
 
+## Code layout
+
+- `server.ts` – Express bootstrap (helmet, CSP, CORS, static/Vite, health, graceful shutdown)
+- `server/routes/api.ts` – assembles the API; the routes live in `server/routes/modules/*.ts` (auth, devices,
+  technicians, repairs, quotes, payments, jobs, reviews, technicianAccount, messaging, admin). **Import order in
+  `api.ts` is route registration order** — don't reorder it.
+- `server/services/*` – business logic; `server/db.ts` + `server/db/*` – persistence (entity store write-through)
+- `src/` – React app; `src/tests/` – the test suite
+
 ## API notes
 
-- List endpoints (`GET /api/technicians`, …) accept `?limit=` and `?offset=`; see "Pagination" below.
-- Sensitive account actions (`DELETE /api/account/me`, `POST /api/account/switch-role`) require the current password.
+- **Pagination:** list endpoints (technicians, jobs, requests, quotes, reviews, parts, inventory, notifications, warranties,
+  messages, admin disputes, customer devices) accept `?limit=` (default 200, max 500; messages 1000) and `?offset=`. The body
+  stays a plain JSON array; `X-Total-Count`, `X-Limit`, `X-Offset` response headers describe the window.
+- **Technician phone numbers are private:** public technician endpoints never include `phone`; a customer sees it (job detail
+  `GET /api/jobs/:id`, quotes) only while they have a paid, not-yet-closed job with that technician.
+- Sensitive account actions (`DELETE /api/account/me`, `POST /api/auth/switch-role`) require the current password in the JSON
+  body (`{ "password": "..." }`); wrong/missing password → `403`. Social-login-only accounts (no password) get
+  `403 PASSWORD_NOT_SET` and must set a password first.
+- Password-reset, e-mail and phone verification codes are stored as HMACs in `verification_codes` and survive restarts.
 
 ## CI
 
