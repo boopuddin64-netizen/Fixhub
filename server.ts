@@ -63,9 +63,13 @@ async function startServer() {
 
   // Wait for the database schema to be applied before accepting traffic (rejects -> process exits 1).
   await pgDb.ready;
+  // Load durable state from PostgreSQL (or bootstrap an empty database) BEFORE accepting traffic.
+  const { hydrated } = await db.init();
+  console.log(hydrated ? '[db] Restored application state from PostgreSQL.' : '[db] Empty database initialised.');
+  db.startBackgroundFlush();
 
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   // Trust proxy for reverse proxy (Cloud Run / Nginx)
   app.set('trust proxy', 1);
@@ -152,9 +156,24 @@ async function startServer() {
   // Global Error Handler (client errors keep their status, everything else is a generic 500)
   app.use(globalErrorHandler);
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const httpServer = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Fix Hub Server running on http://0.0.0.0:${PORT}`);
   });
+
+  // Graceful shutdown: stop accepting connections, flush pending writes, release the DB.
+  let shuttingDown = false;
+  const shutdown = (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`[server] ${signal} received, flushing state and shutting down.`);
+    httpServer.close();
+    db.shutdown()
+      .catch(() => {})
+      .finally(() => pgDb.pool.end().catch(() => {}).finally(() => process.exit(0)));
+    setTimeout(() => process.exit(1), 10_000).unref();
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 startServer().catch((err) => {
