@@ -5,6 +5,12 @@ import { db } from '../db';
 import { User, UserRole, CustomerProfile, TechnicianProfile } from '../../src/types/index';
 import { sendSms } from './smsService';
 
+/** bcrypt work factor for newly created hashes (existing cost-8 hashes keep verifying and are not rewritten). */
+const BCRYPT_COST = 12;
+
+// Pre-computed hash used to keep response time similar for unknown users (limits account enumeration by timing).
+const DUMMY_HASH = bcrypt.hashSync('fixhub-dummy-password', BCRYPT_COST);
+
 const DEFAULT_DEV_JWT_SECRET = 'fixhub-dev-secret-key-production-change-me';
 
 /**
@@ -120,7 +126,7 @@ export class AuthService {
       return { success: false, error: 'User not found.' };
     }
 
-    user.passwordHash = bcrypt.hashSync(newPassword, 8);
+    user.passwordHash = bcrypt.hashSync(newPassword, BCRYPT_COST);
     (user as any).sessionVersion = ((user as any).sessionVersion || 1) + 1;
     this.resetTokens.delete(code);
     db.save();
@@ -155,7 +161,7 @@ export class AuthService {
       };
     }
 
-    user.passwordHash = bcrypt.hashSync(newPassword, 8);
+    user.passwordHash = bcrypt.hashSync(newPassword, BCRYPT_COST);
     (user as any).sessionVersion = ((user as any).sessionVersion || 1) + 1;
     db.save();
 
@@ -417,17 +423,16 @@ export class AuthService {
       (u) => u.email.toLowerCase() === cleanIdentifier || u.phone.replace(/\s+/g, '') === cleanIdentifier.replace(/\s+/g, '')
     );
 
-    if (!user) {
-      return { error: 'Invalid credentials. User not found.' };
-    }
-
     // A password is ALWAYS required on this path. Social (Google) logins go through
     // AuthService.socialLogin / POST /auth/social-login, which verify a provider token instead.
     if (typeof password !== 'string' || password.length === 0) {
       return { error: 'Password is required.' };
     }
-    if (!user.passwordHash || !bcrypt.compareSync(password, user.passwordHash)) {
-      return { error: 'Invalid password. Please check and retry.' };
+    // Same message for "unknown user" and "wrong password" (no account enumeration); a dummy bcrypt
+    // comparison keeps timing similar when the user does not exist.
+    const passwordOk = bcrypt.compareSync(password, user?.passwordHash || DUMMY_HASH);
+    if (!user || !user.passwordHash || !passwordOk) {
+      return { error: 'Invalid email/phone or password.' };
     }
 
     if (user.role === 'technician') {
@@ -480,7 +485,7 @@ export class AuthService {
     }
 
     const userId = `usr_cust_${Date.now()}`;
-    const passwordHash = bcrypt.hashSync(data.password, 8);
+    const passwordHash = bcrypt.hashSync(data.password, BCRYPT_COST);
     const now = new Date().toISOString();
 
     const newUser = {
@@ -578,7 +583,7 @@ export class AuthService {
     }
 
     const userId = `usr_tech_${Date.now()}`;
-    const passwordHash = bcrypt.hashSync(data.password, 8);
+    const passwordHash = bcrypt.hashSync(data.password, BCRYPT_COST);
     const now = new Date().toISOString();
 
     const newUser = {

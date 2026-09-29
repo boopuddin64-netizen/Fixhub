@@ -572,6 +572,20 @@ export async function runSecurityAuditFixTests(): Promise<{ passed: number; fail
       }
     }
 
+    // ---- Extra: generic login errors + bcrypt cost ----
+    console.log('Extra: generic login errors, bcrypt cost');
+    {
+      const unknownUser = AuthService.login('nobody-here@example.com', 'whatever123') as any;
+      const wrongPw = AuthService.login('customer@test.fixhub.local', 'wrongpass123') as any;
+      assert(unknownUser.error && unknownUser.error === wrongPw.error, 'Unknown user and wrong password return the identical error (no enumeration)');
+      const bcryptjs = (await import('bcryptjs')).default;
+      const r2 = AuthService.registerCustomer({ name: 'Cost Check', phone: '+2348055500011', email: 'cost.check@example.com', password: 'Passw0rdY9' }) as any;
+      const hash = (db.users.find((x) => x.email === 'cost.check@example.com') as any)?.passwordHash as string;
+      assert(!r2.error && bcryptjs.getRounds(hash) >= 12, 'New password hashes use bcrypt cost >= 12', String(hash && bcryptjs.getRounds(hash)));
+      assert(!('error' in AuthService.login('cost.check@example.com', 'Passw0rdY9')), 'A cost-12 hash verifies at login');
+      assert(!('error' in AuthService.login('customer@test.fixhub.local', 'password123')), 'Legacy cost-8 hashes still verify');
+    }
+
     // <<FIXES>>
   } catch (err: any) {
     assert(false, 'Security audit regression suite threw', err?.stack || err?.message);
