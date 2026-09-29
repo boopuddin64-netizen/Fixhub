@@ -316,6 +316,20 @@ export async function runSecurityAuditFixTests(): Promise<{ passed: number; fail
       assert(defJwt.status === 1, 'Boot with the default JWT_SECRET exits 1', `status=${defJwt.status}`);
     }
 
+    // ---- Fix 7: schema bootstrap is awaited ----
+    console.log('Fix 7: schema creation is awaited');
+    {
+      const { pgDb } = await import('../../server/db/pgClient');
+      let readyOk = true;
+      try { await pgDb.ready; } catch { readyOk = false; }
+      assert(readyOk, 'pgDb.ready resolves once the schema has been applied');
+      const tables = await db.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'");
+      const names = new Set(tables.rows.map((r: any) => r.table_name));
+      assert(['users', 'payments', 'repair_jobs', 'technician_earnings', 'messages', 'refunds', 'reviews', 'warranties', 'device_models'].every((t) => names.has(t)), 'All core tables exist right after ready (incl. payments, messages, reviews)');
+      assert(typeof (pgDb.executeSchema() as any).then === 'function', 'executeSchema() returns a promise (awaitable) and is idempotent');
+      await pgDb.executeSchema();
+    }
+
     // <<FIXES>>
   } catch (err: any) {
     assert(false, 'Security audit regression suite threw', err?.stack || err?.message);

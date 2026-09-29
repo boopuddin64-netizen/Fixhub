@@ -7,6 +7,7 @@ import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './server/routes/api';
 import { validateProductionSecrets } from './server/config/envValidator';
 import { db } from './server/db';
+import { pgDb } from './server/db/pgClient';
 import { getJwtSecret } from './server/services/authService';
 import { globalErrorHandler, installProcessSafeguards } from './server/middleware/errorHandler';
 
@@ -58,6 +59,9 @@ async function startServer() {
   if (process.env.NODE_ENV === 'production') {
     getJwtSecret(); // throws (and the startServer catch below exits) if unusable
   }
+
+  // Wait for the database schema to be applied before accepting traffic (rejects -> process exits 1).
+  await pgDb.ready;
 
   const app = express();
   const PORT = 3000;
