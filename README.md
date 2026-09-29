@@ -126,5 +126,5 @@ script in `index.html` is allowed by SHA-256 hash computed at boot from `dist/in
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every push to `main` and every pull request: frozen-lockfile install, typecheck,
+`docs/ci/ci.yml` (copy it to `.github/workflows/ci.yml` — the automation token used to open the PR lacks GitHub's `workflow` scope, so the file could not be pushed at its final path) runs on every push to `main` and every pull request: frozen-lockfile install, typecheck,
 lint, build, tests (pg-mem, and again against a PostgreSQL service container) and `bun audit`.
