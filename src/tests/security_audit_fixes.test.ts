@@ -4,6 +4,8 @@
  */
 import express from 'express';
 import { spawnSync } from 'child_process';
+import fs from 'fs';
+import nodePath from 'path';
 import type { AddressInfo } from 'net';
 import { db } from '../../server/db';
 import { apiRouter } from '../../server/routes/api';
@@ -328,6 +330,57 @@ export async function runSecurityAuditFixTests(): Promise<{ passed: number; fail
       assert(['users', 'payments', 'repair_jobs', 'technician_earnings', 'messages', 'refunds', 'reviews', 'warranties', 'device_models'].every((t) => names.has(t)), 'All core tables exist right after ready (incl. payments, messages, reviews)');
       assert(typeof (pgDb.executeSchema() as any).then === 'function', 'executeSchema() returns a promise (awaitable) and is idempotent');
       await pgDb.executeSchema();
+    }
+
+    // ---- Fix 8: SVG stored XSS ----
+    console.log('Fix 8: SVG upload blocked, attachments served as downloads');
+    const attDir = nodePath.resolve(process.cwd(), './data/attachments');
+    const attDirExisted = fs.existsSync(attDir);
+    const filesBefore = attDirExisted ? new Set(fs.readdirSync(attDir)) : new Set<string>();
+    try {
+      const custTok8 = (await call('POST', '/auth/login', { emailOrPhone: 'customer@test.fixhub.local', password: 'password123' })).json.token;
+      const b64 = (str: string) => Buffer.from(str).toString('base64');
+      const svgPayloads: Array<[string, string]> = [
+        ['plain svg', '<svg xmlns="http://www.w3.org/2000/svg"><circle r="5"/></svg>'],
+        ['onmouseover', '<svg xmlns="http://www.w3.org/2000/svg" onmouseover="alert(document.domain)" width="500" height="500"><rect width="500" height="500"/></svg>'],
+        ['onclick', '<svg xmlns="http://www.w3.org/2000/svg"><rect width="9" height="9" onclick="alert(1)"/></svg>'],
+        ['entity-encoded javascript:', '<svg xmlns="http://www.w3.org/2000/svg"><a href="&#106;avascript:alert(1)"><text y="10">x</text></a></svg>'],
+        ['animate href', '<svg xmlns="http://www.w3.org/2000/svg"><a><animate attributeName="href" values="javascript&colon;alert(1)"/><text y="10">x</text></a></svg>'],
+        ['xml prolog', '<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"/>'],
+      ];
+      for (const [label, svg] of svgPayloads) {
+        const asSvg = await call('POST', '/repairs/attachments/upload', { fileData: `data:image/svg+xml;base64,${b64(svg)}`, type: 'IMAGE', mimeType: 'image/svg+xml' }, custTok8);
+        assert(asSvg.status === 415, `SVG upload rejected (${label})`, String(asSvg.status));
+      }
+      const disguised = await call('POST', '/repairs/attachments/upload', { fileData: b64(svgPayloads[1][1]), type: 'IMAGE', mimeType: 'image/png' }, custTok8);
+      assert(disguised.status === 415, 'SVG disguised with a PNG MIME is rejected (content sniffing)', String(disguised.status));
+      const htmlAsPng = await call('POST', '/repairs/attachments/upload', { fileData: b64('<!DOCTYPE html><html><script>alert(1)</script></html>'), type: 'IMAGE', mimeType: 'image/png' }, custTok8);
+      assert(htmlAsPng.status === 415, 'HTML disguised as PNG is rejected', String(htmlAsPng.status));
+      // a real (1x1) PNG still uploads and is served as a hardened download
+      const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+      const okPng = await call('POST', '/repairs/attachments/upload', { fileData: `data:image/png;base64,${png}`, type: 'IMAGE', mimeType: 'image/png' }, custTok8);
+      assert(okPng.status === 201 && /\.png$/.test(okPng.json?.url || ''), 'A legitimate PNG upload still works', JSON.stringify(okPng.json));
+      if (okPng.status === 201) {
+        const dl = await fetch(`${app.base.replace('/api', '')}${okPng.json.url}`, { headers: { Authorization: `Bearer ${custTok8}`, 'X-Forwarded-For': '10.77.0.1' } });
+        assert(dl.status === 200, 'Owner can download the attachment');
+        assert(dl.headers.get('x-content-type-options') === 'nosniff', 'Attachment response has X-Content-Type-Options: nosniff');
+        assert(/^attachment/.test(dl.headers.get('content-disposition') || ''), 'Attachment response has Content-Disposition: attachment');
+        assert(/sandbox/.test(dl.headers.get('content-security-policy') || ''), 'Attachment response has a restrictive CSP (sandbox)');
+        assert(dl.headers.get('content-type') === 'image/png', 'Attachment response has the fixed image/png type');
+      }
+      // legacy SVG already on disk is never served as an image/svg+xml document
+      if (!fs.existsSync(attDir)) fs.mkdirSync(attDir, { recursive: true });
+      const legacy = 'att_legacy_test.svg';
+      fs.writeFileSync(nodePath.join(attDir, legacy), '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>');
+      (db.uploadedAttachments as any[]).push({ id: 'att_legacy_test', type: 'IMAGE', url: `/api/repairs/attachments/${legacy}`, mimeType: 'image/svg+xml', size: 10, createdAt: new Date().toISOString(), ownerId: 'usr_customer_1' });
+      const legacyRes = await fetch(`${app.base}/repairs/attachments/${legacy}`, { headers: { Authorization: `Bearer ${custTok8}`, 'X-Forwarded-For': '10.77.0.2' } });
+      assert(legacyRes.status === 200 && legacyRes.headers.get('content-type') === 'application/octet-stream' && /^attachment/.test(legacyRes.headers.get('content-disposition') || ''), 'Legacy SVG on disk is served as octet-stream download, not as an SVG document', `${legacyRes.status} ${legacyRes.headers.get('content-type')}`);
+    } finally {
+      // remove files created by this test (and the folder if we created it)
+      if (fs.existsSync(attDir)) {
+        for (const f of fs.readdirSync(attDir)) if (!filesBefore.has(f)) fs.unlinkSync(nodePath.join(attDir, f));
+        if (!attDirExisted && fs.readdirSync(attDir).length === 0) fs.rmdirSync(attDir);
+      }
     }
 
     // <<FIXES>>

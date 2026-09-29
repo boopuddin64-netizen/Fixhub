@@ -1109,7 +1109,7 @@ apiRouter.post('/repairs/attachments/upload', requireAuth, requireRole(['custome
       if (lowerMime.includes('png')) attachExt = 'png';
       else if (lowerMime.includes('webp')) attachExt = 'webp';
       else if (lowerMime.includes('gif')) attachExt = 'gif';
-      else if (lowerMime.includes('svg')) attachExt = 'svg';
+      else if (lowerMime.includes('svg')) attachExt = 'svg'; // rejected below
       else attachExt = 'jpg';
     } else if (type === 'AUDIO') {
       if (lowerMime.includes('mp4') || lowerMime.includes('m4a') || lowerMime.includes('aac')) attachExt = 'm4a';
@@ -1119,21 +1119,16 @@ apiRouter.post('/repairs/attachments/upload', requireAuth, requireRole(['custome
       else attachExt = 'webm';
     }
 
-    // Inspect SVG attachments for embedded scripts / malicious tags (Stored XSS mitigation)
-    if (lowerMime.includes('svg') || attachExt === 'svg') {
-      const textContent = buffer.toString('utf8');
-      if (
-        /<script/i.test(textContent) ||
-        /javascript:/i.test(textContent) ||
-        /onload=/i.test(textContent) ||
-        /onerror=/i.test(textContent) ||
-        /<foreignObject/i.test(textContent) ||
-        /<iframe/i.test(textContent)
-      ) {
-        return res.status(400).json({
-          error: 'Security violation: Malicious scripts or executable markup detected in SVG attachment.',
-        });
-      }
+    // SVG (and any markup) is an active-content format: it can carry script, event handlers, <animate>,
+    // entity-encoded javascript: URLs, etc. A regex blacklist cannot make it safe, so SVG uploads are
+    // rejected outright — by declared MIME/extension AND by sniffing the bytes (client MIME is untrusted).
+    const head = buffer.subarray(0, 2048).toString('utf8').replace(/^\uFEFF/, '').trimStart().toLowerCase();
+    const looksLikeMarkup =
+      head.startsWith('<') && (/<svg[\s>]/.test(head) || /<!doctype/.test(head) || /<html[\s>]/.test(head) || /<script[\s>]/.test(head) || /^<\?xml/.test(head));
+    if (lowerMime.includes('svg') || lowerMime.includes('xml') || lowerMime.includes('html') || attachExt === 'svg' || looksLikeMarkup) {
+      return res.status(415).json({
+        error: 'SVG and markup files are not allowed. Please upload a JPEG, PNG, WebP or GIF image.',
+      });
     }
 
     const filename = `${attachId}.${attachExt}`;
@@ -1199,14 +1194,27 @@ apiRouter.get('/repairs/attachments/:filename', requireAuth, (req: Authenticated
     return res.status(403).json({ error: 'Forbidden: You do not have permission to access this attachment.' });
   }
 
+  // Uploads are untrusted user content: never let the browser sniff or render them as a document.
   const ext = path.extname(safeFilename).toLowerCase();
-  if (ext === '.webm') res.type('audio/webm');
-  else if (ext === '.ogg') res.type('audio/ogg');
-  else if (ext === '.m4a' || ext === '.mp4') res.type('audio/mp4');
-  else if (ext === '.wav') res.type('audio/wav');
-  else if (ext === '.jpg' || ext === '.jpeg') res.type('image/jpeg');
-  else if (ext === '.png') res.type('image/png');
-  else if (ext === '.webp') res.type('image/webp');
+  const SAFE_TYPES: Record<string, string> = {
+    '.webm': 'audio/webm',
+    '.ogg': 'audio/ogg',
+    '.m4a': 'audio/mp4',
+    '.mp4': 'audio/mp4',
+    '.wav': 'audio/wav',
+    '.3gp': 'audio/3gpp',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.webp': 'image/webp',
+    '.gif': 'image/gif',
+  };
+  // Anything else (incl. legacy .svg files uploaded before this fix) is served as an opaque download.
+  res.setHeader('Content-Type', SAFE_TYPES[ext] || 'application/octet-stream');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Disposition', `attachment; filename="${safeFilename.replace(/[^A-Za-z0-9._-]/g, '_')}"`);
+  res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'; style-src 'none'; script-src 'none'");
+  res.setHeader('Cache-Control', 'private, max-age=0');
 
   res.sendFile(filePath);
 });
