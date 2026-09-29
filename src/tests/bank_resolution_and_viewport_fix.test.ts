@@ -1,4 +1,3 @@
-import { strictEqual, ok } from 'node:assert';
 import { PaystackClient } from '../../server/services/paystackClient';
 
 export async function runBankResolutionAndViewportTests(): Promise<{ passed: number; failed: number }> {
@@ -17,7 +16,9 @@ export async function runBankResolutionAndViewportTests(): Promise<{ passed: num
   };
 
   // Test 1: Real OPay NUBAN account resolution via banking network
-  try {
+  if (process.env.SKIP_LIVE_NETWORK_TESTS === '1') {
+    console.log('  [SKIP] Test 1: live OPay account resolution (SKIP_LIVE_NETWORK_TESTS=1, needs a live Paystack key)');
+  } else try {
     const result = await PaystackClient.resolveAccountNumber('8030000000', '999992'); // Real OPay code and number
     testAssert(
       result.success === true && typeof result.accountName === 'string' && result.accountName.length > 0,
