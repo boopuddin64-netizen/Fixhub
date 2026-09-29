@@ -455,6 +455,47 @@ export async function runSecurityAuditFixTests(): Promise<{ passed: number; fail
       }
     }
 
+    // ---- Fix 10: CORS allow-list ----
+    console.log('Fix 10: CORS allow-list');
+    {
+      const { isOriginAllowed, buildCorsOptions, parseAllowedOrigins } = await import('../../server/config/cors');
+      const prod: any = { NODE_ENV: 'production', ALLOWED_ORIGINS: 'https://app.fixhub.ng, https://*.staging.fixhub.ng ,*', APP_URL: 'https://fixhub.example.com/some/path' };
+      assert(parseAllowedOrigins(prod).includes('https://app.fixhub.ng') && parseAllowedOrigins(prod).includes('https://fixhub.example.com'), 'ALLOWED_ORIGINS and APP_URL origin are parsed');
+      assert(!parseAllowedOrigins(prod).includes('*'), 'A bare * in ALLOWED_ORIGINS is ignored');
+      assert(isOriginAllowed('https://app.fixhub.ng', prod), 'Listed origin is allowed');
+      assert(isOriginAllowed('https://pr-1.staging.fixhub.ng', prod), 'Explicit wildcard-subdomain entry is honoured');
+      assert(!isOriginAllowed('https://evil.example', prod), 'Unlisted origin is denied in production');
+      assert(!isOriginAllowed('https://evil.example.run.app', prod), '*.run.app is no longer implicitly trusted');
+      assert(!isOriginAllowed('http://localhost:3000', prod), 'localhost is denied in production unless listed');
+      assert(!isOriginAllowed('https://staging.fixhub.ng.evil.example', prod), 'Suffix look-alike domains are denied');
+      assert(isOriginAllowed(undefined, prod), 'Requests without Origin (same-origin/curl) are unaffected');
+      const dev: any = { NODE_ENV: 'development' };
+      assert(isOriginAllowed('http://localhost:5173', dev) && isOriginAllowed('http://127.0.0.1:3000', dev), 'Dev defaults allow localhost / 127.0.0.1');
+      assert(!isOriginAllowed('https://evil.example', dev), 'Arbitrary origins are denied even in development');
+      // end-to-end with the real cors middleware
+      const cors = (await import('cors')).default;
+      const savedEnv = { NODE_ENV: process.env.NODE_ENV, AO: process.env.ALLOWED_ORIGINS };
+      process.env.NODE_ENV = 'production';
+      process.env.ALLOWED_ORIGINS = 'https://app.fixhub.ng';
+      const a3 = express();
+      a3.use(cors(buildCorsOptions(process.env)));
+      a3.get('/x', (_q, r) => { r.json({ ok: 1 }); });
+      const srv3 = await new Promise<import('http').Server>((resolve) => { const s3 = a3.listen(0, '127.0.0.1', () => resolve(s3)); });
+      const u3 = `http://127.0.0.1:${(srv3.address() as AddressInfo).port}/x`;
+      try {
+        const evil = await fetch(u3, { method: 'OPTIONS', headers: { Origin: 'https://evil.example', 'Access-Control-Request-Method': 'GET' } });
+        assert(!evil.headers.get('access-control-allow-origin') && !evil.headers.get('access-control-allow-credentials'), 'Preflight from evil origin gets no ACAO / ACAC headers');
+        const good = await fetch(u3, { method: 'OPTIONS', headers: { Origin: 'https://app.fixhub.ng', 'Access-Control-Request-Method': 'GET' } });
+        assert(good.headers.get('access-control-allow-origin') === 'https://app.fixhub.ng' && good.headers.get('access-control-allow-credentials') === 'true', 'Preflight from allow-listed origin is granted (with credentials)');
+        const evilGet = await fetch(u3, { headers: { Origin: 'https://evil.example' } });
+        assert(!evilGet.headers.get('access-control-allow-origin'), 'Simple GET from evil origin gets no ACAO header');
+      } finally {
+        await new Promise<void>((resolve) => srv3.close(() => resolve()));
+        if (savedEnv.NODE_ENV === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = savedEnv.NODE_ENV;
+        if (savedEnv.AO === undefined) delete process.env.ALLOWED_ORIGINS; else process.env.ALLOWED_ORIGINS = savedEnv.AO;
+      }
+    }
+
     // <<FIXES>>
   } catch (err: any) {
     assert(false, 'Security audit regression suite threw', err?.stack || err?.message);
