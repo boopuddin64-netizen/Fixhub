@@ -965,10 +965,13 @@ const isDirectRun =
   (process.argv[1].endsWith('run_all_tests.ts') || process.argv[1].endsWith('run_all_tests.js'));
 
 if (isDirectRun) {
-  runTestSuite().catch((err) => {
-    console.error('Test execution failed:', err);
-    process.exit(1);
-  });
+  runTestSuite()
+    // Exit explicitly: with a real PostgreSQL the connection pool / writer lock would keep the event loop alive.
+    .then(({ failed }) => process.exit(failed > 0 ? 1 : 0))
+    .catch((err) => {
+      console.error('Test execution failed:', err);
+      process.exit(1);
+    });
 }
 
   // Test: Fix Hub Phase 2.5 Correction

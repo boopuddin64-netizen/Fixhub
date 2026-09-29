@@ -66,6 +66,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Test
         env:
+          FIXHUB_USE_POSTGRES: 'true'
           DATABASE_URL: postgres://fixhub:fixhub@localhost:5432/fixhub
           SKIP_LIVE_NETWORK_TESTS: '1'
         run: npm test
