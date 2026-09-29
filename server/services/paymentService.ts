@@ -53,7 +53,28 @@ export class PaymentService {
    * Initializes a Paystack transaction for a repair job.
    * Authoritative amount is derived strictly from server-side quote and job records.
    */
-  public static async initializePayment(params: InitializePaymentParams): Promise<
+  public static async initializePayment(params: InitializePaymentParams): ReturnType<typeof PaymentService.initializePaymentUnlocked> {
+    // Serialise concurrent initializations for the same repair job so parallel requests (even with
+    // different idempotency keys) cannot create duplicate payment records / Paystack transactions.
+    const lockKey = String(params.repairJobId);
+    const previous = this.initLocks.get(lockKey) || Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => { release = resolve; });
+    const tail = previous.then(() => current);
+    this.initLocks.set(lockKey, tail);
+    await previous;
+    try {
+      return await this.initializePaymentUnlocked(params);
+    } finally {
+      release();
+      if (this.initLocks.get(lockKey) === tail) this.initLocks.delete(lockKey);
+    }
+  }
+
+  /** Per-repair-job promise chain used to serialise payment initialization (single-process lock). */
+  private static initLocks: Map<string, Promise<void>> = new Map();
+
+  private static async initializePaymentUnlocked(params: InitializePaymentParams): Promise<
     | {
         success: true;
         payment: PaymentTransaction;
@@ -129,6 +150,23 @@ export class PaymentService {
       };
     }
 
+    // 5b. Reuse any still-open payment attempt for this job (regardless of idempotency key) instead of
+    //     creating a second Paystack transaction for the same repair.
+    const openAttempt = db.payments.find(
+      (p) => p.repairId === repairJobId && p.customerId === customerId && (p.status === 'INITIATED' || p.status === 'PENDING')
+    );
+    const currentAmount = job.finalAmount || job.originalQuoteAmount || quote.totalAmount;
+    if (openAttempt && openAttempt.amountNaira === currentAmount) {
+      return {
+        success: true,
+        payment: openAttempt,
+        authorizationUrl: openAttempt.authorizationUrl,
+        accessCode: openAttempt.accessCode,
+        reference: openAttempt.providerReference || openAttempt.transactionRef,
+        isExisting: true,
+      };
+    }
+
     // 6. Obtain authoritative amount from server record (Never trust client!)
     const totalAmount = job.finalAmount || job.originalQuoteAmount || quote.totalAmount;
     if (!totalAmount || totalAmount <= 0) {
@@ -178,7 +216,7 @@ export class PaymentService {
       platformFeeNaira: platformFee,
       technicianPayoutNaira: technicianPayout,
       currency: 'NGN',
-      provider: process.env.PAYMENT_MODE === 'live' ? 'PAYSTACK_LIVE' : 'PAYSTACK_SANDBOX',
+      provider: PaystackClient.getPaymentMode() === 'live' ? 'PAYSTACK_LIVE' : 'PAYSTACK_SANDBOX',
       status: 'INITIATED',
       transactionRef: uniqueRef,
       providerReference: uniqueRef,
@@ -308,9 +346,13 @@ export class PaymentService {
       return { success: false, error: 'Payment transaction record not found.' };
     }
 
-    // 2. Authorization check: customer can only verify their own payment
-    if (actorRole === 'customer' && actorId && payment.customerId !== actorId) {
-      return { success: false, error: 'Unauthorized: Payment does not belong to you.' };
+    // 2. Authorization check: only the paying customer or an admin may verify a payment.
+    //    Internal callers (Paystack webhook processing) pass no actor at all.
+    const isInternalCall = !actorId && !actorRole;
+    if (!isInternalCall && actorRole !== 'admin') {
+      if (actorRole !== 'customer' || !actorId || payment.customerId !== actorId) {
+        return { success: false, error: 'Unauthorized: Payment does not belong to you.' };
+      }
     }
 
     // 3. Locate associated job

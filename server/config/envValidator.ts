@@ -65,5 +65,16 @@ export function validateProductionSecrets(
     throw new Error(errorMsg);
   }
 
+  // 5. PAYMENT_MODE must be live in production (sandbox simulates successful payments)
+  const paymentMode = env.PAYMENT_MODE?.trim().toLowerCase();
+  if (paymentMode && paymentMode !== 'live') {
+    const errorMsg = 'FATAL: PAYMENT_MODE must be "live" (or unset) when NODE_ENV=production; sandbox mode simulates payments.';
+    console.error(errorMsg);
+    if (exitOnError) {
+      process.exit(1);
+    }
+    throw new Error(errorMsg);
+  }
+
   return { valid: true };
 }

@@ -7,6 +7,7 @@ import type { AddressInfo } from 'net';
 import { db } from '../../server/db';
 import { apiRouter } from '../../server/routes/api';
 import { AuthService } from '../../server/services/authService';
+import { PaystackClient } from '../../server/services/paystackClient';
 import { PaymentService } from '../../server/services/paymentService';
 import { makeAsyncSafe } from '../../server/utils/asyncRouter';
 import { globalErrorHandler } from '../../server/middleware/errorHandler';
@@ -202,6 +203,89 @@ export async function runSecurityAuditFixTests(): Promise<{ passed: number; fail
         console.error = origErr;
         await new Promise<void>((resolve) => srv.close(() => resolve()));
       }
+    }
+
+    // ---- Fix 5: payments hardening ----
+    console.log('Fix 5: payment mode, verify authorization, concurrent initialize');
+    {
+      const saved = { NODE_ENV: process.env.NODE_ENV, PM: process.env.PAYMENT_MODE, KEY: process.env.PAYSTACK_SECRET_KEY };
+      const savedFetch = globalThis.fetch;
+      const origWarn = console.warn;
+      try {
+        delete process.env.PAYMENT_MODE;
+        process.env.NODE_ENV = 'production';
+        assert(PaystackClient.getPaymentMode() === 'live', 'PAYMENT_MODE defaults to live in production');
+        process.env.PAYMENT_MODE = 'sandbox';
+        assert(PaystackClient.getPaymentMode() === 'live', 'PAYMENT_MODE=sandbox is ignored (live) in production');
+        // Non-OK Paystack answer with a real-looking key must NOT be turned into a simulated success in production
+        process.env.PAYSTACK_SECRET_KEY = 'sk_live_' + 'a'.repeat(30);
+        (globalThis as any).fetch = async () => ({ ok: false, json: async () => ({ status: false, message: 'Transaction reference not found' }) });
+        const prodVerify = await PaystackClient.verifyTransaction('FXP-NOT-PAID', 3000000);
+        assert(prodVerify.status === false, 'Production: non-OK Paystack verify does not simulate success');
+        (globalThis as any).fetch = async () => { throw new Error('network down'); };
+        const prodNet = await PaystackClient.verifyTransaction('FXP-NOT-PAID', 3000000);
+        assert(prodNet.status === false, 'Production: Paystack network error does not simulate success');
+        // Production with a dummy key refuses (no simulation)
+        process.env.PAYSTACK_SECRET_KEY = 'sk_test_mock_fixhub_development_key';
+        const prodMock = await PaystackClient.verifyTransaction('FXP-NOT-PAID', 3000000);
+        assert(prodMock.status === false, 'Production: dummy/mock key cannot verify payments');
+        // env validator rejects sandbox mode in production
+        const { validateProductionSecrets } = await import('../../server/config/envValidator');
+        const goodEnv: any = { NODE_ENV: 'production', PAYSTACK_SECRET_KEY: 'sk_live_' + 'a'.repeat(30), DATABASE_URL: 'postgres://x', JWT_SECRET: 'x'.repeat(48), SMS_PROVIDER_API_KEY: 'k' };
+        const origErr = console.error;
+        console.error = () => {};
+        let sandboxRejected = false;
+        try { validateProductionSecrets({ ...goodEnv, PAYMENT_MODE: 'sandbox' }, false); } catch { sandboxRejected = true; }
+        console.error = origErr;
+        assert(sandboxRejected, 'Env validator rejects PAYMENT_MODE=sandbox in production');
+        assert(validateProductionSecrets({ ...goodEnv, PAYMENT_MODE: 'live' }, false).valid === true, 'Env validator accepts PAYMENT_MODE=live');
+      } finally {
+        (globalThis as any).fetch = savedFetch;
+        console.warn = origWarn;
+        if (saved.NODE_ENV === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = saved.NODE_ENV;
+        if (saved.PM === undefined) delete process.env.PAYMENT_MODE; else process.env.PAYMENT_MODE = saved.PM;
+        if (saved.KEY === undefined) delete process.env.PAYSTACK_SECRET_KEY; else process.env.PAYSTACK_SECRET_KEY = saved.KEY;
+      }
+    }
+    {
+      // fresh job for authorization + concurrency checks
+      const now = new Date().toISOString();
+      db.repairRequests.push({ id: 'req_pay5', customerId: 'usr_customer_1', deviceBrand: 'Apple', deviceModel: 'iPhone 13', deviceType: 'SMARTPHONE', issues: [], description: 'x', photos: [], status: 'REQUESTED', createdAt: now, updatedAt: now, quotesCount: 1, matchedTechnicians: [] } as any);
+      db.repairQuotes.push({ id: 'quote_pay5', requestId: 'req_pay5', technicianId: 'usr_tech_1', technicianName: 'Emeka', businessName: 'E', technicianPhone: '', technicianRating: 5, technicianReviewsCount: 1, distanceKm: 1, partsCost: 1000, laborCost: 1000, otherCost: 0, totalAmount: 2000, estimatedTimeHours: 1, warrantyDays: 30, partsQuality: 'PREMIUM_AFTERMARKET', notes: '', status: 'ACCEPTED', createdAt: now } as any);
+      db.repairJobs.push({ id: 'job_pay5', requestId: 'req_pay5', quoteId: 'quote_pay5', customerId: 'usr_customer_1', technicianId: 'usr_tech_1', deviceBrand: 'Apple', deviceModel: 'iPhone 13', issues: [], status: 'PAYMENT_PENDING', dropOffCode: 'FX-2222', pickupCode: 'PK-2222', handoffQrToken: 't', originalQuoteAmount: 2000, finalAmount: 2000, platformFeeAmount: 0, technicianPayoutAmount: 0, partsUsed: [], createdAt: now, statusHistory: [] } as any);
+      const results = await Promise.all(
+        Array.from({ length: 6 }, (_, i) => PaymentService.initializePayment({ repairJobId: 'job_pay5', customerId: 'usr_customer_1', idempotencyKey: `race_key_${i}`, customerEmail: 'customer@test.fixhub.local' }))
+      );
+      const ok = results.filter((r) => r.success);
+      const ids = new Set(ok.map((r: any) => r.payment.id));
+      assert(ok.length === 6 && ids.size === 1, '6 concurrent initializes with different idempotency keys yield ONE payment', `distinct=${ids.size}`);
+      assert(db.payments.filter((p) => p.repairId === 'job_pay5').length === 1, 'Only one payment record exists for the job');
+      const ref = (ok[0] as any).reference;
+      // technicians (even the assigned one) cannot verify a customer's payment
+      const techVerify = await PaymentService.verifyPayment({ reference: ref, actorId: 'usr_tech_1', actorRole: 'technician' });
+      assert(techVerify.success === false, 'Assigned technician cannot verify the customer payment');
+      const otherTech = await PaymentService.verifyPayment({ reference: ref, actorId: 'usr_tech_2', actorRole: 'technician' });
+      assert(otherTech.success === false, 'Unrelated technician cannot verify the payment');
+      const otherCust = await PaymentService.verifyPayment({ reference: ref, actorId: 'usr_customer_2', actorRole: 'customer' });
+      assert(otherCust.success === false, 'Other customer cannot verify the payment');
+      assert(db.payments.find((p) => p.transactionRef === ref)?.status === 'INITIATED', 'Rejected verify attempts leave the payment untouched');
+      const noActorRole = await PaymentService.verifyPayment({ reference: ref, actorId: 'usr_customer_1' });
+      assert(noActorRole.success === false, 'An actorId without a role is not accepted');
+      const admin = await PaymentService.verifyPayment({ reference: ref, actorId: 'usr_admin_x', actorRole: 'admin' });
+      assert(admin.success === true, 'Admin can verify a payment');
+    }
+    {
+      // via HTTP: technician token gets 400 on verify of somebody else's payment
+      const now = new Date().toISOString();
+      db.repairJobs.push({ id: 'job_pay5b', requestId: 'req_pay5', quoteId: 'quote_pay5', customerId: 'usr_customer_1', technicianId: 'usr_tech_1', deviceBrand: 'Apple', deviceModel: 'iPhone 13', issues: [], status: 'PAYMENT_PENDING', dropOffCode: 'FX-3333', pickupCode: 'PK-3333', handoffQrToken: 't', originalQuoteAmount: 2000, finalAmount: 2000, platformFeeAmount: 0, technicianPayoutAmount: 0, partsUsed: [], createdAt: now, statusHistory: [] } as any);
+      const custTok = (await call('POST', '/auth/login', { emailOrPhone: 'customer@test.fixhub.local', password: 'password123' })).json.token;
+      const techTok = (await call('POST', '/auth/login', { emailOrPhone: 'technician@test.fixhub.local', password: 'password123' })).json.token;
+      const initHttp = await call('POST', '/payments/initialize', { repairJobId: 'job_pay5b', idempotencyKey: 'http_idem_1' }, custTok);
+      assert(initHttp.status === 200 && !!initHttp.json?.reference, 'HTTP: customer initializes payment', JSON.stringify(initHttp.json));
+      const techHttp = await call('POST', '/payments/verify', { reference: initHttp.json.reference }, techTok);
+      assert(techHttp.status === 400, 'HTTP: technician verify of a customer payment is rejected', String(techHttp.status));
+      const custHttp = await call('POST', '/payments/verify', { reference: initHttp.json.reference }, custTok);
+      assert(custHttp.status === 200 && custHttp.json?.payment?.status === 'SUCCESS', 'HTTP: owning customer can verify (sandbox outside production)');
     }
 
     // <<FIXES>>
