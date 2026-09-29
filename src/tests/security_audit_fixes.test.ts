@@ -529,6 +529,49 @@ export async function runSecurityAuditFixTests(): Promise<{ passed: number; fail
       assert(spoof.status === 200 && (db.users.find((u) => u.id === 'usr_customer_1') as any)?.phone === smsBefore, 'verify-phone/request ignores a spoofed body userId');
     }
 
+    // ---- Fix 12: government ID never auto-approves in production without a provider ----
+    console.log('Fix 12: government ID verification fails closed in production');
+    {
+      const { IdentityVerificationService } = await import('../../server/services/identityVerificationService');
+      const u: any = db.users.find((x) => x.id === 'usr_tech_1');
+      const tp: any = AuthService.ensureTechnicianProfile(u);
+      const saved12 = { NODE_ENV: process.env.NODE_ENV, ID: process.env.IDENTITYPASS_API_KEY, PB: process.env.PREMBLY_API_KEY };
+      const realFetch12 = globalThis.fetch;
+      try {
+        delete process.env.IDENTITYPASS_API_KEY; delete process.env.PREMBLY_API_KEY;
+        process.env.NODE_ENV = 'development';
+        const dev = await IdentityVerificationService.verifyGovernmentId(u, tp, { idType: 'NIN', idNumber: '98765432101' } as any);
+        assert(dev.success === true, 'Development (no key): sandbox auto-approval still works for local testing');
+        process.env.NODE_ENV = 'production';
+        const prodCac = await IdentityVerificationService.verifyCac(u, tp, { cacNumber: 'RC-1849201' } as any);
+        assert(prodCac.success === false, 'Production without a provider key: CAC demo registry is not used');
+        const prod = await IdentityVerificationService.verifyGovernmentId(u, tp, { idType: 'NIN', idNumber: '98765432101' } as any);
+        assert(prod.success === false, 'Production without a provider key: a well-formed NIN is NOT auto-approved');
+        const prodReg = await IdentityVerificationService.verifyGovernmentId(u, tp, { idType: 'DRIVERS_LICENSE', idNumber: 'AAA12345AA01' } as any);
+        assert(prodReg.success === false, 'Production without a provider key: even demo-registry IDs are refused');
+        process.env.IDENTITYPASS_API_KEY = 'test_mock_key';
+        const prodMock = await IdentityVerificationService.verifyGovernmentId(u, tp, { idType: 'NIN', idNumber: '98765432101' } as any);
+        assert(prodMock.success === false, 'Production with a mock/test key: refused');
+        process.env.IDENTITYPASS_API_KEY = 'live_real_looking_key_123456';
+        (globalThis as any).fetch = async () => { throw new Error('provider down'); };
+        const warn = console.warn; console.warn = () => {};
+        const prodDown = await IdentityVerificationService.verifyGovernmentId(u, tp, { idType: 'NIN', idNumber: '98765432101' } as any);
+        console.warn = warn;
+        assert(prodDown.success === false, 'Production with a real key but provider unreachable: refused (fail closed)');
+        (globalThis as any).fetch = async () => ({ ok: true, json: async () => ({ status: true, data: { firstname: 'Emeka', surname: 'Okafor' } }) });
+        const prodOk = await IdentityVerificationService.verifyGovernmentId(u, tp, { idType: 'NIN', idNumber: '98765432101' } as any);
+        assert(prodOk.success === true && /okafor/i.test(prodOk.verifiedName || ''), 'Production with a real key and a provider match: accepted');
+        (globalThis as any).fetch = async () => ({ ok: true, json: async () => ({ status: true, data: { firstname: 'Someone', surname: 'Else' } }) });
+        const prodWrong = await IdentityVerificationService.verifyGovernmentId(u, tp, { idType: 'NIN', idNumber: '98765432101' } as any);
+        assert(prodWrong.success === false, 'Production: provider name that does not match the account owner is rejected');
+      } finally {
+        (globalThis as any).fetch = realFetch12;
+        if (saved12.NODE_ENV === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = saved12.NODE_ENV;
+        if (saved12.ID === undefined) delete process.env.IDENTITYPASS_API_KEY; else process.env.IDENTITYPASS_API_KEY = saved12.ID;
+        if (saved12.PB === undefined) delete process.env.PREMBLY_API_KEY; else process.env.PREMBLY_API_KEY = saved12.PB;
+      }
+    }
+
     // <<FIXES>>
   } catch (err: any) {
     assert(false, 'Security audit regression suite threw', err?.stack || err?.message);
