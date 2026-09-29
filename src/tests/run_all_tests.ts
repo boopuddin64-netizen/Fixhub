@@ -1,4 +1,5 @@
 import { db } from '../../server/db';
+import { pgDb } from '../../server/db/pgClient';
 import { AuthService } from '../../server/services/authService';
 import { TechnicianMatchingService } from '../../server/services/technicianMatchingService';
 import { PaymentService } from '../../server/services/paymentService';
@@ -44,6 +45,9 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   console.log('\n===============================================================');
   console.log('   FIX HUB BACKEND SECURITY FIX #1 — AUDIT & VERIFICATION');
   console.log('===============================================================\n');
+
+  // Real PostgreSQL applies the schema asynchronously: wait for it before touching SQL tables.
+  await pgDb.ready;
 
   // Reset to fresh seed
   db.resetToSeed();
