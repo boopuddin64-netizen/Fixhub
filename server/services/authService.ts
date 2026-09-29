@@ -74,14 +74,29 @@ export class AuthService {
   private static resetTokens: Map<string, { userId: string; expiresAt: number }> = new Map();
   private static emailVerifyTokens: Map<string, { userId: string; email: string; expiresAt: number }> = new Map();
   private static phoneVerifyTokens: Map<string, { userId?: string; phone: string; code: string; expiresAt: number }> = new Map();
-  private static revokedTokens: Set<string> = new Set();
 
+  /** Tokens are stored/compared as SHA-256 digests, so the revocation table never contains a usable credential. */
+  private static tokenDigest(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  /**
+   * Revokes a JWT (logout, account deletion). The revocation is kept in `db.revokedTokenHashes` and
+   * written through to the `revoked_tokens` table, so it survives restarts. Rows expire with the token.
+   */
   public static revokeToken(token: string): void {
-    this.revokedTokens.add(token);
+    const digest = this.tokenDigest(token);
+    db.revokedTokenHashes.add(digest);
+    const decoded: any = jwt.decode(token);
+    const expMs = decoded && typeof decoded.exp === 'number' ? decoded.exp * 1000 : Date.now() + 30 * 24 * 60 * 60 * 1000;
+    db.queueWrite(
+      `INSERT INTO revoked_tokens (token_hash, user_id, expires_at) VALUES ($1, $2, $3) ON CONFLICT (token_hash) DO NOTHING`,
+      [digest, decoded?.id ?? null, new Date(Math.max(expMs, Date.now() + 60 * 1000)).toISOString()]
+    );
   }
 
   public static isTokenRevoked(token: string): boolean {
-    return this.revokedTokens.has(token);
+    return db.revokedTokenHashes.has(this.tokenDigest(token));
   }
 
   public static async requestPasswordReset(emailOrPhone: string): Promise<{ success: boolean; message: string }> {
