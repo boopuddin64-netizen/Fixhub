@@ -16,6 +16,7 @@ import { calculateDistanceKm } from '../services/technicianMatchingService';
 import { BankOtpService, BANK_OTP_TTL_MS } from '../services/bankOtpService';
 import { sendSms } from '../services/smsService';
 import { makeAsyncSafe } from '../utils/asyncRouter';
+import { paginate } from '../utils/pagination';
 import { authRateLimiter, codeAttemptRateLimiter, codeSendRateLimiter, paymentRateLimiter, webhookRateLimiter } from '../middleware/rateLimiters';
 import {
   UserRole,
@@ -681,7 +682,7 @@ apiRouter.get('/devices/issues', (_req: Request, res: Response) => {
 apiRouter.get('/customer/devices', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
   const customerId = req.user!.id;
   const devices = (db.customerDevices || []).filter((d) => d.customerId === customerId);
-  return res.json(devices);
+  return res.json(paginate(req, res, devices));
 });
 
 apiRouter.post('/customer/devices', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
@@ -837,9 +838,32 @@ apiRouter.delete('/customer/devices/:id', requireAuth, requireRole(['customer'])
 /* -------------------------------------------------------------
  * 3. TECHNICIAN DISCOVERY & MATCHING (Public / Lead Matching)
  * ----------------------------------------------------------- */
-export function sanitizeTechnicianForPublic(tech: TechnicianProfile): Omit<TechnicianProfile, 'bankDetails' | 'trustScore'> {
-  const { bankDetails, trustScore, bankChangeVerification: _bcv, ...publicTech } = tech as any;
+/**
+ * Public view of a technician: no bank details, trust score, OTP state and NO phone number.
+ * The phone is only revealed to a customer who has an active job with that technician
+ * (see customerHasActiveJobWith / GET /jobs/:id).
+ */
+export function sanitizeTechnicianForPublic(tech: TechnicianProfile): Omit<TechnicianProfile, 'bankDetails' | 'trustScore' | 'phone'> {
+  const { bankDetails, trustScore, phone: _phone, bankChangeVerification: _bcv, ...publicTech } = tech as any;
   return publicTech;
+}
+
+/** Job states in which the customer may see / call the technician (paid, not yet closed). */
+const PHONE_VISIBLE_JOB_STATUSES = new Set<string>([
+  'PAYMENT_CONFIRMED', 'BOOKED', 'DEVICE_DROPPED_OFF', 'DEVICE_RECEIVED', 'DIAGNOSING',
+  'REPAIR_IN_PROGRESS', 'ADDITIONAL_DIAGNOSIS', 'READY_FOR_PICKUP', 'PICKED_UP',
+]);
+
+export function customerHasActiveJobWith(customerId: string, technicianId: string): boolean {
+  return db.repairJobs.some(
+    (j) => j.customerId === customerId && j.technicianId === technicianId && PHONE_VISIBLE_JOB_STATUSES.has(j.status)
+  );
+}
+
+/** Customer-facing quote: the technician's phone is blanked unless the customer has an active job with them. */
+export function sanitizeQuoteForCustomer<T extends { technicianId: string; technicianPhone?: string }>(quote: T, customerId: string): T {
+  if (customerHasActiveJobWith(customerId, quote.technicianId)) return quote;
+  return { ...quote, technicianPhone: '' };
 }
 
 /** Owner-facing view: full profile (incl. own bank details) but never any OTP/verification secrets. */
@@ -848,8 +872,8 @@ export function sanitizeTechnicianForOwner(tech: TechnicianProfile): TechnicianP
   return rest as TechnicianProfile;
 }
 
-apiRouter.get('/technicians', (_req: Request, res: Response) => {
-  return res.json(db.technicianProfiles.map(sanitizeTechnicianForPublic));
+apiRouter.get('/technicians', (req: Request, res: Response) => {
+  return res.json(paginate(req, res, db.technicianProfiles.map(sanitizeTechnicianForPublic)));
 });
 
 // NOTE: literal /technicians/* routes must be registered BEFORE /technicians/:id, otherwise
@@ -1332,7 +1356,8 @@ apiRouter.post('/repairs/requests/:id/match', requireAuth, requireRole(['custome
     const q = requestQuotes.find((rq) => rq.technicianId === m.technicianId);
     return {
       ...m,
-      quote: q || null,
+      technician: sanitizeTechnicianForPublic(m.technician),
+      quote: q ? sanitizeQuoteForCustomer(q, customerId) : null,
     };
   });
   return res.json({ request, matchedTechnicians: matchedWithQuotes });
@@ -1463,7 +1488,7 @@ apiRouter.get('/repairs/requests', requireAuth, (req: AuthenticatedRequest, res:
   if (req.user!.role === 'customer') {
     // Customers only see their own requests with full location data
     const requests = db.repairRequests.filter((r) => r.customerId === req.user!.id);
-    return res.json(requests);
+    return res.json(paginate(req, res, requests));
   } else if (req.user!.role === 'technician') {
     // Technicians only see ELIGIBLE requests (matching service radius + supported brand)
     let tech = db.technicianProfiles.find((t) => t.userId === req.user!.id);
@@ -1525,7 +1550,7 @@ apiRouter.get('/repairs/requests', requireAuth, (req: AuthenticatedRequest, res:
       }
     }
 
-    return res.json(visibleRequests);
+    return res.json(paginate(req, res, visibleRequests));
   }
 
   return res.status(403).json({ error: 'Forbidden.' });
@@ -1543,13 +1568,13 @@ apiRouter.get('/repairs/requests/:id', requireAuth, (req: AuthenticatedRequest, 
       return res.status(404).json({ error: 'Repair request not found.' });
     }
 
-    const quotes = db.repairQuotes.filter((q) => q.requestId === request.id);
+    const quotes = db.repairQuotes.filter((q) => q.requestId === request.id).map((q) => sanitizeQuoteForCustomer(q, req.user!.id));
     const matchedTechnicians = TechnicianMatchingService.matchTechnicians({
       customerLocation: request.customerLocation,
       deviceBrand: request.deviceBrand,
       deviceModel: request.deviceModel,
       issues: request.issues,
-    });
+    }).map((m) => ({ ...m, technician: sanitizeTechnicianForPublic(m.technician) }));
     return res.json({ request, quotes, matchedTechnicians });
   } else if (req.user!.role === 'technician') {
     let tech = db.technicianProfiles.find((t) => t.userId === req.user!.id);
@@ -1920,11 +1945,11 @@ apiRouter.get('/repairs/requests/:id/quotes', requireAuth, (req: AuthenticatedRe
     });
     db.save();
 
-    return res.json(quotes);
+    return res.json(paginate(req, res, quotes.map((q) => sanitizeQuoteForCustomer(q, req.user!.id))));
   } else if (req.user!.role === 'technician') {
     // Technician only sees their own quote for this request
     const quotes = db.repairQuotes.filter((q) => q.requestId === request.id && q.technicianId === req.user!.id);
-    return res.json(quotes);
+    return res.json(paginate(req, res, quotes));
   }
 
   return res.status(403).json({ error: 'Forbidden.' });
@@ -1942,12 +1967,12 @@ apiRouter.get('/quotes/my-quotes', requireAuth, (req: AuthenticatedRequest, res:
           : undefined,
       };
     });
-    return res.json(quotesWithRequests);
+    return res.json(paginate(req, res, quotesWithRequests));
   } else if (req.user!.role === 'customer') {
     const customerRequests = db.repairRequests.filter((r) => r.customerId === req.user!.id);
     const requestIds = new Set(customerRequests.map((r) => r.id));
     const quotes = db.repairQuotes.filter((q) => requestIds.has(q.requestId));
-    return res.json(quotes);
+    return res.json(paginate(req, res, quotes.map((q) => sanitizeQuoteForCustomer(q, req.user!.id))));
   }
   return res.status(403).json({ error: 'Forbidden.' });
 });
@@ -2130,10 +2155,10 @@ apiRouter.post('/technicians/payouts/request', requireAuth, requireRole(['techni
 apiRouter.get('/jobs', requireAuth, (req: AuthenticatedRequest, res: Response) => {
   if (req.user!.role === 'customer') {
     const jobs = db.repairJobs.filter((j) => j.customerId === req.user!.id);
-    return res.json(jobs);
+    return res.json(paginate(req, res, jobs));
   } else if (req.user!.role === 'technician') {
     const jobs = db.repairJobs.filter((j) => j.technicianId === req.user!.id);
-    return res.json(jobs);
+    return res.json(paginate(req, res, jobs));
   }
   return res.status(403).json({ error: 'Forbidden.' });
 });
@@ -2175,16 +2200,23 @@ apiRouter.get('/jobs/:id', requireAuth, (req: AuthenticatedRequest, res: Respons
   const payment = db.payments.find((p) => p.repairId === job.id);
   const quote = db.repairQuotes.find((q) => q.id === job.quoteId);
 
+  const isOwnTechnician = req.user!.role === 'technician' && job.technicianId === req.user!.id;
+  const revealPhone = req.user!.role === 'customer' && customerHasActiveJobWith(req.user!.id, job.technicianId);
   const safeTech = technician
-    ? (req.user!.role === 'technician' && job.technicianId === req.user!.id ? technician : sanitizeTechnicianForPublic(technician))
+    ? isOwnTechnician
+      ? technician
+      : revealPhone
+        ? { ...sanitizeTechnicianForPublic(technician), phone: technician.phone }
+        : sanitizeTechnicianForPublic(technician)
     : null;
+  const safeQuote = quote && req.user!.role === 'customer' ? sanitizeQuoteForCustomer(quote, req.user!.id) : quote;
 
   return res.json({
     job,
     customer: customer ? { id: customer.id, name: customer.name, phone: customer.phone, avatarUrl: customer.avatarUrl } : null,
     technician: safeTech,
     payment,
-    quote,
+    quote: safeQuote,
   });
 });
 
@@ -2607,12 +2639,12 @@ apiRouter.post('/reviews', requireAuth, requireRole(['customer']), (req: Authent
 
 apiRouter.get('/reviews/technician/:id', (req: Request, res: Response) => {
   const reviews = db.reviews.filter((r) => r.technicianId === req.params.id);
-  return res.json(reviews);
+  return res.json(paginate(req, res, reviews));
 });
 
 apiRouter.get('/reviews/my-reviews', requireAuth, requireRole(['customer']), (req: AuthenticatedRequest, res: Response) => {
   const reviews = db.reviews.filter((r) => r.customerId === req.user!.id);
-  return res.json(reviews);
+  return res.json(paginate(req, res, reviews));
 });
 
 /* -------------------------------------------------------------
@@ -2627,7 +2659,7 @@ apiRouter.get('/inventory', requireAuth, requireRole(['technician']), (req: Auth
     status: typeof status === 'string' ? status : undefined,
     deviceModel: typeof deviceModel === 'string' ? deviceModel : undefined,
   });
-  return res.json(items);
+  return res.json(paginate(req, res, items));
 });
 
 apiRouter.post('/inventory', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
@@ -2678,7 +2710,7 @@ apiRouter.get('/inventory/:id/price-history', requireAuth, (req: AuthenticatedRe
 
 apiRouter.get('/parts/technician/:id', (req: Request, res: Response) => {
   const parts = InventoryService.getInventoryByTechnician(req.params.id);
-  return res.json(parts);
+  return res.json(paginate(req, res, parts));
 });
 
 apiRouter.post('/parts', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
@@ -3045,7 +3077,7 @@ apiRouter.post('/technicians/availability', requireAuth, requireRole(['technicia
 apiRouter.get('/notifications', requireAuth, (req: AuthenticatedRequest, res: Response) => {
   // Always filter strictly by authenticated user's ID, ignoring query parameters
   const notifs = db.notifications.filter((n) => n.userId === req.user!.id);
-  return res.json(notifs);
+  return res.json(paginate(req, res, notifs));
 });
 
 apiRouter.post('/notifications/:id/read', requireAuth, (req: AuthenticatedRequest, res: Response) => {
@@ -3097,7 +3129,7 @@ apiRouter.get('/messages/:repairId', requireAuth, (req: AuthenticatedRequest, re
   }
 
   const messages = db.messages.filter((m) => m.repairId === repairId);
-  return res.json(messages);
+  return res.json(paginate(req, res, messages, { defaultLimit: 1000, maxLimit: 1000 }));
 });
 
 apiRouter.post('/messages/:repairId', requireAuth, (req: AuthenticatedRequest, res: Response) => {
@@ -3159,10 +3191,10 @@ apiRouter.get('/warranties/my-warranties', requireAuth, (req: AuthenticatedReque
     const jobs = db.repairJobs.filter((j) => j.customerId === req.user!.id);
     const jobIds = jobs.map((j) => j.id);
     const warranties = db.warranties.filter((w) => jobIds.includes(w.repairJobId));
-    return res.json(warranties);
+    return res.json(paginate(req, res, warranties));
   } else if (req.user!.role === 'technician') {
     const warranties = db.warranties.filter((w) => w.technicianId === req.user!.id);
-    return res.json(warranties);
+    return res.json(paginate(req, res, warranties));
   }
   return res.status(403).json({ error: 'Forbidden.' });
 });
@@ -3238,9 +3270,9 @@ apiRouter.post('/admin/technicians/:id/verify', requireAuth, requireRole(['admin
   return res.json({ success: true, technician: tech });
 });
 
-apiRouter.get('/admin/disputes', requireAuth, requireRole(['admin']), (_req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/admin/disputes', requireAuth, requireRole(['admin']), (req: AuthenticatedRequest, res: Response) => {
   const disputedJobs = db.repairJobs.filter((j) => j.status === 'DISPUTED');
-  return res.json(disputedJobs);
+  return res.json(paginate(req, res, disputedJobs));
 });
 
 apiRouter.post('/admin/disputes/:jobId/resolve', requireAuth, requireRole(['admin']), async (req: AuthenticatedRequest, res: Response) => {

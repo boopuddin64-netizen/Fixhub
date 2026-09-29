@@ -59,6 +59,7 @@ export function buildCorsOptions(env: NodeJS.ProcessEnv = process.env): CorsOpti
     origin: (origin, callback) => callback(null, isOriginAllowed(origin, env)),
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    exposedHeaders: ['X-Total-Count', 'X-Limit', 'X-Offset'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   };
 }

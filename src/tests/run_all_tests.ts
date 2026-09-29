@@ -22,6 +22,7 @@ import { runTechnicianIdAndCacVerificationTests } from './technician_id_and_cac_
 import { runSecurityAuditFixTests } from './security_audit_fixes.test';
 import { runPostgresPersistenceTests } from './postgres_persistence.test';
 import { runCspTests } from './csp.test';
+import { runAuditRemainingTests } from './audit_remaining.test';
 import {
   validateNumber,
   isValidCoordinates,
@@ -938,6 +939,10 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   const persistenceResults = await runPostgresPersistenceTests();
   passed += persistenceResults.passed;
   failed += persistenceResults.failed;
+
+  const auditRemainingResults = await runAuditRemainingTests();
+  passed += auditRemainingResults.passed;
+  failed += auditRemainingResults.failed;
 
   const cspResults = await runCspTests();
   passed += cspResults.passed;
