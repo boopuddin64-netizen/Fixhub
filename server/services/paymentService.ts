@@ -191,6 +191,9 @@ export class PaymentService {
     };
 
     db.payments.push(payment);
+    // Best-effort early persistence. The authoritative, transactional write happens on verify (the
+    // repair job row may not exist in SQL yet, in which case this legitimately fails its FK).
+    // Failures are logged instead of being silently swallowed.
     await db.query(
       `INSERT INTO payments (id, repair_id, customer_id, quote_id, amount_naira, platform_fee_naira, technician_payout_naira, escrow_held, status, payment_method, transaction_ref, provider_reference, idempotency_key, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
@@ -212,7 +215,9 @@ export class PaymentService {
         payment.createdAt,
         payment.updatedAt,
       ]
-    ).catch(() => {});
+    ).catch((e: any) => {
+      console.warn('[payments] initial payment row not persisted yet (written transactionally on verify):', e?.message);
+    });
 
     AuditService.log({
       actorId: customerId,
@@ -245,6 +250,39 @@ export class PaymentService {
       reference: uniqueRef,
       isExisting: false,
     };
+  }
+
+  /**
+   * Registered users live in memory (see db.users); the relational payment tables reference users(id).
+   * Make sure the SQL row exists before writing any FK-dependent row so the first payment of a newly
+   * registered customer/technician cannot violate a foreign key. Idempotent (ON CONFLICT DO NOTHING).
+   */
+  private static async ensureUserRows(
+    tx: { query: (sql: string, params?: any[]) => Promise<any> },
+    userIds: Array<string | undefined>,
+    fallbackRoles: Record<string, string> = {}
+  ): Promise<void> {
+    const seen = new Set<string>();
+    for (const userId of userIds) {
+      if (!userId || seen.has(userId)) continue;
+      seen.add(userId);
+      const u: any = db.users.find((x) => x.id === userId);
+      await tx.query(
+        `INSERT INTO users (id, email, phone, name, role, avatar_url, password_hash, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT DO NOTHING`,
+        [
+          userId,
+          u?.email || `${userId}@fixhub.local`,
+          u?.phone || '+2348000000000',
+          u?.name || 'Fixhub User',
+          u?.role || fallbackRoles[userId] || 'customer',
+          u?.avatarUrl || null,
+          u?.passwordHash || 'placeholder_hash',
+          u?.createdAt || new Date().toISOString(),
+        ]
+      );
+    }
   }
 
   /**
@@ -424,6 +462,20 @@ export class PaymentService {
         request.updatedAt = paidAt;
       }
       const reqId = job.requestId || `req_auto_${job.id}`;
+
+      // Registered users are held in memory; make sure their SQL rows exist before FK-dependent inserts.
+      await this.ensureUserRows(
+        tx,
+        [
+          request?.customerId || job.customerId,
+          job.customerId,
+          payment.customerId,
+          job.technicianId,
+          (db.repairQuotes.find((q) => q.id === job.quoteId) as any)?.technicianId,
+        ],
+        { [job.technicianId]: 'technician' }
+      );
+
       await tx.query(
         `INSERT INTO repair_requests (id, customer_id, device_brand, device_model, device_type, issue_description, status, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)

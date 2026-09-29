@@ -7,6 +7,9 @@ import type { AddressInfo } from 'net';
 import { db } from '../../server/db';
 import { apiRouter } from '../../server/routes/api';
 import { AuthService } from '../../server/services/authService';
+import { PaymentService } from '../../server/services/paymentService';
+import { makeAsyncSafe } from '../../server/utils/asyncRouter';
+import { globalErrorHandler } from '../../server/middleware/errorHandler';
 
 let ipCounter = 1;
 
@@ -136,6 +139,70 @@ export async function runSecurityAuditFixTests(): Promise<{ passed: number; fail
     const techLogin = await call('POST', '/auth/login', { emailOrPhone: 'technician@test.fixhub.local', password: 'password123' });
     const earnTech = await call('GET', '/technicians/earnings', undefined, techLogin.json.token);
     assert(earnTech.status === 200 && !!earnTech.json?.summary && Array.isArray(earnTech.json?.earnings), 'GET /technicians/earnings reaches the earnings handler for a technician');
+
+    // ---- Fix 4: first payment of a newly registered user + async error handling ----
+    console.log('Fix 4: first payment for a newly registered customer, async handler errors');
+    const reg = AuthService.registerCustomer({ name: 'Fresh Buyer', phone: '+2348011122233', email: 'fresh.buyer@example.com', password: 'Passw0rdX1' });
+    assert(!('error' in reg), 'New customer registers');
+    if (!('error' in reg)) {
+      const newId = reg.user.id;
+      const u: any = db.users.find((x) => x.id === newId);
+      u.emailVerified = true;
+      const sqlBefore = await db.query('SELECT id FROM users WHERE id = $1', [newId]);
+      assert(sqlBefore.rows.length === 0, 'Precondition: new user is not yet in the SQL users table');
+      const now = new Date().toISOString();
+      db.repairRequests.push({ id: 'req_fresh_1', customerId: newId, deviceBrand: 'Samsung', deviceModel: 'S23', deviceType: 'SMARTPHONE', issues: ['CRACKED_SCREEN'], description: 'cracked', photos: [], status: 'REQUESTED', createdAt: now, updatedAt: now, quotesCount: 1, matchedTechnicians: [] } as any);
+      db.repairQuotes.push({ id: 'quote_fresh_1', requestId: 'req_fresh_1', technicianId: 'usr_tech_1', technicianName: 'Emeka Okafor', businessName: 'Emeka Phone Labs', technicianPhone: '', technicianRating: 4.9, technicianReviewsCount: 1, distanceKm: 1, partsCost: 20000, laborCost: 10000, otherCost: 0, totalAmount: 30000, estimatedTimeHours: 2, warrantyDays: 30, partsQuality: 'PREMIUM_AFTERMARKET', notes: '', status: 'ACCEPTED', createdAt: now } as any);
+      db.repairJobs.push({ id: 'job_fresh_1', requestId: 'req_fresh_1', quoteId: 'quote_fresh_1', customerId: newId, technicianId: 'usr_tech_1', deviceBrand: 'Samsung', deviceModel: 'S23', issues: [], status: 'PAYMENT_PENDING', dropOffCode: 'FX-1111', pickupCode: 'PK-1111', handoffQrToken: 't', originalQuoteAmount: 30000, finalAmount: 30000, platformFeeAmount: 0, technicianPayoutAmount: 0, partsUsed: [], createdAt: now, statusHistory: [] } as any);
+      const init = await PaymentService.initializePayment({ repairJobId: 'job_fresh_1', customerId: newId, idempotencyKey: 'idem_fresh_1', customerEmail: 'fresh.buyer@example.com' });
+      assert(init.success === true, 'Payment initializes for a newly registered customer');
+      if (init.success) {
+        let threw = false;
+        let vr: any;
+        try {
+          vr = await PaymentService.verifyPayment({ reference: init.reference, actorId: newId, actorRole: 'customer' });
+        } catch (e: any) {
+          threw = true;
+          console.error('    verify threw:', e?.message);
+        }
+        assert(!threw, 'First payment verify no longer throws a foreign-key violation');
+        assert(vr?.success === true && vr?.payment?.status === 'SUCCESS', 'First payment verify succeeds for a newly registered customer');
+        const sqlAfter = await db.query('SELECT id FROM users WHERE id = $1', [newId]);
+        assert(sqlAfter.rows.length === 1, 'Customer row is persisted to SQL users at payment time');
+        const pays = await db.query('SELECT status FROM payments WHERE customer_id = $1', [newId]);
+        assert(pays.rows.length === 1 && pays.rows[0].status === 'SUCCESS', 'Payment row persisted as SUCCESS');
+      }
+    }
+    // async route rejections must produce a 500 and never crash the process
+    {
+      const { Router } = await import('express');
+      const r = makeAsyncSafe(Router());
+      r.get('/boom-async', async () => { throw new Error('secret internal detail'); });
+      r.get('/boom-reject', (_req, _res, _next) => Promise.reject(new Error('rejected')) as any);
+      r.get('/boom-sync', () => { throw new Error('sync'); });
+      r.get('/ok', (_req, res) => { res.json({ ok: true }); });
+      const a2 = express();
+      a2.use('/t', r);
+      a2.use(globalErrorHandler);
+      const srv = await new Promise<import('http').Server>((resolve) => { const s = a2.listen(0, '127.0.0.1', () => resolve(s)); });
+      const base2 = `http://127.0.0.1:${(srv.address() as AddressInfo).port}/t`;
+      const origErr = console.error;
+      console.error = () => {};
+      try {
+        const r1 = await fetch(`${base2}/boom-async`);
+        const b1 = await r1.text();
+        assert(r1.status === 500, 'Async handler that throws returns 500 (process survives)');
+        assert(!b1.includes('secret internal detail'), '500 response does not leak the internal error message');
+        assert((await fetch(`${base2}/boom-reject`)).status === 500, 'Handler returning a rejected promise returns 500');
+        assert((await fetch(`${base2}/boom-sync`)).status === 500, 'Sync throw returns 500');
+        assert((await fetch(`${base2}/ok`)).status === 200, 'Server still serves requests after handler failures');
+        const badJson = await fetch(`${base2}/ok`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{bad' });
+        assert(badJson.status === 404 || badJson.status === 400, 'Unrouted request handled');
+      } finally {
+        console.error = origErr;
+        await new Promise<void>((resolve) => srv.close(() => resolve()));
+      }
+    }
 
     // <<FIXES>>
   } catch (err: any) {
