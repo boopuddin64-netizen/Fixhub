@@ -13,6 +13,8 @@ import { PaystackClient } from '../services/paystackClient';
 import { IdentityVerificationService } from '../services/identityVerificationService';
 import { getBankCodeByName, getBankNameByCode } from '../data/nigerianBanks';
 import { calculateDistanceKm } from '../services/technicianMatchingService';
+import { BankOtpService, BANK_OTP_TTL_MS } from '../services/bankOtpService';
+import { sendSms } from '../services/smsService';
 import { makeAsyncSafe } from '../utils/asyncRouter';
 import { authRateLimiter, paymentRateLimiter, webhookRateLimiter } from '../middleware/rateLimiters';
 import {
@@ -793,8 +795,14 @@ apiRouter.delete('/customer/devices/:id', requireAuth, requireRole(['customer'])
  * 3. TECHNICIAN DISCOVERY & MATCHING (Public / Lead Matching)
  * ----------------------------------------------------------- */
 export function sanitizeTechnicianForPublic(tech: TechnicianProfile): Omit<TechnicianProfile, 'bankDetails' | 'trustScore'> {
-  const { bankDetails, trustScore, ...publicTech } = tech;
+  const { bankDetails, trustScore, bankChangeVerification: _bcv, ...publicTech } = tech as any;
   return publicTech;
+}
+
+/** Owner-facing view: full profile (incl. own bank details) but never any OTP/verification secrets. */
+export function sanitizeTechnicianForOwner(tech: TechnicianProfile): TechnicianProfile {
+  const { bankChangeVerification: _bcv, ...rest } = tech as any;
+  return rest as TechnicianProfile;
 }
 
 apiRouter.get('/technicians', (_req: Request, res: Response) => {
@@ -2747,11 +2755,10 @@ apiRouter.put('/technicians/profile', requireAuth, requireRole(['technician']), 
     }
 
     const hadExistingBank = !!(tech.bankDetails && tech.bankDetails.accountNumber);
-    const bankVerification = (tech as any).bankChangeVerification;
 
     // If bank details were already set up, require valid security verification
     if (hadExistingBank) {
-      const isVerified = bankVerification && bankVerification.verified && (Date.now() - (bankVerification.verifiedAt || 0) < 30 * 60 * 1000);
+      const isVerified = BankOtpService.isUnlocked(req.user!.id);
       if (!isVerified) {
         return res.status(403).json({
           error: 'Security verification required: Modifying an existing payout bank account requires identity verification for fraud prevention.',
@@ -2786,60 +2793,65 @@ apiRouter.put('/technicians/profile', requireAuth, requireRole(['technician']), 
     };
     tech.verificationStatus.payoutVerified = true;
     // Clear the one-time verification
-    delete (tech as any).bankChangeVerification;
+    BankOtpService.clear(req.user!.id);
+    delete (tech as any).bankChangeVerification; // legacy field, never populated any more
   }
 
   db.save();
-  return res.json({ success: true, profile: tech, user });
+  return res.json({ success: true, profile: sanitizeTechnicianForOwner(tech), user });
 });
 
 // Request security verification code to modify existing payout bank account
-apiRouter.post('/technicians/bank/request-change-otp', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/technicians/bank/request-change-otp', authRateLimiter, requireAuth, requireRole(['technician']), async (req: AuthenticatedRequest, res: Response) => {
   const user = db.users.find((u) => u.id === req.user!.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  const tech = AuthService.ensureTechnicianProfile(user);
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const issued = BankOtpService.issue(user.id);
+  if (!issued.ok) {
+    return res.status(429).json({ error: `Please wait ${issued.retryAfterSeconds}s before requesting another code.` });
+  }
 
-  (tech as any).bankChangeVerification = {
-    code,
-    expiresAt: Date.now() + 10 * 60 * 1000, // 10 mins
-    verified: false,
-  };
-
-  db.save();
   const destination = user.email || user.phone || 'registered technician account';
+  const isProd = process.env.NODE_ENV === 'production';
+
+  if (isProd) {
+    // Deliver out-of-band; the code is NEVER returned in the HTTP response in production.
+    const sms = user.phone
+      ? await sendSms(user.phone, `Your Fixhub security code is ${issued.code}. It expires in ${BANK_OTP_TTL_MS / 60000} minutes. Never share it.`)
+      : { success: false, error: 'No phone number on file.' };
+    if (!sms.success) {
+      BankOtpService.clear(user.id);
+      return res.status(502).json({ error: 'We could not deliver your verification code. Please try again shortly.' });
+    }
+    return res.json({ success: true, message: 'A 6-digit security verification code has been sent to your registered phone number.' });
+  }
+
+  // Non-production only: surface the code so local development/testing works without an SMS provider.
   return res.json({
     success: true,
     message: `A 6-digit security verification code has been generated for ${destination}.`,
-    devCode: code,
+    devCode: issued.code,
   });
 });
 
 // Verify security code to unlock payout bank modification
-apiRouter.post('/technicians/bank/verify-change-otp', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/technicians/bank/verify-change-otp', authRateLimiter, requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
   const user = db.users.find((u) => u.id === req.user!.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  const tech = AuthService.ensureTechnicianProfile(user);
-  const { otp } = req.body;
-  const currentVerification = (tech as any).bankChangeVerification;
-
-  if (!currentVerification || !currentVerification.code) {
-    return res.status(400).json({ error: 'No active bank verification request found. Please request a new code.' });
+  const result = BankOtpService.verify(user.id, req.body?.otp);
+  if (!result.ok) {
+    switch (result.reason) {
+      case 'NO_REQUEST':
+        return res.status(400).json({ error: 'No active bank verification request found. Please request a new code.' });
+      case 'EXPIRED':
+        return res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
+      case 'LOCKED':
+        return res.status(429).json({ error: 'Too many incorrect attempts. Please request a new verification code.' });
+      default:
+        return res.status(400).json({ error: `Incorrect 6-digit verification code. ${result.attemptsLeft} attempt(s) left.` });
+    }
   }
-
-  if (Date.now() > currentVerification.expiresAt) {
-    return res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
-  }
-
-  if (currentVerification.code !== String(otp || '').trim()) {
-    return res.status(400).json({ error: 'Incorrect 6-digit verification code. Please check and try again.' });
-  }
-
-  currentVerification.verified = true;
-  currentVerification.verifiedAt = Date.now();
-  db.save();
 
   return res.json({
     success: true,
@@ -2897,7 +2909,7 @@ apiRouter.post('/technicians/verify/government-id', requireAuth, requireRole(['t
       message: result.message,
       verifiedName: result.verifiedName,
       idNumberMasked: result.idNumberMasked,
-      profile: tech,
+      profile: sanitizeTechnicianForOwner(tech),
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message || 'Error processing government ID verification.' });
@@ -2950,7 +2962,7 @@ apiRouter.post('/technicians/verify/cac', requireAuth, requireRole(['technician'
       companyName: result.companyName,
       rcNumber: result.rcNumber,
       classification: result.classification,
-      profile: tech,
+      profile: sanitizeTechnicianForOwner(tech),
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message || 'Error processing CAC verification.' });

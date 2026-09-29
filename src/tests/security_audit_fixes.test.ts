@@ -383,6 +383,78 @@ export async function runSecurityAuditFixTests(): Promise<{ passed: number; fail
       }
     }
 
+    // ---- Fix 9: bank-change OTP ----
+    console.log('Fix 9: bank-change OTP hardening');
+    {
+      const { BankOtpService, BANK_OTP_MAX_ATTEMPTS, BANK_OTP_TTL_MS } = await import('../../server/services/bankOtpService');
+      // unit level
+      const u1 = 'otp_unit_user';
+      const a = BankOtpService.issue(u1, 1_000_000);
+      assert(a.ok === true && /^\d{6}$/.test(a.code || ''), 'OTP is a 6-digit numeric code');
+      assert(BankOtpService.issue(u1, 1_000_000 + 1000).ok === false, 'Re-issuing within the cooldown is refused');
+      assert(BankOtpService.verify(u1, a.code, 1_000_000 + BANK_OTP_TTL_MS + 1).reason === 'EXPIRED', 'OTP expires after 10 minutes');
+      const b = BankOtpService.issue(u1, 2_000_000);
+      let last: any;
+      for (let i = 0; i < BANK_OTP_MAX_ATTEMPTS; i++) last = BankOtpService.verify(u1, '000000' === b.code ? '111111' : '000000', 2_000_100);
+      assert(last.reason === 'LOCKED', `OTP locks after ${BANK_OTP_MAX_ATTEMPTS} wrong attempts`);
+      assert(BankOtpService.verify(u1, b.code, 2_000_200).ok === false, 'Correct code no longer works after lockout (must request a new one)');
+      const distinct = new Set<string>();
+      for (let i = 0; i < 40; i++) distinct.add(BankOtpService.issue(`otp_dist_${i}`).code as string);
+      assert(distinct.size > 30, 'Generated codes are varied');
+
+      // HTTP level (dev)
+      const techTok9 = (await call('POST', '/auth/login', { emailOrPhone: 'technician@test.fixhub.local', password: 'password123' })).json.token;
+      const req1 = await call('POST', '/technicians/bank/request-change-otp', {}, techTok9);
+      assert(req1.status === 200 && /^\d{6}$/.test(req1.json?.devCode || ''), 'Non-production: devCode is returned for local testing');
+      const code9 = req1.json.devCode as string;
+      const req1b = await call('POST', '/technicians/bank/request-change-otp', {}, techTok9);
+      assert(req1b.status === 429, 'Requesting a second code immediately is rate-limited (429)');
+      // the code must not leak through the government-id verify response (owner profile)
+      const gov = await call('POST', '/technicians/verify/government-id', { idType: 'NIN', idNumber: '98765432101' }, techTok9);
+      assert(!JSON.stringify(gov.json).includes(code9) && !/bankChangeVerification/.test(gov.text), 'OTP is not leaked in the government-id verify response');
+      const prof = await call('GET', '/auth/me', undefined, techTok9);
+      assert(!prof.text.includes(code9), 'OTP is not leaked via /auth/me');
+      const pub = await call('GET', '/technicians');
+      assert(!pub.text.includes(code9) && !/bankChangeVerification/.test(pub.text), 'OTP is not leaked in the public technician list');
+      // wrong guesses are limited
+      const wrong = code9 === '123456' ? '654321' : '123456';
+      const statuses: number[] = [];
+      for (let i = 0; i < 7; i++) statuses.push((await call('POST', '/technicians/bank/verify-change-otp', { otp: wrong }, techTok9)).status);
+      assert(statuses.slice(0, 4).every((x) => x === 400) && statuses[4] === 429, 'Wrong OTP guesses are capped (400 x4 then 429 lockout)', statuses.join(','));
+      const afterLock = await call('POST', '/technicians/bank/verify-change-otp', { otp: code9 }, techTok9);
+      assert(afterLock.status === 400 || afterLock.status === 429, 'The original code is dead after lockout', String(afterLock.status));
+
+      // HTTP level (production): no devCode, delivered by SMS
+      const savedP = { NODE_ENV: process.env.NODE_ENV, SMS: process.env.SMS_PROVIDER_API_KEY, JWT: process.env.JWT_SECRET };
+      const realFetch = globalThis.fetch;
+      let smsBody = '';
+      try {
+        process.env.SMS_PROVIDER_API_KEY = 'test-sms-key';
+        (globalThis as any).fetch = async (url: any, init?: any) => {
+          if (String(url).includes('sendchamp')) {
+            smsBody = String(init?.body || '');
+            return { ok: true, json: async () => ({ status: 'success', code: 200 }) };
+          }
+          return realFetch(url, init);
+        };
+        process.env.JWT_SECRET = 'j'.repeat(48);
+        process.env.NODE_ENV = 'production';
+        BankOtpService.clear('usr_tech_2');
+        // (demo users are already loaded in memory; just mint a token for one of them)
+        const tok2 = AuthService.generateToken(db.users.find((x) => x.id === 'usr_tech_2') as any);
+        const pr = await call('POST', '/technicians/bank/request-change-otp', {}, tok2);
+        assert(pr.status === 200 && pr.json?.success === true, 'Production: OTP request succeeds via SMS', JSON.stringify(pr.json));
+        assert(pr.json && !('devCode' in pr.json), 'Production: devCode is NOT returned');
+        const sentCode = (smsBody.match(/\b(\d{6})\b/) || [])[1];
+        assert(!!sentCode && !pr.text.includes(sentCode), 'Production: the code is only in the SMS payload, never in the HTTP response');
+      } finally {
+        (globalThis as any).fetch = realFetch;
+        if (savedP.NODE_ENV === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = savedP.NODE_ENV;
+        if (savedP.SMS === undefined) delete process.env.SMS_PROVIDER_API_KEY; else process.env.SMS_PROVIDER_API_KEY = savedP.SMS;
+        if (savedP.JWT === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = savedP.JWT;
+      }
+    }
+
     // <<FIXES>>
   } catch (err: any) {
     assert(false, 'Security audit regression suite threw', err?.stack || err?.message);
