@@ -496,6 +496,39 @@ export async function runSecurityAuditFixTests(): Promise<{ passed: number; fail
       }
     }
 
+    // ---- Fix 11: ?token= auth restricted, code endpoints rate limited ----
+    console.log('Fix 11: query-token auth restricted; rate limits on code endpoints');
+    {
+      const tokC = (await call('POST', '/auth/login', { emailOrPhone: 'customer@test.fixhub.local', password: 'password123' })).json.token;
+      const meQuery = await call('GET', `/auth/me?token=${encodeURIComponent(tokC)}`);
+      assert(meQuery.status === 401, 'GET /auth/me?token=<jwt> is no longer accepted', String(meQuery.status));
+      const meHeader = await call('GET', '/auth/me', undefined, tokC);
+      assert(meHeader.status === 200, 'Authorization header auth still works');
+      const postQuery = await call('POST', `/auth/logout?token=${encodeURIComponent(tokC)}`, {});
+      assert(postQuery.status === 401, 'POST with ?token= is not accepted');
+      const attQuery = await call('GET', `/repairs/attachments/does_not_exist.png?token=${encodeURIComponent(tokC)}`);
+      assert(attQuery.status === 404, 'Attachment media route still accepts ?token= (auth passes, file not found -> 404)', String(attQuery.status));
+      // verify-email/confirm: brute force is capped from a single IP
+      const fixedIp = { 'X-Forwarded-For': '203.0.113.77' };
+      const codes: number[] = [];
+      for (let i = 0; i < 14; i++) codes.push((await call('POST', '/auth/verify-email/confirm', { code: String(100000 + i) }, undefined, fixedIp)).status);
+      assert(codes.slice(0, 10).every((c) => c === 400) && codes.slice(10).every((c) => c === 429), 'verify-email/confirm: 10 guesses then 429', codes.join(','));
+      const resetIp = { 'X-Forwarded-For': '203.0.113.78' };
+      const rc: number[] = [];
+      for (let i = 0; i < 13; i++) rc.push((await call('POST', '/auth/reset-password', { code: String(200000 + i), newPassword: 'Newpass123' }, undefined, resetIp)).status);
+      assert(rc.slice(0, 10).every((c) => c === 400) && rc.slice(10).every((c) => c === 429), 'reset-password: 10 guesses then 429', rc.join(','));
+      const pc: number[] = [];
+      for (let i = 0; i < 13; i++) pc.push((await call('POST', '/auth/verify-phone/confirm', { phoneOrUserId: '+2340000000000', code: String(300000 + i) }, undefined, { 'X-Forwarded-For': '203.0.113.79' })).status);
+      assert(pc.slice(0, 10).every((c) => c === 400) && pc.slice(10).every((c) => c === 429), 'verify-phone/confirm: 10 guesses then 429', pc.join(','));
+      const sc: number[] = [];
+      for (let i = 0; i < 13; i++) sc.push((await call('POST', '/auth/forgot-password', { emailOrPhone: `nobody${i}@example.com` }, undefined, { 'X-Forwarded-For': '203.0.113.80' })).status);
+      assert(sc.slice(10).every((c) => c === 429), 'forgot-password (SMS/email trigger) is capped', sc.join(','));
+      // body userId cannot be used to trigger a code for somebody else's account
+      const smsBefore = (db.users.find((u) => u.id === 'usr_customer_1') as any)?.phone;
+      const spoof = await call('POST', '/auth/verify-phone/request', { phoneOrUserId: '+2349999999999', userId: 'usr_customer_1' }, undefined, { 'X-Forwarded-For': '203.0.113.81' });
+      assert(spoof.status === 200 && (db.users.find((u) => u.id === 'usr_customer_1') as any)?.phone === smsBefore, 'verify-phone/request ignores a spoofed body userId');
+    }
+
     // <<FIXES>>
   } catch (err: any) {
     assert(false, 'Security audit regression suite threw', err?.stack || err?.message);
