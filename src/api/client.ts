@@ -106,10 +106,10 @@ export class ApiClient {
     });
   }
 
-  public static switchRole(role: 'customer' | 'technician') {
+  public static switchRole(role: 'customer' | 'technician', password: string) {
     return this.request<AuthResponse>('/auth/switch-role', {
       method: 'POST',
-      body: JSON.stringify({ role }),
+      body: JSON.stringify({ role, password }),
     });
   }
 
@@ -166,9 +166,10 @@ export class ApiClient {
     return this.request<any>('/account/export-data');
   }
 
-  public static deleteAccount() {
+  public static deleteAccount(password: string) {
     return this.request<{ success: boolean; message: string }>('/account/me', {
       method: 'DELETE',
+      body: JSON.stringify({ password }),
     });
   }
 

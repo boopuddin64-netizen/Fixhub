@@ -136,6 +136,42 @@ export async function runAuditRemainingTests(): Promise<{ passed: number; failed
     db.repairJobs.splice(db.repairJobs.findIndex((j) => j.id === 'job_phone_1'), 1);
     db.repairQuotes.splice(db.repairQuotes.findIndex((q) => q.id === 'quote_phone_1'), 1);
     db.repairRequests.splice(db.repairRequests.findIndex((r) => r.id === 'req_phone_1'), 1);
+
+    // ---------------------------------------------------------------- re-authentication
+    console.log('Item 6: password confirmation for switch-role and delete-account');
+    const { AuthService } = await import('../../server/services/authService');
+    const reg = AuthService.registerCustomer({ name: 'Reauth User', phone: '+2348055500001', email: 'reauth.user@example.com', password: 'Passw0rdX1' });
+    assert(!('error' in reg), 'test user registers');
+    const rTok = await login('reauth.user@example.com', 'Passw0rdX1');
+    const swNo = await call('POST', '/auth/switch-role', { role: 'technician' }, rTok);
+    assert(swNo.status === 403 && swNo.json?.code === 'PASSWORD_CONFIRMATION_FAILED', 'switch-role without password -> 403');
+    const swBad = await call('POST', '/auth/switch-role', { role: 'technician', password: 'wrong-password1' }, rTok);
+    assert(swBad.status === 403, 'switch-role with a wrong password -> 403 (not 401, so the client keeps the session)');
+    assert(db.users.find((u) => u.email === 'reauth.user@example.com')?.role === 'customer', 'role unchanged after refused switch');
+    const swObj = await call('POST', '/auth/switch-role', { role: 'technician', password: { $ne: 1 } }, rTok);
+    assert(swObj.status === 403, 'switch-role with a non-string password -> 403');
+    const swOk = await call('POST', '/auth/switch-role', { role: 'technician', password: 'Passw0rdX1' }, rTok);
+    assert(swOk.status === 200 && swOk.json?.user?.role === 'technician', 'switch-role with the right password succeeds');
+    const swBadRole = await call('POST', '/auth/switch-role', { role: 'admin', password: 'Passw0rdX1' }, rTok);
+    assert(swBadRole.status === 400, 'switch-role still validates the role');
+
+    const delNo = await call('DELETE', '/account/me', undefined, rTok);
+    assert(delNo.status === 403 && db.users.some((u) => u.email === 'reauth.user@example.com'), 'delete-account without password -> 403, user kept');
+    const delBad = await call('DELETE', '/account/me', { password: 'nope-nope-1' }, rTok);
+    assert(delBad.status === 403 && db.users.some((u) => u.email === 'reauth.user@example.com'), 'delete-account with wrong password -> 403, user kept');
+    const stillValid = await call('GET', '/auth/me', undefined, rTok);
+    assert(stillValid.status === 200, 'session is still valid after a refused delete');
+    const delOk = await call('DELETE', '/account/me', { password: 'Passw0rdX1' }, rTok);
+    assert(delOk.status === 200 && !db.users.some((u) => u.email === 'reauth.user@example.com'), 'delete-account with the right password succeeds');
+    const gone = await call('GET', '/auth/me', undefined, rTok);
+    assert(gone.status === 401, 'token is revoked after deletion');
+
+    // A social-login-only account (no password hash) cannot re-authenticate: clear message, nothing happens.
+    (db.users as any[]).push({ id: 'usr_social_reauth', email: 'social.reauth@example.com', phone: '+2348055500002', name: 'Social', role: 'customer', passwordHash: '', createdAt: new Date().toISOString(), emailVerified: true });
+    const sTok = AuthService.generateToken(db.users.find((u) => u.id === 'usr_social_reauth')!);
+    const sDel = await call('DELETE', '/account/me', { password: 'anything1' }, sTok);
+    assert(sDel.status === 403 && sDel.json?.code === 'PASSWORD_NOT_SET' && db.users.some((u) => u.id === 'usr_social_reauth'), 'password-less (social) account gets PASSWORD_NOT_SET and is not deleted');
+    (db.users as any[]).splice((db.users as any[]).findIndex((u) => u.id === 'usr_social_reauth'), 1);
   } finally {
     await app.close();
   }

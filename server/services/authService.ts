@@ -151,6 +151,20 @@ export class AuthService {
     return { success: true };
   }
 
+  /**
+   * Re-authentication for sensitive actions (delete account, switch role): checks the CURRENT password of the
+   * already-authenticated user. Accounts that have no password (social-login only) cannot be re-authenticated
+   * this way and get `NO_PASSWORD` — they must set a password first (POST /auth/change-password allows that).
+   */
+  public static confirmPassword(userId: string, password: unknown): { ok: true } | { ok: false; reason: 'NO_PASSWORD' | 'INVALID' } {
+    const user = db.users.find((u) => u.id === userId);
+    if (!user) return { ok: false, reason: 'INVALID' };
+    if (!user.passwordHash) return { ok: false, reason: 'NO_PASSWORD' };
+    const supplied = typeof password === 'string' ? password.slice(0, 200) : '';
+    const match = bcrypt.compareSync(supplied, user.passwordHash);
+    return supplied && match ? { ok: true } : { ok: false, reason: 'INVALID' };
+  }
+
   public static changePassword(
     userId: string,
     currentPassword: string | undefined,

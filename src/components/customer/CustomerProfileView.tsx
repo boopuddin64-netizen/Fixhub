@@ -63,6 +63,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
   const [copiedId, setCopiedId] = useState<boolean>(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [deletingAccount, setDeletingAccount] = useState<boolean>(false);
+  const [deletePassword, setDeletePassword] = useState<string>('');
 
   // Email/Phone verification in Security Modal
   const [emailVerifying, setEmailVerifying] = useState<boolean>(false);
@@ -196,12 +197,12 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
   const handleDeleteAccount = async () => {
     setDeletingAccount(true);
     try {
-      await ApiClient.deleteAccount();
+      await ApiClient.deleteAccount(deletePassword);
       logout();
     } catch (err: any) {
       alert('Failed to delete account: ' + (err.message || 'Please contact support'));
       setDeletingAccount(false);
-      setShowDeleteConfirm(false);
+      setDeletePassword('');
     }
   };
 
@@ -764,17 +765,27 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
                         <p className="text-[11px] text-rose-800 leading-relaxed">
                           This will immediately delete your customer profile and revoke session access. This action cannot be undone.
                         </p>
+                        <input
+                          id="delete-account-password"
+                          type="password"
+                          autoComplete="current-password"
+                          aria-label="Confirm your password to delete your account"
+                          placeholder="Confirm your password"
+                          value={deletePassword}
+                          onChange={(e) => setDeletePassword(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-rose-200 bg-white text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-rose-400"
+                        />
                         <div className="flex items-center gap-2 pt-1">
                           <button
-                            onClick={() => setShowDeleteConfirm(false)}
+                            onClick={() => { setShowDeleteConfirm(false); setDeletePassword(''); }}
                             className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
                           >
                             Cancel
                           </button>
                           <button
                             onClick={handleDeleteAccount}
-                            disabled={deletingAccount}
-                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1 cursor-pointer"
+                            disabled={deletingAccount || !deletePassword}
+                            className="px-3 py-1.5 bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-rose-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1 cursor-pointer"
                           >
                             {deletingAccount ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                             <span>Yes, Delete Account</span>

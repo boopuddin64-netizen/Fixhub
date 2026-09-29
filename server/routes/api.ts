@@ -295,11 +295,30 @@ apiRouter.get('/auth/me', requireAuth, (req: AuthenticatedRequest, res: Response
   return res.json(session);
 });
 
-apiRouter.post('/auth/switch-role', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+/**
+ * Re-authentication gate for sensitive account actions. Wrong/missing password -> 403 (NOT 401: the web client
+ * treats 401 as "session expired" and drops the token). Accounts without a password must set one first.
+ */
+function requirePasswordConfirmation(req: AuthenticatedRequest, res: Response): boolean {
+  const result = AuthService.confirmPassword(req.user!.id, req.body?.password ?? req.body?.currentPassword);
+  if (!('reason' in result)) return true;
+  if (result.reason === 'NO_PASSWORD') {
+    res.status(403).json({
+      error: 'Set a password on your account first (Profile > Security), then repeat this action.',
+      code: 'PASSWORD_NOT_SET',
+    });
+  } else {
+    res.status(403).json({ error: 'Password confirmation failed. Enter your current password.', code: 'PASSWORD_CONFIRMATION_FAILED' });
+  }
+  return false;
+}
+
+apiRouter.post('/auth/switch-role', authRateLimiter, requireAuth, (req: AuthenticatedRequest, res: Response) => {
   const { role } = req.body;
   if (!role || !['customer', 'technician'].includes(role)) {
     return res.status(400).json({ error: 'Role must be customer or technician.' });
   }
+  if (!requirePasswordConfirmation(req, res)) return;
   let user = db.users.find((u) => u.id === req.user!.id);
   if (!user) {
     user = {
@@ -501,8 +520,9 @@ apiRouter.get('/account/export-data', requireAuth, (req: AuthenticatedRequest, r
   return res.json(exportPayload);
 });
 
-apiRouter.delete('/account/me', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.delete('/account/me', authRateLimiter, requireAuth, (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
+  if (!requirePasswordConfirmation(req, res)) return;
 
   // 1. Remove user
   db.users = db.users.filter((u) => u.id !== userId);
