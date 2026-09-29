@@ -800,30 +800,54 @@ apiRouter.get('/technicians', (_req: Request, res: Response) => {
   return res.json(db.technicianProfiles.map(sanitizeTechnicianForPublic));
 });
 
+// NOTE: literal /technicians/* routes must be registered BEFORE /technicians/:id, otherwise
+// Express matches the parameterised route first (e.g. /technicians/earnings).
+apiRouter.get('/technicians/earnings', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
+  const technicianId = req.user!.id;
+  const earnings = db.technicianEarnings.filter((e) => e.technicianId === technicianId);
+  const payouts = db.payouts.filter((p) => p.technicianId === technicianId);
+
+  const heldNaira = earnings
+    .filter((e) => e.status === 'HELD')
+    .reduce((sum, e) => sum + e.netEarningsNaira, 0);
+
+  const eligibleGrossNaira = earnings
+    .filter((e) => e.status === 'ELIGIBLE_FOR_PAYOUT')
+    .reduce((sum, e) => sum + e.netEarningsNaira, 0);
+
+  const lockedInPayoutsNaira = payouts
+    .filter((p) => p.status === 'PENDING' || p.status === 'PROCESSING')
+    .reduce((sum, p) => sum + p.amountNaira, 0);
+
+  const availablePayoutNaira = Math.max(0, eligibleGrossNaira - lockedInPayoutsNaira);
+
+  const completedPayoutsNaira = payouts
+    .filter((p) => p.status === 'COMPLETED')
+    .reduce((sum, p) => sum + p.amountNaira, 0);
+
+  return res.json({
+    earnings,
+    payouts,
+    summary: {
+      heldEarningsNaira: heldNaira,
+      availablePayoutNaira,
+      lockedInProcessingNaira: lockedInPayoutsNaira,
+      totalCompletedPayoutsNaira: completedPayoutsNaira,
+      commissionRatePercent: PaymentService.COMMISSION_RATE * 100,
+    },
+  });
+});
+
 apiRouter.get('/technicians/:id', (req: Request, res: Response) => {
-  const techId = req.params.id;
-  let tech = db.technicianProfiles.find((t) => t.userId === techId || (t as any).id === techId);
+  // Read-only: this public endpoint must never create users or profiles.
+  const techId = String(req.params.id);
+  const tech = db.technicianProfiles.find((t) => t.userId === techId || (t as any).id === techId);
   if (!tech) {
-    let user = db.users.find((u) => u.id === techId || (u.email && u.email.toLowerCase() === techId.toLowerCase()));
-    if (!user) {
-      user = {
-        id: techId,
-        email: techId.includes('@') ? techId : `tech_${techId}@fixhub.local`,
-        name: techId.includes('@') ? techId.split('@')[0] : 'Fixhub Technician',
-        phone: '',
-        role: 'technician',
-        createdAt: new Date().toISOString(),
-        emailVerified: true,
-        phoneVerified: false,
-        passwordHash: '',
-      };
-      db.users.push(user);
-    }
-    tech = AuthService.ensureTechnicianProfile(user);
+    return res.status(404).json({ error: 'Technician not found.' });
   }
-  const parts = db.technicianParts.filter((p) => p.technicianId === tech!.userId);
-  const reviews = db.reviews.filter((r) => r.technicianId === tech!.userId);
-  return res.json({ technician: sanitizeTechnicianForPublic(tech!), parts, reviews });
+  const parts = db.technicianParts.filter((p) => p.technicianId === tech.userId);
+  const reviews = db.reviews.filter((r) => r.technicianId === tech.userId);
+  return res.json({ technician: sanitizeTechnicianForPublic(tech), parts, reviews });
 });
 
 apiRouter.post('/technicians/match', (req: Request, res: Response) => {
@@ -2018,42 +2042,6 @@ apiRouter.post('/payments/refund', requireAuth, requireRole(['admin']), async (r
   }
 
   return res.json(result);
-});
-
-apiRouter.get('/technicians/earnings', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
-  const technicianId = req.user!.id;
-  const earnings = db.technicianEarnings.filter((e) => e.technicianId === technicianId);
-  const payouts = db.payouts.filter((p) => p.technicianId === technicianId);
-
-  const heldNaira = earnings
-    .filter((e) => e.status === 'HELD')
-    .reduce((sum, e) => sum + e.netEarningsNaira, 0);
-
-  const eligibleGrossNaira = earnings
-    .filter((e) => e.status === 'ELIGIBLE_FOR_PAYOUT')
-    .reduce((sum, e) => sum + e.netEarningsNaira, 0);
-
-  const lockedInPayoutsNaira = payouts
-    .filter((p) => p.status === 'PENDING' || p.status === 'PROCESSING')
-    .reduce((sum, p) => sum + p.amountNaira, 0);
-
-  const availablePayoutNaira = Math.max(0, eligibleGrossNaira - lockedInPayoutsNaira);
-
-  const completedPayoutsNaira = payouts
-    .filter((p) => p.status === 'COMPLETED')
-    .reduce((sum, p) => sum + p.amountNaira, 0);
-
-  return res.json({
-    earnings,
-    payouts,
-    summary: {
-      heldEarningsNaira: heldNaira,
-      availablePayoutNaira,
-      lockedInProcessingNaira: lockedInPayoutsNaira,
-      totalCompletedPayoutsNaira: completedPayoutsNaira,
-      commissionRatePercent: PaymentService.COMMISSION_RATE * 100,
-    },
-  });
 });
 
 apiRouter.post('/technicians/payouts/request', requireAuth, requireRole(['technician']), async (req: AuthenticatedRequest, res: Response) => {

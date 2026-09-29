@@ -111,6 +111,32 @@ export async function runSecurityAuditFixTests(): Promise<{ passed: number; fail
       if (prevEnv.SEED === undefined) delete process.env.SEED_DEMO_DATA; else process.env.SEED_DEMO_DATA = prevEnv.SEED;
     }
 
+    // ---- Fix 3: GET /technicians/:id is read-only; /technicians/earnings not shadowed ----
+    console.log('Fix 3: read-only technician lookup + earnings route order');
+    const usersBefore = db.users.length;
+    const profilesBefore = db.technicianProfiles.length;
+    const unknown = await call('GET', '/technicians/does-not-exist-123');
+    assert(unknown.status === 404, 'GET /technicians/<unknown id> returns 404', String(unknown.status));
+    const unknownEmail = await call('GET', '/technicians/squatter@example.com');
+    assert(unknownEmail.status === 404, 'GET /technicians/<unknown email> returns 404');
+    assert(db.users.length === usersBefore && db.technicianProfiles.length === profilesBefore, 'Unknown-id GETs created no users or technician profiles');
+    const listAfter = await call('GET', '/technicians');
+    assert(Array.isArray(listAfter.json) && listAfter.json.length === profilesBefore, 'Public technician list did not grow');
+    const custAsTech = await call('GET', '/technicians/customer@test.fixhub.local');
+    assert(custAsTech.status === 404, 'GET /technicians/<existing customer email> does not turn the customer into a technician');
+    assert(!db.technicianProfiles.some((t) => t.userId === 'usr_customer_1'), 'No technician profile was created for the customer');
+    const knownTech = await call('GET', `/technicians/${db.technicianProfiles[0].userId}`);
+    assert(knownTech.status === 200 && !!knownTech.json?.technician, 'GET /technicians/<known id> still returns the technician');
+    const earnAnon = await call('GET', '/technicians/earnings');
+    assert(earnAnon.status === 401, 'GET /technicians/earnings requires auth (401 unauthenticated)', String(earnAnon.status));
+    assert(!db.users.some((u) => u.id === 'earnings'), 'GET /technicians/earnings did not create an "earnings" user');
+    const custLogin = await call('POST', '/auth/login', { emailOrPhone: 'customer@test.fixhub.local', password: 'password123' });
+    const earnCust = await call('GET', '/technicians/earnings', undefined, custLogin.json.token);
+    assert(earnCust.status === 403, 'GET /technicians/earnings is technician-only (403 for customer)', String(earnCust.status));
+    const techLogin = await call('POST', '/auth/login', { emailOrPhone: 'technician@test.fixhub.local', password: 'password123' });
+    const earnTech = await call('GET', '/technicians/earnings', undefined, techLogin.json.token);
+    assert(earnTech.status === 200 && !!earnTech.json?.summary && Array.isArray(earnTech.json?.earnings), 'GET /technicians/earnings reaches the earnings handler for a technician');
+
     // <<FIXES>>
   } catch (err: any) {
     assert(false, 'Security audit regression suite threw', err?.stack || err?.message);
