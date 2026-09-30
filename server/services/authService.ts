@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { db } from '../db';
 import { User, UserRole, CustomerProfile, TechnicianProfile } from '../../src/types/index';
 import { sendSms } from './smsService';
+import { resolveSmsLogMode } from '../config/stagingMode';
 import { VerificationCodeService } from './verificationCodeService';
 import { validateAdminPassword } from '../../src/utils/adminPasswordPolicy';
 import { phonesMatch, normalizeNgPhone } from '../../src/utils/format';
@@ -278,7 +279,9 @@ export class AuthService {
     const code = crypto.randomInt(100000, 1000000).toString();
     VerificationCodeService.issueByCode('email', code, { userId: user.id, email: user.email }, 30 * 60 * 1000);
 
-    if (process.env.NODE_ENV !== 'production') {
+    // No e-mail provider is wired up yet: outside production (or with the explicit staging SMS_DEV_MODE opt-in) the
+    // code goes to the server log so the flow can be tested.
+    if (process.env.NODE_ENV !== 'production' || resolveSmsLogMode(process.env).active) {
       console.log(`[DEV EMAIL VERIFY] Verification code for ${user.email}: ${code}`);
     }
 

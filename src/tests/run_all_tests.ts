@@ -26,6 +26,7 @@ import { runSetPasswordTests } from './set_password.test';
 import { runAuditRemainingTests } from './audit_remaining.test';
 import { runAdminPortalTests } from './admin_portal.test';
 import { runUxUpgradeTests } from './ux_upgrades.test';
+import { runStagingModeTests } from './staging_mode.test';
 import {
   validateNumber,
   isValidCoordinates,
@@ -962,6 +963,10 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   const uxResults = await runUxUpgradeTests();
   passed += uxResults.passed;
   failed += uxResults.failed;
+
+  const stagingResults = await runStagingModeTests();
+  passed += stagingResults.passed;
+  failed += stagingResults.failed;
 
   console.log('\n===============================================================');
   console.log(`   GLOBAL TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);

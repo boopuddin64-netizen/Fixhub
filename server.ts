@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './server/routes/api';
 import { validateProductionSecrets } from './server/config/envValidator';
+import { paystackTestKeyAllowedInProduction } from './server/config/stagingMode';
 import { db } from './server/db';
 import { buildCorsOptions } from './server/config/cors';
 import { cspReportRateLimiter } from './server/middleware/rateLimiters';
@@ -29,7 +30,7 @@ export function validateProductionStartup(
       !paystackKey ||
       paystackKey === '' ||
       paystackKey.toLowerCase().includes('mock') ||
-      paystackKey.startsWith('sk_test')
+      (paystackKey.startsWith('sk_test') && !paystackTestKeyAllowedInProduction(env))
     ) {
       const msg = 'FATAL: A valid live PAYSTACK_SECRET_KEY is required when NODE_ENV=production.';
       console.error(msg);
