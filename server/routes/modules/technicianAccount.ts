@@ -238,7 +238,7 @@ apiRouter.put('/technicians/profile', requireAuth, requireRole(['technician']), 
   }
 
   db.save();
-  return res.json({ success: true, profile: sanitizeTechnicianForOwner(tech), user });
+  return res.json({ success: true, profile: sanitizeTechnicianForOwner(tech), user: AuthService.toPublicUser(user) });
 });
 
 // Request security verification code to modify existing payout bank account

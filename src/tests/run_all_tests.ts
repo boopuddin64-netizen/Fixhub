@@ -22,6 +22,7 @@ import { runTechnicianIdAndCacVerificationTests } from './technician_id_and_cac_
 import { runSecurityAuditFixTests } from './security_audit_fixes.test';
 import { runPostgresPersistenceTests } from './postgres_persistence.test';
 import { runCspTests } from './csp.test';
+import { runSetPasswordTests } from './set_password.test';
 import { runAuditRemainingTests } from './audit_remaining.test';
 import {
   validateNumber,
@@ -943,6 +944,10 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   const auditRemainingResults = await runAuditRemainingTests();
   passed += auditRemainingResults.passed;
   failed += auditRemainingResults.failed;
+
+  const setPasswordResults = await runSetPasswordTests();
+  passed += setPasswordResults.passed;
+  failed += setPasswordResults.failed;
 
   const cspResults = await runCspTests();
   passed += cspResults.passed;

@@ -37,6 +37,18 @@ import { safeStorage } from '../utils/safeStorage';
 
 const API_BASE = '/api';
 
+/** Error thrown for every non-2xx API response; keeps the HTTP status and the server's machine-readable `code`. */
+export class ApiError extends Error {
+  public readonly status: number;
+  public readonly code?: string;
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
 export class ApiClient {
   private static getToken(): string | null {
     return safeStorage.getItem('fixhub_token');
@@ -85,7 +97,11 @@ export class ApiClient {
       if (response.status === 401) {
         ApiClient.removeToken();
       }
-      throw new Error(data.error || data.message || `Request failed with status ${response.status}`);
+      throw new ApiError(
+        data.error || data.message || `Request failed with status ${response.status}`,
+        response.status,
+        typeof data.code === 'string' ? data.code : undefined
+      );
     }
 
     return data as T;
@@ -155,11 +171,24 @@ export class ApiClient {
     });
   }
 
-  public static changePassword(data: { currentPassword?: string; newPassword: string }) {
-    return this.request<{ success: boolean; message: string }>('/auth/change-password', {
+  /** Changing a password signs other sessions out; the server returns a fresh token for this one, which is stored. */
+  public static async changePassword(data: { currentPassword?: string; newPassword: string }) {
+    const res = await this.request<{ success: boolean; message: string; token?: string }>('/auth/change-password', {
       method: 'POST',
       body: JSON.stringify(data),
     });
+    if (res.token) this.setToken(res.token);
+    return res;
+  }
+
+  /** First password for a social-login-only account. Stores the fresh token the server returns. */
+  public static async setPassword(newPassword: string) {
+    const res = await this.request<{ success: boolean; message: string; token: string; user?: User }>('/auth/set-password', {
+      method: 'POST',
+      body: JSON.stringify({ newPassword }),
+    });
+    if (res.token) this.setToken(res.token);
+    return res;
   }
 
   public static exportAccountData() {

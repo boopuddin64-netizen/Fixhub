@@ -87,6 +87,8 @@ export interface User {
   emailVerified?: boolean;
   emailVerifiedAt?: string;
   authProvider?: 'local' | 'google' | 'apple' | 'facebook';
+  /** false for social-login-only accounts: they must set a password before delete-account / switch-role. */
+  hasPassword?: boolean;
 }
 
 export interface CustomerProfile {

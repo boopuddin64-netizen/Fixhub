@@ -9,6 +9,12 @@ import { VerificationCodeService } from './verificationCodeService';
 /** bcrypt work factor for newly created hashes (existing cost-8 hashes keep verifying and are not rewritten). */
 const BCRYPT_COST = 12;
 
+/** Password policy shared by register, reset, change and set-password (mirrored client-side in src/utils/passwordPolicy.ts). */
+export const PASSWORD_POLICY_MESSAGE = 'Password must be at least 8 characters long and contain at least one number.';
+export function isPasswordAcceptable(password: unknown): password is string {
+  return typeof password === 'string' && password.length >= 8 && /\d/.test(password);
+}
+
 // Pre-computed hash used to keep response time similar for unknown users (limits account enumeration by timing).
 const DUMMY_HASH = bcrypt.hashSync('fixhub-dummy-password', BCRYPT_COST);
 
@@ -38,6 +44,29 @@ export interface AuthSession {
 }
 
 export class AuthService {
+  /**
+   * The only shape in which a stored user leaves the server: never the password hash, session version or other
+   * internals. `hasPassword` lets the UI tell social-login-only accounts (which must set a password first).
+   */
+  public static toPublicUser(user: any, extra: Partial<User> = {}): User {
+    return {
+      id: user.id,
+      email: user.email,
+      phone: user.phone,
+      name: user.name,
+      role: user.role,
+      avatarUrl: user.avatarUrl,
+      createdAt: user.createdAt,
+      phoneVerified: Boolean(user.phoneVerified),
+      phoneVerifiedAt: user.phoneVerifiedAt,
+      emailVerified: Boolean(user.emailVerified),
+      emailVerifiedAt: user.emailVerifiedAt,
+      authProvider: user.authProvider || 'local',
+      hasPassword: Boolean(user.passwordHash),
+      ...extra,
+    };
+  }
+
   public static generateToken(user: User, isBorrowedDevice = false): string {
     const expiresIn = isBorrowedDevice ? '2h' : '30d'; // Shorter expiry on borrowed devices
     const sessionVersion = (user as any).sessionVersion || 1;
@@ -130,8 +159,8 @@ export class AuthService {
       return { success: false, error: 'Invalid or expired password reset code.' };
     }
 
-    if (!newPassword || newPassword.length < 8 || !/\d/.test(newPassword)) {
-      return { success: false, error: 'Password must be at least 8 characters long and contain at least one number.' };
+    if (!isPasswordAcceptable(newPassword)) {
+      return { success: false, error: PASSWORD_POLICY_MESSAGE };
     }
 
     const user = db.users.find((u) => u.id === record.userId);
@@ -165,7 +194,7 @@ export class AuthService {
     userId: string,
     currentPassword: string | undefined,
     newPassword: string
-  ): { success: boolean; message?: string; error?: string } {
+  ): { success: boolean; message?: string; error?: string; token?: string } {
     const user = db.users.find((u) => u.id === userId);
     if (!user) {
       return { success: false, error: 'User account not found.' };
@@ -181,7 +210,7 @@ export class AuthService {
       }
     }
 
-    if (!newPassword || newPassword.length < 8 || !/\d/.test(newPassword)) {
+    if (!isPasswordAcceptable(newPassword)) {
       return {
         success: false,
         error: 'New password must be at least 8 characters long and contain at least one number.',
@@ -192,7 +221,41 @@ export class AuthService {
     (user as any).sessionVersion = ((user as any).sessionVersion || 1) + 1;
     db.save();
 
-    return { success: true, message: 'Password updated successfully.' };
+    // The session version was bumped (every other session is signed out), so hand the caller a fresh token
+    // or its own next request would 401.
+    return { success: true, message: 'Password updated successfully.', token: this.generateToken(user as any) };
+  }
+
+  /**
+   * First password for an account that has none (social / Google sign-in only). Refused when a password already
+   * exists (use changePassword, which demands the current one). Same policy + bcrypt cost as registration.
+   * Bumps the session version so any other session (e.g. a stolen token) is signed out, and returns a fresh token.
+   */
+  public static setPassword(
+    userId: string,
+    newPassword: unknown
+  ): { success: true; message: string; token: string } | { success: false; status: 400 | 404 | 409; code: string; error: string } {
+    const user = db.users.find((u) => u.id === userId);
+    if (!user) {
+      return { success: false, status: 404, code: 'USER_NOT_FOUND', error: 'User account not found.' };
+    }
+    if (user.passwordHash && user.passwordHash.length > 0) {
+      return {
+        success: false,
+        status: 409,
+        code: 'PASSWORD_ALREADY_SET',
+        error: 'This account already has a password. Use "Update Password" and enter your current password to change it.',
+      };
+    }
+    if (!isPasswordAcceptable(newPassword)) {
+      return { success: false, status: 400, code: 'WEAK_PASSWORD', error: PASSWORD_POLICY_MESSAGE };
+    }
+
+    user.passwordHash = bcrypt.hashSync(newPassword, BCRYPT_COST);
+    (user as any).sessionVersion = ((user as any).sessionVersion || 1) + 1;
+    db.save();
+
+    return { success: true, message: 'Password set. You can now also sign in with your email and password.', token: this.generateToken(user as any) };
   }
 
   public static async requestEmailVerification(userId: string): Promise<{ success: boolean; message: string }> {
@@ -282,19 +345,7 @@ export class AuthService {
 
     VerificationCodeService.deletePhone([clean, phoneKey, record.userId, authenticatedUserId, record.phone?.replace(/\s+/g, '')]);
 
-    const safeUser: User | undefined = user ? {
-      id: user.id,
-      email: user.email,
-      phone: user.phone,
-      name: user.name,
-      role: user.role,
-      avatarUrl: user.avatarUrl,
-      createdAt: user.createdAt,
-      phoneVerified: true,
-      phoneVerifiedAt: (user as any).phoneVerifiedAt,
-      emailVerified: (user as any).emailVerified,
-      emailVerifiedAt: (user as any).emailVerifiedAt,
-    } : undefined;
+    const safeUser: User | undefined = user ? this.toPublicUser(user) : undefined;
 
     return { success: true, user: safeUser };
   }
@@ -453,16 +504,7 @@ export class AuthService {
     const customerProfile = db.customerProfiles.find((c) => c.userId === user.id);
     const technicianProfile = db.technicianProfiles.find((t) => t.userId === user.id || (t as any).id === user.id);
 
-    const safeUser: User = {
-      id: user.id,
-      email: user.email,
-      phone: user.phone,
-      name: user.name,
-      role: user.role,
-      avatarUrl: user.avatarUrl,
-      createdAt: user.createdAt,
-      isBorrowedDeviceSession: isBorrowedDevice,
-    };
+    const safeUser: User = this.toPublicUser(user, { isBorrowedDeviceSession: isBorrowedDevice });
 
     return {
       token,
@@ -483,8 +525,8 @@ export class AuthService {
     state?: string;
     isBorrowedDevice?: boolean;
   }): AuthSession | { error: string } {
-    if (!data.password || data.password.length < 8 || !/\d/.test(data.password)) {
-      return { error: 'Password must be at least 8 characters long and contain at least one number.' };
+    if (!isPasswordAcceptable(data.password)) {
+      return { error: PASSWORD_POLICY_MESSAGE };
     }
 
     const existing = db.users.find((u) => u.email.toLowerCase() === data.email.trim().toLowerCase() || u.phone === data.phone.trim());
@@ -548,18 +590,7 @@ export class AuthService {
 
     const token = this.generateToken(newUser as any, !!data.isBorrowedDevice);
 
-    const safeUser: User = {
-      id: newUser.id,
-      email: newUser.email,
-      phone: newUser.phone,
-      name: newUser.name,
-      role: newUser.role,
-      avatarUrl: newUser.avatarUrl,
-      createdAt: newUser.createdAt,
-      isBorrowedDeviceSession: !!data.isBorrowedDevice,
-      phoneVerified: false,
-      emailVerified: false,
-    };
+    const safeUser: User = this.toPublicUser(newUser, { isBorrowedDeviceSession: !!data.isBorrowedDevice });
 
     return {
       token,
@@ -581,8 +612,8 @@ export class AuthService {
     state?: string;
     supportedBrands?: string[];
   }): AuthSession | { error: string } {
-    if (!data.password || data.password.length < 8 || !/\d/.test(data.password)) {
-      return { error: 'Password must be at least 8 characters long and contain at least one number.' };
+    if (!isPasswordAcceptable(data.password)) {
+      return { error: PASSWORD_POLICY_MESSAGE };
     }
 
     const existing = db.users.find((u) => u.email.toLowerCase() === data.email.trim().toLowerCase() || u.phone === data.phone.trim());
@@ -653,17 +684,7 @@ export class AuthService {
 
     const token = this.generateToken(newUser, false);
 
-    const safeUser: User = {
-      id: newUser.id,
-      email: newUser.email,
-      phone: newUser.phone,
-      name: newUser.name,
-      role: newUser.role,
-      avatarUrl: newUser.avatarUrl,
-      createdAt: newUser.createdAt,
-      phoneVerified: false,
-      emailVerified: false,
-    };
+    const safeUser: User = this.toPublicUser(newUser);
 
     return {
       token,
@@ -686,20 +707,7 @@ export class AuthService {
     const customerProfile = db.customerProfiles.find((c) => c.userId === user.id);
     const technicianProfile = db.technicianProfiles.find((t) => t.userId === user.id || (t as any).id === user.id);
 
-    const safeUser: User = {
-      id: user.id,
-      email: user.email,
-      phone: user.phone,
-      name: user.name,
-      role: user.role,
-      avatarUrl: user.avatarUrl,
-      createdAt: user.createdAt,
-      phoneVerified: Boolean((user as any).phoneVerified),
-      phoneVerifiedAt: (user as any).phoneVerifiedAt,
-      emailVerified: Boolean((user as any).emailVerified),
-      emailVerifiedAt: (user as any).emailVerifiedAt,
-      authProvider: (user as any).authProvider || 'local',
-    };
+    const safeUser: User = this.toPublicUser(user);
 
     return {
       token,
@@ -845,20 +853,7 @@ export class AuthService {
     }
 
     const sessionToken = this.generateToken(user as any);
-    const safeUser: User = {
-      id: user.id,
-      email: user.email,
-      phone: user.phone,
-      name: user.name,
-      role: user.role,
-      avatarUrl: user.avatarUrl,
-      createdAt: user.createdAt,
-      phoneVerified: Boolean(user.phoneVerified),
-      phoneVerifiedAt: user.phoneVerifiedAt,
-      emailVerified: Boolean(user.emailVerified),
-      emailVerifiedAt: user.emailVerifiedAt,
-      authProvider: user.authProvider,
-    };
+    const safeUser: User = this.toPublicUser(user);
 
     const customerProfile = db.customerProfiles.find((c) => c.userId === user.id) || null;
     const technicianProfile = db.technicianProfiles.find((t) => t.userId === user.id || (t as any).id === user.id) || null;
