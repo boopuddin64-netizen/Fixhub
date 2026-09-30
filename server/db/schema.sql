@@ -426,3 +426,39 @@ CREATE INDEX IF NOT EXISTS idx_payouts_tech ON payouts(technician_id);
 CREATE INDEX IF NOT EXISTS idx_webhook_events_event_key ON webhook_events(event_key);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_messages_repair ON messages(repair_id);
+
+-- =============================================================================
+-- Durable application state (added by feat/postgres-persistence)
+-- =============================================================================
+-- Write-through document store for the application's entity collections (users, profiles, repair
+-- requests, quotes, jobs, payments, messages, reviews, notifications, ...). The server keeps a
+-- working copy in memory, persists every change here (in one transaction per flush) and
+-- re-hydrates from this table on boot. `seq` preserves insertion order.
+CREATE TABLE IF NOT EXISTS entity_store (
+  seq BIGSERIAL,
+  collection TEXT NOT NULL,
+  id TEXT NOT NULL,
+  doc JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (collection, id)
+);
+CREATE INDEX IF NOT EXISTS idx_entity_store_collection_seq ON entity_store(collection, seq);
+
+-- Logout / account-deletion token revocation list (SHA-256 of the JWT, never the token itself).
+CREATE TABLE IF NOT EXISTS revoked_tokens (
+  token_hash TEXT PRIMARY KEY,
+  user_id TEXT,
+  revoked_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
+-- Bank-change one-time codes (HMAC of the code, never the code itself).
+CREATE TABLE IF NOT EXISTS bank_otps (
+  technician_id TEXT PRIMARY KEY,
+  code_hash TEXT NOT NULL,
+  attempts INT NOT NULL DEFAULT 0,
+  verified BOOLEAN NOT NULL DEFAULT false,
+  created_at_ms BIGINT NOT NULL,
+  expires_at_ms BIGINT NOT NULL,
+  verified_at_ms BIGINT
+);

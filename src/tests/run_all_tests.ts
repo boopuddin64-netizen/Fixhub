@@ -1,4 +1,5 @@
 import { db } from '../../server/db';
+import { pgDb } from '../../server/db/pgClient';
 import { AuthService } from '../../server/services/authService';
 import { TechnicianMatchingService } from '../../server/services/technicianMatchingService';
 import { PaymentService } from '../../server/services/paymentService';
@@ -19,6 +20,7 @@ import { runWheelPickerTests } from './wheel_picker.test';
 import { runBankResolutionAndViewportTests } from './bank_resolution_and_viewport_fix.test';
 import { runTechnicianIdAndCacVerificationTests } from './technician_id_and_cac_verification.test';
 import { runSecurityAuditFixTests } from './security_audit_fixes.test';
+import { runPostgresPersistenceTests } from './postgres_persistence.test';
 import {
   validateNumber,
   isValidCoordinates,
@@ -43,6 +45,9 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   console.log('\n===============================================================');
   console.log('   FIX HUB BACKEND SECURITY FIX #1 — AUDIT & VERIFICATION');
   console.log('===============================================================\n');
+
+  // Real PostgreSQL applies the schema asynchronously: wait for it before touching SQL tables.
+  await pgDb.ready;
 
   // Reset to fresh seed
   db.resetToSeed();
@@ -928,6 +933,10 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   const securityFixResults = await runSecurityAuditFixTests();
   passed += securityFixResults.passed;
   failed += securityFixResults.failed;
+
+  const persistenceResults = await runPostgresPersistenceTests();
+  passed += persistenceResults.passed;
+  failed += persistenceResults.failed;
 
   console.log('\n===============================================================');
   console.log(`   GLOBAL TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);

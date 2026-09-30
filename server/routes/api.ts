@@ -115,6 +115,34 @@ export function geocodeCustomerLocation(customerLocation: any) {
 
 export const apiRouter = makeAsyncSafe(Router());
 
+/**
+ * Durability barrier: for every state-changing request (anything but GET/HEAD/OPTIONS) the response is held
+ * back until pending changes are committed to PostgreSQL. An acknowledged write therefore survives a crash
+ * or restart. If the write cannot be committed the client gets a 500 instead of a false success.
+ * (No-op until db.init() has enabled persistence, e.g. in unit tests.)
+ */
+apiRouter.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS' || !db.isPersistent) return next();
+  const originalEnd = res.end.bind(res) as (...args: any[]) => Response;
+  (res as any).end = (...args: any[]) => {
+    (res as any).end = originalEnd;
+    db.flush().then(
+      () => originalEnd(...args),
+      (err) => {
+        console.error('[persistence] response withheld, write not durable:', err?.message || err);
+        if (res.headersSent) return originalEnd(...args);
+        res.statusCode = 500;
+        res.removeHeader('Content-Length');
+        res.removeHeader('ETag');
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        return originalEnd(JSON.stringify({ error: 'Internal Server Error' }));
+      }
+    );
+    return res;
+  };
+  next();
+});
+
 // 0. HEALTH CHECK ENDPOINT (Includes DB connectivity check)
 apiRouter.get('/health', async (req: Request, res: Response) => {
   let database = 'connected';

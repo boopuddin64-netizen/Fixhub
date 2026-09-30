@@ -71,6 +71,15 @@ JWT_SECRET=fixhub-dev-secret-key-production-change-me
 - When no external PostgreSQL server is detected in local development, Fixhub automatically runs using its embedded in-memory PostgreSQL engine (`pg-mem`) executing the exact PostgreSQL schema and SQL DDL defined in `server/db/schema.sql`.
 - Financial operations (payment verification, booking status transitions, earnings generation, payout distributions, and webhook idempotency) execute in ACID SQL transactions.
 
+### Durable state (users, requests, quotes, jobs, messages, ...)
+
+- With a real PostgreSQL (production, or locally with `FIXHUB_USE_POSTGRES=true` + `DATABASE_URL`), application state is
+  **restored from the database on boot** and **written through on every change** (`entity_store`, `revoked_tokens`,
+  `bank_otps` tables; created idempotently from `server/db/schema.sql`). A mutating API request is only acknowledged after
+  its change is committed.
+- Without `NODE_ENV=production`/`FIXHUB_USE_POSTGRES` the in-memory pg-mem engine is used and nothing survives a restart (dev/test).
+- Run **one server instance per database** for now (state is cached per process); a second instance logs a warning.
+
 ---
 
 ## 5. Production Deployment Fail-Fast Guardrails

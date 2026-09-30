@@ -17,11 +17,23 @@ export interface TransactionClient {
   query: (sql: string, params?: any[]) => Promise<any>;
 }
 
+export interface TransactionHooks {
+  /** runs inside the transaction after the callback succeeded and immediately before COMMIT */
+  beforeCommit?: (client: TransactionClient) => Promise<void>;
+  /** runs after COMMIT succeeded */
+  afterCommit?: () => void;
+}
+
 export class PostgresDatabase {
   private static instance: PostgresDatabase;
   public pool!: Pool;
   private memDb: IMemoryDb | null = null;
   private isMemory = false;
+
+  /** True when running on the pg-mem fallback (no external PostgreSQL). */
+  public get isMemoryMode(): boolean {
+    return this.isMemory;
+  }
   /**
    * Resolves once the schema has been applied (and seed data written). The server awaits this before
    * it starts listening so a fresh database boots deterministically. Rejects if the schema cannot be applied.
@@ -46,7 +58,10 @@ export class PostgresDatabase {
       (process.env.SQL_HOST && !process.env.SQL_HOST.includes('mock'))
     );
 
-    if (hasPostgresEnv && process.env.NODE_ENV === 'production') {
+    // Real PostgreSQL is used in production, or elsewhere when explicitly opted in with FIXHUB_USE_POSTGRES=true.
+    const useRealPostgres =
+      process.env.NODE_ENV === 'production' || /^(1|true)$/i.test(process.env.FIXHUB_USE_POSTGRES || '');
+    if (hasPostgresEnv && useRealPostgres) {
       try {
         if (process.env.DATABASE_URL) {
           this.pool = new Pool({
@@ -143,6 +158,7 @@ export class PostgresDatabase {
           }
         }
       }
+      this.applyGuardIndexes(); // synchronous for pg-mem (keeps the seed inserts in the same tick)
       await this.seedInitialData();
       return;
     }
@@ -161,7 +177,47 @@ export class PostgresDatabase {
     } finally {
       client.release();
     }
+    await this.applyGuardIndexes();
     await this.seedInitialData();
+  }
+
+  /**
+   * Database-level money guards. They are created separately from schema.sql (and never abort boot):
+   * on an existing database that already contains rows violating a rule, CREATE UNIQUE INDEX fails and
+   * we log loudly instead of refusing to start, so an operator can clean the data and restart.
+   *   - at most ONE confirmed payment per repair job (a duplicate charge cannot be recorded, even if two
+   *     server processes race, because the in-process guard is per-process);
+   *   - a provider transaction reference can only be recorded once.
+   */
+  public applyGuardIndexes(): Promise<void> {
+    const statements = [
+      `CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_one_confirmed_per_repair
+         ON payments (repair_id) WHERE status IN ('SUCCESS', 'ESCROW_HELD')`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_transaction_ref ON payments (transaction_ref)`,
+    ];
+    const report = (e: any) =>
+      console.error(
+        `[db] Could not create payment guard index (existing data may violate it — fix the data and restart): ${String(e?.message || e).split('\n')[0]}`
+      );
+    if (this.memDb) {
+      for (const sql of statements) {
+        try {
+          this.memDb.public.none(sql);
+        } catch (e) {
+          report(e);
+        }
+      }
+      return Promise.resolve();
+    }
+    return (async () => {
+      for (const sql of statements) {
+        try {
+          await this.pool.query(sql);
+        } catch (e) {
+          report(e);
+        }
+      }
+    })();
   }
 
   public async seedInitialData(): Promise<void> {
@@ -207,7 +263,10 @@ export class PostgresDatabase {
    * Executes a callback within a single database transaction boundary.
    * If any step throws an error, the transaction is completely rolled back.
    */
-  public async transaction<T>(callback: (client: TransactionClient) => Promise<T>): Promise<T> {
+  public async transaction<T>(
+    callback: (client: TransactionClient) => Promise<T>,
+    hooks: TransactionHooks = {}
+  ): Promise<T> {
     if (this.isMemory && this.memDb) {
       const backup = this.memDb.backup();
       try {
@@ -215,6 +274,8 @@ export class PostgresDatabase {
           query: (sql: string, params: any[] = []) => this.pool.query(sql, params),
         };
         const result = await callback(client);
+        if (hooks.beforeCommit) await hooks.beforeCommit(client);
+        hooks.afterCommit?.();
         return result;
       } catch (error) {
         backup.restore();
@@ -229,10 +290,12 @@ export class PostgresDatabase {
         query: (sql: string, params: any[] = []) => client.query(sql, params),
       };
       const result = await callback(txClient);
+      if (hooks.beforeCommit) await hooks.beforeCommit(txClient);
       await client.query('COMMIT');
+      hooks.afterCommit?.();
       return result;
     } catch (error) {
-      await client.query('ROLLBACK');
+      await client.query('ROLLBACK').catch(() => {});
       throw error;
     } finally {
       client.release();
