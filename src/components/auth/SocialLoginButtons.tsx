@@ -43,9 +43,7 @@ export const SocialLoginButtons: React.FC<SocialLoginButtonsProps> = ({
     socialLoginRef.current = socialLogin;
   });
 
-  const googleClientId =
-    import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-    '56408372166-fdcat8gp2ildbktlu1q5u3ab9pad5t0b.apps.googleusercontent.com';
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
   // Pre-load and initialize Google Identity Services immediately on mount
   useEffect(() => {
@@ -292,6 +290,9 @@ export const SocialLoginButtons: React.FC<SocialLoginButtonsProps> = ({
       setLoadingProvider(null);
     }
   };
+
+  // No client ID configured: hide the button instead of showing one that cannot work.
+  if (!googleClientId) return null;
 
   return (
     <div className="space-y-2 my-3">
