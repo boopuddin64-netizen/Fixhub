@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { db } from '../db';
 import { User, UserRole, CustomerProfile, TechnicianProfile } from '../../src/types/index';
 import { sendSms } from './smsService';
+import { VerificationCodeService } from './verificationCodeService';
 
 /** bcrypt work factor for newly created hashes (existing cost-8 hashes keep verifying and are not rewritten). */
 const BCRYPT_COST = 12;
@@ -73,9 +74,7 @@ export class AuthService {
     }
   }
 
-  private static resetTokens: Map<string, { userId: string; expiresAt: number }> = new Map();
-  private static emailVerifyTokens: Map<string, { userId: string; email: string; expiresAt: number }> = new Map();
-  private static phoneVerifyTokens: Map<string, { userId?: string; phone: string; code: string; expiresAt: number }> = new Map();
+  // Reset / e-mail / phone verification codes are NOT kept here: see VerificationCodeService (hashed, durable).
 
   /** Tokens are stored/compared as SHA-256 digests, so the revocation table never contains a usable credential. */
   private static tokenDigest(token: string): string {
@@ -111,10 +110,7 @@ export class AuthService {
     }
 
     const resetCode = crypto.randomInt(100000, 1000000).toString();
-    this.resetTokens.set(resetCode, {
-      userId: user.id,
-      expiresAt: Date.now() + 15 * 60 * 1000,
-    });
+    VerificationCodeService.issueByCode('reset', resetCode, { userId: user.id }, 15 * 60 * 1000);
 
     // Deliver reset code via SMS or Email service
     const smsResult = await sendSms(user.phone, `Your Fixhub password reset code is: ${resetCode}. Valid for 15 minutes.`);
@@ -129,8 +125,8 @@ export class AuthService {
   }
 
   public static resetPasswordWithCode(code: string, newPassword: string): { success: boolean; error?: string } {
-    const record = this.resetTokens.get(code);
-    if (!record || record.expiresAt < Date.now()) {
+    const record = VerificationCodeService.findByCode('reset', code);
+    if (!record || !record.userId) {
       return { success: false, error: 'Invalid or expired password reset code.' };
     }
 
@@ -145,10 +141,24 @@ export class AuthService {
 
     user.passwordHash = bcrypt.hashSync(newPassword, BCRYPT_COST);
     (user as any).sessionVersion = ((user as any).sessionVersion || 1) + 1;
-    this.resetTokens.delete(code);
+    VerificationCodeService.consumeByCode('reset', code);
     db.save();
 
     return { success: true };
+  }
+
+  /**
+   * Re-authentication for sensitive actions (delete account, switch role): checks the CURRENT password of the
+   * already-authenticated user. Accounts that have no password (social-login only) cannot be re-authenticated
+   * this way and get `NO_PASSWORD` — they must set a password first (POST /auth/change-password allows that).
+   */
+  public static confirmPassword(userId: string, password: unknown): { ok: true } | { ok: false; reason: 'NO_PASSWORD' | 'INVALID' } {
+    const user = db.users.find((u) => u.id === userId);
+    if (!user) return { ok: false, reason: 'INVALID' };
+    if (!user.passwordHash) return { ok: false, reason: 'NO_PASSWORD' };
+    const supplied = typeof password === 'string' ? password.slice(0, 200) : '';
+    const match = bcrypt.compareSync(supplied, user.passwordHash);
+    return supplied && match ? { ok: true } : { ok: false, reason: 'INVALID' };
   }
 
   public static changePassword(
@@ -190,11 +200,7 @@ export class AuthService {
     if (!user) return { success: false, message: 'User not found.' };
 
     const code = crypto.randomInt(100000, 1000000).toString();
-    this.emailVerifyTokens.set(code, {
-      userId: user.id,
-      email: user.email,
-      expiresAt: Date.now() + 30 * 60 * 1000,
-    });
+    VerificationCodeService.issueByCode('email', code, { userId: user.id, email: user.email }, 30 * 60 * 1000);
 
     if (process.env.NODE_ENV !== 'production') {
       console.log(`[DEV EMAIL VERIFY] Verification code for ${user.email}: ${code}`);
@@ -204,8 +210,8 @@ export class AuthService {
   }
 
   public static confirmEmailVerification(code: string): { success: boolean; error?: string } {
-    const record = this.emailVerifyTokens.get(code);
-    if (!record || record.expiresAt < Date.now()) {
+    const record = VerificationCodeService.findByCode('email', code);
+    if (!record) {
       return { success: false, error: 'Invalid or expired verification code.' };
     }
 
@@ -216,7 +222,7 @@ export class AuthService {
       db.save();
     }
 
-    this.emailVerifyTokens.delete(code);
+    VerificationCodeService.consumeByCode('email', code);
     return { success: true };
   }
 
@@ -230,17 +236,12 @@ export class AuthService {
     const phoneKey = targetPhone.replace(/\s+/g, '');
     const userKey = user ? user.id : phoneKey;
 
-    const tokenRecord = {
-      userId: user?.id || authenticatedUserId,
-      phone: targetPhone,
+    VerificationCodeService.issuePhone(
+      [userKey, phoneKey],
       code,
-      expiresAt: Date.now() + 15 * 60 * 1000,
-    };
-
-    this.phoneVerifyTokens.set(userKey, tokenRecord);
-    if (userKey !== phoneKey) {
-      this.phoneVerifyTokens.set(phoneKey, tokenRecord);
-    }
+      { userId: user?.id || authenticatedUserId, phone: targetPhone },
+      15 * 60 * 1000
+    );
 
     await sendSms(targetPhone, `Your Fixhub verification code is: ${code}. Valid for 15 minutes.`);
 
@@ -251,12 +252,9 @@ export class AuthService {
     const clean = phoneOrUserId.trim();
     const phoneKey = clean.replace(/\s+/g, '');
 
-    let record = this.phoneVerifyTokens.get(clean) || this.phoneVerifyTokens.get(phoneKey);
-    if (!record && authenticatedUserId) {
-      record = this.phoneVerifyTokens.get(authenticatedUserId);
-    }
+    const record = VerificationCodeService.findPhone([clean, phoneKey, authenticatedUserId]);
 
-    if (!record || record.code !== code.trim() || record.expiresAt < Date.now()) {
+    if (!record || !VerificationCodeService.phoneCodeMatches(record, code)) {
       return { success: false, error: 'Invalid or expired phone verification code.' };
     }
 
@@ -282,14 +280,7 @@ export class AuthService {
       db.save();
     }
 
-    this.phoneVerifyTokens.delete(clean);
-    this.phoneVerifyTokens.delete(phoneKey);
-    if (record.userId) {
-      this.phoneVerifyTokens.delete(record.userId);
-    }
-    if (authenticatedUserId) {
-      this.phoneVerifyTokens.delete(authenticatedUserId);
-    }
+    VerificationCodeService.deletePhone([clean, phoneKey, record.userId, authenticatedUserId, record.phone?.replace(/\s+/g, '')]);
 
     const safeUser: User | undefined = user ? {
       id: user.id,

@@ -15,7 +15,7 @@ interface AuthContextType {
   registerTechnician: (data: RegisterTechnicianInput) => Promise<void>;
   socialLogin: (provider: 'google', token: string, role: 'customer' | 'technician') => Promise<AuthResponse>;
   logout: () => void;
-  switchRole: (role: 'customer' | 'technician') => Promise<void>;
+  switchRole: (role: 'customer' | 'technician', password: string) => Promise<void>;
   switchDemoUser: (email: string) => Promise<void>;
   refreshUser: () => Promise<void>;
   refreshAuth?: () => Promise<void>;
@@ -133,10 +133,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsBorrowedDevice(false);
   };
 
-  const switchRole = async (targetRole: 'customer' | 'technician') => {
+  const switchRole = async (targetRole: 'customer' | 'technician', password: string) => {
     setIsLoading(true);
     try {
-      const data = await ApiClient.switchRole(targetRole);
+      const data = await ApiClient.switchRole(targetRole, password);
       if (data.token) {
         ApiClient.setToken(data.token);
       }

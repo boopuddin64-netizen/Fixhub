@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { RepairJob, RepairQuote, TechnicianProfile } from '../../types';
 import { ApiClient } from '../../api/client';
 import { StatusBadge } from '../common/StatusBadge';
@@ -50,6 +50,22 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
   const [cancelReason, setCancelReason] = useState('');
   const [isSubmittingCancel, setIsSubmittingCancel] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  // The public technician list no longer exposes phone numbers. The job detail endpoint reveals the phone only
+  // to the customer of an active job, so fetch it from there.
+  const [technicianPhone, setTechnicianPhone] = useState<string | null>(technician?.phone || null);
+  useEffect(() => {
+    let cancelled = false;
+    setTechnicianPhone(technician?.phone || null);
+    ApiClient.getJob(job.id)
+      .then((res: any) => {
+        const phone = res?.technician?.phone;
+        if (!cancelled && typeof phone === 'string' && phone.trim()) setTechnicianPhone(phone);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [job.id, job.status, technician?.phone]);
 
   const steps = [
     {
@@ -591,13 +607,15 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <a
-              href={`tel:${technician.phone}`}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold cursor-pointer"
-            >
-              <Phone className="w-3.5 h-3.5" />
-              <span>Call Shop</span>
-            </a>
+            {technicianPhone && (
+              <a
+                href={`tel:${technicianPhone}`}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold cursor-pointer"
+              >
+                <Phone className="w-3.5 h-3.5" />
+                <span>Call Shop</span>
+              </a>
+            )}
             <button
               onClick={onOpenChat}
               className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-bold cursor-pointer"

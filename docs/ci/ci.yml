@@ -1,0 +1,73 @@
+# Copy this file to .github/workflows/ci.yml to enable CI.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Typecheck, lint, build, test (pg-mem)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: oven-sh/setup-bun@v2
+      - name: Install dependencies (bun.lock is the source of truth)
+        run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Test
+        env:
+          # The OPay bank-resolution test needs a live Paystack key; skip it in CI.
+          SKIP_LIVE_NETWORK_TESTS: '1'
+        run: npm test
+      - name: Dependency audit
+        run: bun audit
+
+  test-postgres:
+    name: Test against real PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: fixhub
+          POSTGRES_PASSWORD: fixhub
+          POSTGRES_DB: fixhub
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fixhub"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Test
+        env:
+          FIXHUB_USE_POSTGRES: 'true'
+          DATABASE_URL: postgres://fixhub:fixhub@localhost:5432/fixhub
+          SKIP_LIVE_NETWORK_TESTS: '1'
+        run: npm test

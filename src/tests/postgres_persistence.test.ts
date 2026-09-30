@@ -188,7 +188,9 @@ export async function runPostgresPersistenceTests(): Promise<{ passed: number; f
 
     // ---------------------------------------------------------------- deletes are durable
     console.log('4. Account deletion and revocation are durable');
-    const del = await call('DELETE', '/account/me', undefined, goodTok);
+    const delNoPw = await call('DELETE', '/account/me', undefined, goodTok);
+    assert(delNoPw.status === 403 && db.users.some((x) => x.id === custId), 'Account deletion without the password is refused');
+    const del = await call('DELETE', '/account/me', { password: pw }, goodTok);
     assert(del.status === 200, 'Account deletion succeeds');
     await db.simulateRestartForTests();
     assert(!db.users.some((x) => x.id === custId), 'Deleted user is still gone after restart');

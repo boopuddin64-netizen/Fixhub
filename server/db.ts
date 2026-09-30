@@ -41,6 +41,18 @@ export interface BankOtpState {
   verifiedAt?: number;
 }
 
+/** Password-reset / e-mail / phone verification code. Only an HMAC of the code is kept. */
+export interface VerificationCodeState {
+  purpose: 'reset' | 'email' | 'phone';
+  codeKey: string;
+  codeHash: string;
+  userId?: string;
+  email?: string;
+  phone?: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
 /** Longest a verified OTP can still matter (30 min unlock window) — used to prune old rows. */
 const BANK_OTP_RETENTION_MS = 45 * 60 * 1000;
 
@@ -140,6 +152,8 @@ export class Database {
   public revokedTokenHashes: Set<string> = new Set();
   /** Bank-change OTP state by technician id. Durable via the `bank_otps` table. */
   public bankOtps: Map<string, BankOtpState> = new Map();
+  /** Reset / e-mail / phone verification codes, keyed `${purpose}:${codeKey}`. Durable via `verification_codes`. */
+  public verificationCodes: Map<string, VerificationCodeState> = new Map();
 
   private readonly store = new EntityStore(
     (name) => (this as any)[name] as any[],
@@ -217,9 +231,11 @@ export class Database {
     this.store.reset();
     this.revokedTokenHashes = new Set();
     this.bankOtps = new Map();
+    this.verificationCodes = new Map();
     if (this.persistenceActive) {
       this.store.queueWrite('DELETE FROM revoked_tokens', []);
       this.store.queueWrite('DELETE FROM bank_otps', []);
+      this.store.queueWrite('DELETE FROM verification_codes', []);
       this.scheduleFlush();
     }
   }
@@ -238,6 +254,7 @@ export class Database {
     // Drop expired side-store rows first (cheap housekeeping, idempotent).
     await this.pg.query('DELETE FROM revoked_tokens WHERE expires_at <= $1', [new Date().toISOString()]);
     await this.pg.query('DELETE FROM bank_otps WHERE expires_at_ms < $1', [Date.now() - BANK_OTP_RETENTION_MS]);
+    await this.pg.query('DELETE FROM verification_codes WHERE expires_at_ms < $1', [Date.now()]);
 
     const hydrated = await this.store.hydrate(this.pg);
     if (!hydrated) {
@@ -262,6 +279,22 @@ export class Database {
       });
     }
 
+    const codes = await this.pg.query('SELECT * FROM verification_codes');
+    this.verificationCodes = new Map();
+    for (const r of codes.rows || []) {
+      const purpose = String(r.purpose) as VerificationCodeState['purpose'];
+      this.verificationCodes.set(`${purpose}:${r.code_key}`, {
+        purpose,
+        codeKey: String(r.code_key),
+        codeHash: String(r.code_hash),
+        userId: r.user_id ?? undefined,
+        email: r.email ?? undefined,
+        phone: r.phone ?? undefined,
+        createdAt: Number(r.created_at_ms),
+        expiresAt: Number(r.expires_at_ms),
+      });
+    }
+
     this.persistenceActive = true;
     if (!hydrated) await this.flush();
     return { hydrated };
@@ -278,6 +311,7 @@ export class Database {
     for (const spec of PERSISTED_COLLECTIONS) (this as any)[spec.name] = [];
     this.revokedTokenHashes = new Set();
     this.bankOtps = new Map();
+    this.verificationCodes = new Map();
     this.store.reset();
     return this.init();
   }
@@ -292,6 +326,8 @@ export class Database {
       console.error('[db] final flush failed:', e?.message || e);
     }
     this.persistenceActive = false;
+    if (this.writerLockTimer) clearInterval(this.writerLockTimer);
+    this.writerLockTimer = null;
     this.writerLockClient?.release();
     this.writerLockClient = null;
   }
@@ -309,27 +345,91 @@ export class Database {
   }
 
   /**
-   * Best-effort single-writer guard. Memory is the working copy of each process, so two processes writing
-   * the same database would overwrite each other's entities. We hold a session advisory lock while
-   * running and warn loudly if someone else already has it. (Real PostgreSQL only.)
+   * Single-writer guard. Memory is the working copy of each process, so two processes writing the same
+   * database would overwrite each other's entities. We hold a session-level PostgreSQL advisory lock for the
+   * whole life of the process (real PostgreSQL only).
+   *
+   *  - Production: if another instance holds the lock we wait up to WRITER_LOCK_WAIT_MS (default 30s, so a
+   *    rolling deploy where the old instance is draining can hand over) and then REFUSE TO START (init()
+   *    rejects -> the server exits 1) instead of silently corrupting data. ALLOW_MULTI_INSTANCE=true
+   *    downgrades this to a loud warning (unsupported: last writer wins).
+   *  - Elsewhere: loud warning only.
+   *  - A heartbeat on the lock connection detects a lost lock (connection dropped, failover) and re-acquires
+   *    it; if another instance has taken it meanwhile in production, this process exits rather than keep writing.
    */
   private async acquireWriterLock(): Promise<void> {
     if (this.pg.isMemoryMode || this.writerLockClient) return;
-    try {
-      const client = await this.pg.pool.connect();
-      const res = await client.query('SELECT pg_try_advisory_lock($1) AS ok', [727463002]);
-      if (!res.rows?.[0]?.ok) {
-        console.error(
-          '[db] WARNING: another Fixhub instance holds the writer lock on this database. Running more than one ' +
-            'instance against the same database is NOT supported yet (state is cached per process) — data can be lost.'
-        );
+    const isProd = process.env.NODE_ENV === 'production';
+    const allowMulti = /^(1|true)$/i.test(process.env.ALLOW_MULTI_INSTANCE || '');
+    const waitMs = isProd && !allowMulti ? Math.max(0, Number(process.env.WRITER_LOCK_WAIT_MS ?? 30_000) || 0) : 0;
+    const deadline = Date.now() + waitMs;
+    let announced = false;
+    for (;;) {
+      let client: any;
+      try {
+        client = await this.pg.pool.connect();
+        const res = await client.query('SELECT pg_try_advisory_lock($1) AS ok', [Database.WRITER_LOCK_KEY]);
+        if (res.rows?.[0]?.ok) {
+          client.on?.('error', (e: any) => console.error('[db] writer-lock connection error:', e?.message || e));
+          this.writerLockClient = {
+            release: () => {
+              // Session locks outlive release() (the connection returns to the pool): unlock explicitly.
+              client.query('SELECT pg_advisory_unlock($1)', [Database.WRITER_LOCK_KEY]).catch(() => {}).finally(() => client.release());
+            },
+          };
+          this.startWriterLockHeartbeat(client);
+          return;
+        }
         client.release();
-        return;
+      } catch (e: any) {
+        try { client?.release(true); } catch { /* ignore */ }
+        console.error('[db] could not acquire writer lock:', e?.message || e);
+        return; // DB problems surface elsewhere (schema / hydrate); do not mask them here
       }
-      this.writerLockClient = { release: () => client.release() };
-    } catch (e: any) {
-      console.error('[db] could not acquire writer lock:', e?.message || e);
+      if (Date.now() >= deadline) break;
+      if (!announced) {
+        console.warn(`[db] another Fixhub instance holds the writer lock; waiting up to ${Math.round(waitMs / 1000)}s for it to exit...`);
+        announced = true;
+      }
+      await new Promise((r) => setTimeout(r, 1000));
     }
+    const msg =
+      'another Fixhub instance holds the writer lock on this database. Running more than one instance against the ' +
+      'same database is NOT supported (state is cached per process; data would be overwritten).';
+    if (isProd && !allowMulti) {
+      throw new Error(`FATAL: ${msg} Stop the other instance (or set ALLOW_MULTI_INSTANCE=true to override at your own risk).`);
+    }
+    console.error(`[db] WARNING: ${msg}`);
+  }
+
+  private static readonly WRITER_LOCK_KEY = 727463002;
+  private writerLockTimer: NodeJS.Timeout | null = null;
+
+  private startWriterLockHeartbeat(client: any, intervalMs = Number(process.env.WRITER_LOCK_HEARTBEAT_MS) || 10_000): void {
+    if (this.writerLockTimer) clearInterval(this.writerLockTimer);
+    this.writerLockTimer = setInterval(async () => {
+      try {
+        // The lock lives and dies with this connection; a cheap round trip proves it is still alive.
+        const res = await client.query('SELECT pg_try_advisory_lock($1) AS ok', [Database.WRITER_LOCK_KEY]);
+        if (res.rows?.[0]?.ok) {
+          // Re-entrant on the same session: we still own it (or just re-took it). Balance the extra count.
+          await client.query('SELECT pg_advisory_unlock($1)', [Database.WRITER_LOCK_KEY]);
+        }
+      } catch (e: any) {
+        console.error('[db] writer lock connection lost:', e?.message || e);
+        if (this.writerLockTimer) clearInterval(this.writerLockTimer);
+        this.writerLockTimer = null;
+        try { client.release(true); } catch { /* ignore */ }
+        this.writerLockClient = null;
+        try {
+          await this.acquireWriterLock();
+        } catch (fatal: any) {
+          console.error(String(fatal?.message || fatal));
+          process.exit(1);
+        }
+      }
+    }, intervalMs);
+    this.writerLockTimer.unref?.();
   }
 
   private waitForTransactions(): Promise<void> {

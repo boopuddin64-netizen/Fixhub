@@ -76,3 +76,16 @@ export const codeSendRateLimiter = rateLimit({
   },
   message: { error: 'Too many code requests. Please wait a few minutes and try again.' },
 });
+
+/** CSP violation reports come from browsers unauthenticated; keep the log volume bounded. */
+export const cspReportRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: {
+    xForwardedForHeader: false,
+    forwardedHeader: false,
+  },
+  message: { error: 'Too many reports.' },
+});

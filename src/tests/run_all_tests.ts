@@ -21,6 +21,8 @@ import { runBankResolutionAndViewportTests } from './bank_resolution_and_viewpor
 import { runTechnicianIdAndCacVerificationTests } from './technician_id_and_cac_verification.test';
 import { runSecurityAuditFixTests } from './security_audit_fixes.test';
 import { runPostgresPersistenceTests } from './postgres_persistence.test';
+import { runCspTests } from './csp.test';
+import { runAuditRemainingTests } from './audit_remaining.test';
 import {
   validateNumber,
   isValidCoordinates,
@@ -938,6 +940,14 @@ export async function runTestSuite(): Promise<{ passed: number; failed: number }
   passed += persistenceResults.passed;
   failed += persistenceResults.failed;
 
+  const auditRemainingResults = await runAuditRemainingTests();
+  passed += auditRemainingResults.passed;
+  failed += auditRemainingResults.failed;
+
+  const cspResults = await runCspTests();
+  passed += cspResults.passed;
+  failed += cspResults.failed;
+
   console.log('\n===============================================================');
   console.log(`   GLOBAL TEST SUITE EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);
   console.log('===============================================================\n');
@@ -955,10 +965,13 @@ const isDirectRun =
   (process.argv[1].endsWith('run_all_tests.ts') || process.argv[1].endsWith('run_all_tests.js'));
 
 if (isDirectRun) {
-  runTestSuite().catch((err) => {
-    console.error('Test execution failed:', err);
-    process.exit(1);
-  });
+  runTestSuite()
+    // Exit explicitly: with a real PostgreSQL the connection pool / writer lock would keep the event loop alive.
+    .then(({ failed }) => process.exit(failed > 0 ? 1 : 0))
+    .catch((err) => {
+      console.error('Test execution failed:', err);
+      process.exit(1);
+    });
 }
 
   // Test: Fix Hub Phase 2.5 Correction
