@@ -71,6 +71,13 @@ export interface VerificationStatus {
   identityVerified: boolean;
   businessVerified: boolean;
   payoutVerified: boolean;
+  /** Last manual KYC decision taken by an admin (admin portal). */
+  kycReview?: {
+    status: 'APPROVED' | 'REJECTED';
+    reviewedBy: string;
+    reviewedAt: string;
+    reason?: string;
+  };
 }
 
 export interface User {
@@ -89,6 +96,14 @@ export interface User {
   authProvider?: 'local' | 'google' | 'apple' | 'facebook';
   /** false for social-login-only accounts: they must set a password before delete-account / switch-role. */
   hasPassword?: boolean;
+  /** Moderation state (admin portal). Suspended accounts cannot sign in and their sessions are revoked. */
+  status?: 'active' | 'suspended';
+  suspendedAt?: string;
+  suspendedReason?: string;
+  suspendedBy?: string;
+  /** Admin accounts created with a generated one-time password must change it before using the portal. */
+  mustChangePassword?: boolean;
+  lastLoginAt?: string;
 }
 
 export interface CustomerProfile {
@@ -620,6 +635,9 @@ export interface PayoutRecord {
   updatedAt: string;
   processedAt?: string;
   failureReason?: string;
+  /** Admin review of a payout that was held for approval (PAYOUT_APPROVAL_REQUIRED=true). */
+  reviewedBy?: string;
+  reviewedAt?: string;
 }
 
 export type RefundStatus = 'PENDING' | 'COMPLETED' | 'REJECTED' | 'FAILED';
@@ -660,6 +678,11 @@ export interface Review {
   verifiedPurchase: true;
   repairSummary: string;
   createdAt: string;
+  /** Moderation (admin portal): hidden reviews are excluded from public listings and rating averages. */
+  hidden?: boolean;
+  hiddenReason?: string;
+  hiddenBy?: string;
+  hiddenAt?: string;
 }
 
 export interface AuditLog {
@@ -679,8 +702,10 @@ export interface NotificationItem {
   userId: string;
   title: string;
   message: string;
-  type: 'QUOTE' | 'STATUS_CHANGE' | 'PAYMENT' | 'WARRANTY' | 'MESSAGE' | 'SECURITY';
+  type: 'QUOTE' | 'STATUS_CHANGE' | 'PAYMENT' | 'WARRANTY' | 'MESSAGE' | 'SECURITY' | 'ANNOUNCEMENT';
   repairId?: string;
+  /** Set for admin broadcasts so a single announcement can be traced across recipients. */
+  announcementId?: string;
   read: boolean;
   createdAt: string;
 }

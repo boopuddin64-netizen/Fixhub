@@ -5,6 +5,8 @@ import { db } from '../db';
 import { User, UserRole, CustomerProfile, TechnicianProfile } from '../../src/types/index';
 import { sendSms } from './smsService';
 import { VerificationCodeService } from './verificationCodeService';
+import { validateAdminPassword } from '../../src/utils/adminPasswordPolicy';
+import { phonesMatch, normalizeNgPhone } from '../../src/utils/format';
 
 /** bcrypt work factor for newly created hashes (existing cost-8 hashes keep verifying and are not rewritten). */
 const BCRYPT_COST = 12;
@@ -63,12 +65,14 @@ export class AuthService {
       emailVerifiedAt: user.emailVerifiedAt,
       authProvider: user.authProvider || 'local',
       hasPassword: Boolean(user.passwordHash),
+      ...(user.role === 'admin' ? { mustChangePassword: Boolean(user.mustChangePassword) } : {}),
       ...extra,
     };
   }
 
   public static generateToken(user: User, isBorrowedDevice = false): string {
-    const expiresIn = isBorrowedDevice ? '2h' : '30d'; // Shorter expiry on borrowed devices
+    // Shorter expiry on borrowed devices; admin sessions are always short (8h) and revocable (sessionVersion).
+    const expiresIn = user.role === 'admin' ? '8h' : isBorrowedDevice ? '2h' : '30d';
     const sessionVersion = (user as any).sessionVersion || 1;
     return jwt.sign(
       {
@@ -93,11 +97,14 @@ export class AuthService {
       if (!decoded || !decoded.id) return null;
       const user = db.users.find((u) => u.id === decoded.id);
       if (!user) return null;
+      // A suspended account (admin portal) loses every existing session immediately.
+      if (user.status === 'suspended') return null;
       const userSessionVersion = (user as any).sessionVersion || 1;
       if (decoded.sessionVersion !== undefined && decoded.sessionVersion < userSessionVersion) {
         return null;
       }
-      return decoded;
+      // The role always comes from the database, never from the (possibly stale) token claim.
+      return { ...decoded, role: user.role };
     } catch {
       return null;
     }
@@ -131,10 +138,9 @@ export class AuthService {
 
   public static async requestPasswordReset(emailOrPhone: string): Promise<{ success: boolean; message: string }> {
     const clean = emailOrPhone.trim().toLowerCase();
-    const user = db.users.find(
-      (u) => u.email.toLowerCase() === clean || (u.phone && u.phone.replace(/\s+/g, '') === clean.replace(/\s+/g, ''))
-    );
-    if (!user) {
+    const user = db.users.find((u) => u.email.toLowerCase() === clean || (u.phone && phonesMatch(u.phone, clean)));
+    // Admin passwords are never reset over SMS (SIM-swap takeover risk): `npm run admin:create -- --reset-password` only.
+    if (!user || user.role === 'admin') {
       return { success: true, message: 'If an account exists with this credential, a password reset code has been sent.' };
     }
 
@@ -210,7 +216,13 @@ export class AuthService {
       }
     }
 
-    if (!isPasswordAcceptable(newPassword)) {
+    if (user.role === 'admin') {
+      const adminMsg = validateAdminPassword(newPassword, { email: user.email, name: user.name });
+      if (adminMsg) return { success: false, error: adminMsg };
+      if (typeof newPassword === 'string' && user.passwordHash && bcrypt.compareSync(newPassword, user.passwordHash)) {
+        return { success: false, error: 'The new password must be different from the current one.' };
+      }
+    } else if (!isPasswordAcceptable(newPassword)) {
       return {
         success: false,
         error: 'New password must be at least 8 characters long and contain at least one number.',
@@ -219,6 +231,7 @@ export class AuthService {
 
     user.passwordHash = bcrypt.hashSync(newPassword, BCRYPT_COST);
     (user as any).sessionVersion = ((user as any).sessionVersion || 1) + 1;
+    if (user.role === 'admin') (user as any).mustChangePassword = false;
     db.save();
 
     // The session version was bumped (every other session is signed out), so hand the caller a fresh token
@@ -292,11 +305,11 @@ export class AuthService {
   public static async requestPhoneVerification(phoneOrUserId: string, authenticatedUserId?: string): Promise<{ success: boolean; message: string }> {
     const clean = phoneOrUserId.trim();
     const user = (authenticatedUserId ? db.users.find((u) => u.id === authenticatedUserId) : null) ||
-      db.users.find((u) => u.id === clean || (u.phone && u.phone.replace(/\s+/g, '') === clean.replace(/\s+/g, '')));
+      db.users.find((u) => u.id === clean || (u.phone && phonesMatch(u.phone, clean)));
     const targetPhone = user?.phone ? user.phone : clean;
 
     const code = crypto.randomInt(100000, 1000000).toString();
-    const phoneKey = targetPhone.replace(/\s+/g, '');
+    const phoneKey = normalizeNgPhone(targetPhone) || targetPhone.replace(/\s+/g, '');
     const userKey = user ? user.id : phoneKey;
 
     VerificationCodeService.issuePhone(
@@ -313,7 +326,7 @@ export class AuthService {
 
   public static confirmPhoneVerification(phoneOrUserId: string, code: string, authenticatedUserId?: string): { success: boolean; user?: User; error?: string } {
     const clean = phoneOrUserId.trim();
-    const phoneKey = clean.replace(/\s+/g, '');
+    const phoneKey = normalizeNgPhone(clean) || clean.replace(/\s+/g, '');
 
     const record = VerificationCodeService.findPhone([clean, phoneKey, authenticatedUserId]);
 
@@ -324,7 +337,7 @@ export class AuthService {
     const targetUserId = record.userId || authenticatedUserId;
     let user = targetUserId ? db.users.find((u) => u.id === targetUserId) : null;
     if (!user) {
-      user = db.users.find((u) => u.id === clean || u.phone.replace(/\s+/g, '') === phoneKey);
+      user = db.users.find((u) => u.id === clean || (u.phone ? phonesMatch(u.phone, clean) : false));
     }
 
     if (user) {
@@ -343,7 +356,7 @@ export class AuthService {
       db.save();
     }
 
-    VerificationCodeService.deletePhone([clean, phoneKey, record.userId, authenticatedUserId, record.phone?.replace(/\s+/g, '')]);
+    VerificationCodeService.deletePhone([clean, phoneKey, record.userId, authenticatedUserId, record.phone ? normalizeNgPhone(record.phone) || record.phone.replace(/\s+/g, '') : undefined]);
 
     const safeUser: User | undefined = user ? this.toPublicUser(user) : undefined;
 
@@ -478,9 +491,7 @@ export class AuthService {
 
   public static login(emailOrPhone: string, password?: string, isBorrowedDevice = false): AuthSession | { error: string } {
     const cleanIdentifier = emailOrPhone.trim().toLowerCase();
-    const user = db.users.find(
-      (u) => u.email.toLowerCase() === cleanIdentifier || u.phone.replace(/\s+/g, '') === cleanIdentifier.replace(/\s+/g, '')
-    );
+    const user = db.users.find((u) => u.email.toLowerCase() === cleanIdentifier || (u.phone ? phonesMatch(u.phone, cleanIdentifier) : false));
 
     // A password is ALWAYS required on this path. Social (Google) logins go through
     // AuthService.socialLogin / POST /auth/social-login, which verify a provider token instead.
@@ -490,8 +501,13 @@ export class AuthService {
     // Same message for "unknown user" and "wrong password" (no account enumeration); a dummy bcrypt
     // comparison keeps timing similar when the user does not exist.
     const passwordOk = bcrypt.compareSync(password, user?.passwordHash || DUMMY_HASH);
-    if (!user || !user.passwordHash || !passwordOk) {
+    // Admin accounts sign in ONLY through POST /admin/auth/login (own rate limit + lockout); here they look like
+    // any other wrong credential.
+    if (!user || !user.passwordHash || !passwordOk || user.role === 'admin') {
       return { error: 'Invalid email/phone or password.' };
+    }
+    if (user.status === 'suspended') {
+      return { error: 'This account has been suspended. Please contact Fixhub support.' };
     }
 
     if (user.role === 'technician') {
@@ -499,6 +515,7 @@ export class AuthService {
     } else if (user.role === 'customer') {
       this.ensureCustomerProfile(user);
     }
+    user.lastLoginAt = new Date().toISOString();
 
     const token = this.generateToken(user, isBorrowedDevice);
     const customerProfile = db.customerProfiles.find((c) => c.userId === user.id);
@@ -529,7 +546,8 @@ export class AuthService {
       return { error: PASSWORD_POLICY_MESSAGE };
     }
 
-    const existing = db.users.find((u) => u.email.toLowerCase() === data.email.trim().toLowerCase() || u.phone === data.phone.trim());
+    const phone = normalizeNgPhone(data.phone) || data.phone.trim();
+    const existing = db.users.find((u) => u.email.toLowerCase() === data.email.trim().toLowerCase() || (u.phone ? phonesMatch(u.phone, phone) : false));
     if (existing) {
       return { error: 'An account with this email or phone already exists.' };
     }
@@ -541,7 +559,7 @@ export class AuthService {
     const newUser = {
       id: userId,
       email: data.email.trim().toLowerCase(),
-      phone: data.phone.trim(),
+      phone,
       name: data.name.trim(),
       role: 'customer' as UserRole,
       avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(data.name)}`,
@@ -616,7 +634,8 @@ export class AuthService {
       return { error: PASSWORD_POLICY_MESSAGE };
     }
 
-    const existing = db.users.find((u) => u.email.toLowerCase() === data.email.trim().toLowerCase() || u.phone === data.phone.trim());
+    const phone = normalizeNgPhone(data.phone) || data.phone.trim();
+    const existing = db.users.find((u) => u.email.toLowerCase() === data.email.trim().toLowerCase() || (u.phone ? phonesMatch(u.phone, phone) : false));
     if (existing) {
       return { error: 'An account with this email or phone already exists.' };
     }
@@ -628,7 +647,7 @@ export class AuthService {
     const newUser = {
       id: userId,
       email: data.email.trim().toLowerCase(),
-      phone: data.phone.trim(),
+      phone,
       name: data.name.trim(),
       role: 'technician' as UserRole,
       avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(data.businessName)}`,
@@ -656,7 +675,7 @@ export class AuthService {
       serviceRadiusKm: 15,
       businessHours: 'Mon - Sat: 8:30 AM - 6:30 PM',
       yearsExperience: 3,
-      phone: data.phone.trim(),
+      phone,
       avatarUrl: newUser.avatarUrl,
       shopPhotos: [],
       supportedBrands: data.supportedBrands || ['Apple', 'Samsung', 'Tecno', 'Infinix'],
@@ -817,6 +836,13 @@ export class AuthService {
 
     const cleanEmail = verifiedIdentity.email.toLowerCase().trim();
     let user = db.users.find((u) => u.email.toLowerCase() === cleanEmail);
+
+    if (user && user.role === 'admin') {
+      return { success: false, error: 'Admin accounts must sign in through the admin portal with their password.' };
+    }
+    if (user && user.status === 'suspended') {
+      return { success: false, error: 'This account has been suspended. Please contact Fixhub support.' };
+    }
 
     if (user) {
       user.emailVerified = true;

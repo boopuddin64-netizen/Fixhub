@@ -6,7 +6,7 @@ export class NotificationService {
     userId: string;
     title: string;
     message: string;
-    type: 'QUOTE' | 'STATUS_CHANGE' | 'PAYMENT' | 'WARRANTY' | 'MESSAGE' | 'SECURITY';
+    type: NotificationItem['type'];
     repairId?: string;
   }): NotificationItem {
     const item: NotificationItem = {

@@ -10,8 +10,13 @@ import { geocodeCustomerLocation, apiRouter, AuthenticatedRequest, requireAuth, 
  * 3. TECHNICIAN DISCOVERY & MATCHING (Public / Lead Matching)
  * ----------------------------------------------------------- */
 
+/** Technicians whose account an admin suspended are invisible to customers (lists, detail, matching). */
+function isSuspended(userId: string): boolean {
+  return db.users.find((u) => u.id === userId)?.status === 'suspended';
+}
+
 apiRouter.get('/technicians', (req: Request, res: Response) => {
-  return res.json(paginate(req, res, db.technicianProfiles.map(sanitizeTechnicianForPublic)));
+  return res.json(paginate(req, res, db.technicianProfiles.filter((t) => !isSuspended(t.userId)).map(sanitizeTechnicianForPublic)));
 });
 
 // NOTE: literal /technicians/* routes must be registered BEFORE /technicians/:id, otherwise
@@ -56,11 +61,11 @@ apiRouter.get('/technicians/:id', (req: Request, res: Response) => {
   // Read-only: this public endpoint must never create users or profiles.
   const techId = String(req.params.id);
   const tech = db.technicianProfiles.find((t) => t.userId === techId || (t as any).id === techId);
-  if (!tech) {
+  if (!tech || isSuspended(tech.userId)) {
     return res.status(404).json({ error: 'Technician not found.' });
   }
   const parts = db.technicianParts.filter((p) => p.technicianId === tech.userId);
-  const reviews = db.reviews.filter((r) => r.technicianId === tech.userId);
+  const reviews = db.reviews.filter((r) => r.technicianId === tech.userId && !r.hidden);
   return res.json({ technician: sanitizeTechnicianForPublic(tech), parts, reviews });
 });
 

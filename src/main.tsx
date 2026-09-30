@@ -1,9 +1,14 @@
-import {StrictMode} from 'react';
+import {StrictMode, Suspense, lazy} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import './index.css';
 import { initMobileViewportZoomFix } from './utils/mobileViewport';
+import { isAdminPath } from './utils/adminUi';
+
+// The admin portal is a separate, lazily loaded bundle: customers and technicians never download it.
+const AdminApp = lazy(() => import('./admin/AdminApp'));
+const showAdmin = typeof window !== 'undefined' && isAdminPath(window.location.pathname);
 
 // Initialize global iOS keyboard zoom prevention & viewport restoration
 if (typeof window !== 'undefined') {
@@ -69,7 +74,13 @@ if (rootElement) {
   createRoot(rootElement).render(
     <StrictMode>
       <ErrorBoundary>
-        <App />
+        {showAdmin ? (
+          <Suspense fallback={<div role="status" className="p-8 text-center text-sm text-slate-500">Loading admin…</div>}>
+            <AdminApp />
+          </Suspense>
+        ) : (
+          <App />
+        )}
       </ErrorBoundary>
     </StrictMode>,
   );

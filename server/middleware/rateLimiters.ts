@@ -89,3 +89,47 @@ export const cspReportRateLimiter = rateLimit({
   },
   message: { error: 'Too many reports.' },
 });
+
+/**
+ * Admin sign-in: much stricter than the public login limiter. Only FAILED attempts count, so a legitimate admin is never
+ * locked out by their own successful sessions; on top of this every admin account has its own lockout
+ * (server/services/adminAuthService.ts) so rotating IPs does not help an attacker either.
+ */
+export const adminLoginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: {
+    xForwardedForHeader: false,
+    forwardedHeader: false,
+  },
+  message: { error: 'Too many admin sign-in attempts. Please wait 15 minutes and try again.' },
+});
+
+/** Generic ceiling for the whole /api/admin surface (authenticated admins only ever reach a fraction of it). */
+export const adminApiRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: {
+    xForwardedForHeader: false,
+    forwardedHeader: false,
+  },
+  message: { error: 'Too many admin requests. Please slow down.' },
+});
+
+/** Bulk operations (CSV exports, announcements) are expensive: a low ceiling per IP. */
+export const adminBulkRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 12,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: {
+    xForwardedForHeader: false,
+    forwardedHeader: false,
+  },
+  message: { error: 'Too many export/broadcast requests. Please wait a minute.' },
+});

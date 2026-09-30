@@ -16,6 +16,7 @@ import './modules/jobs';
 import './modules/reviews';
 import './modules/technicianAccount';
 import './modules/messaging';
+import './modules/adminPortal';
 import './modules/admin';
 
 export { apiRouter, geocodeCustomerLocation, requireAuth, requireRole, sanitizeTechnicianForPublic, customerHasActiveJobWith, sanitizeQuoteForCustomer, sanitizeTechnicianForOwner, requirePasswordConfirmation } from './modules/shared';

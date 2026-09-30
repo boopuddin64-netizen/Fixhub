@@ -15,6 +15,7 @@ import { NotificationService } from './notificationService';
 import { PaymentService } from './paymentService';
 import { QuoteAccuracyService } from './quoteAccuracyService';
 import { InventoryService } from './inventoryService';
+import { formatNaira } from '../../src/utils/format';
 
 export const REPAIR_STATUS_TRANSITIONS: Record<RepairLifecycleStatus, RepairLifecycleStatus[]> = {
   DRAFT: ['SUBMITTED', 'CANCELLED'],
@@ -193,7 +194,7 @@ export class RepairWorkflowService {
         statusHistory: [
           { status: 'REQUESTED', timestamp: request.createdAt, actorRole: 'customer' },
           { status: 'QUOTING', timestamp: quote.createdAt, actorRole: 'technician' },
-          { status: 'QUOTE_ACCEPTED', timestamp: isoNow, actorRole: 'customer', note: `Accepted quote from ${quote.technicianName} (₦${total.toLocaleString()})` },
+          { status: 'QUOTE_ACCEPTED', timestamp: isoNow, actorRole: 'customer', note: `Accepted quote from ${quote.technicianName} (${formatNaira(total)})` },
           { status: 'PAYMENT_PENDING', timestamp: isoNow, actorRole: 'customer' },
         ],
       };
@@ -207,7 +208,7 @@ export class RepairWorkflowService {
       NotificationService.send({
         userId: quote.technicianId,
         title: 'Quote Accepted!',
-        message: `${request.customerName} accepted your quote of ₦${total.toLocaleString()} for ${request.deviceBrand} ${request.deviceModel}. Waiting for escrow payment.`,
+        message: `${request.customerName} accepted your quote of ${formatNaira(total)} for ${request.deviceBrand} ${request.deviceModel}. Waiting for escrow payment.`,
         type: 'QUOTE',
         repairId: job.id,
       });
@@ -216,7 +217,7 @@ export class RepairWorkflowService {
       NotificationService.send({
         userId: request.customerId,
         title: 'Booking Created!',
-        message: `Your booking (Ref: ${bookingRef}) with ${quote.businessName} has been created for ₦${total.toLocaleString()}. Next step: Secure escrow payment.`,
+        message: `Your booking (Ref: ${bookingRef}) with ${quote.businessName} has been created for ${formatNaira(total)}. Next step: Secure escrow payment.`,
         type: 'STATUS_CHANGE',
         repairId: job.id,
       });
@@ -502,13 +503,13 @@ export class RepairWorkflowService {
         status: 'ADDITIONAL_DIAGNOSIS',
         timestamp: new Date().toISOString(),
         actorRole: 'technician',
-        note: `Additional issue discovered (+₦${additionalCostNaira.toLocaleString()}). Awaiting customer approval.`,
+        note: `Additional issue discovered (+${formatNaira(additionalCostNaira)}). Awaiting customer approval.`,
       });
 
       NotificationService.send({
         userId: job.customerId,
         title: 'Action Required: Additional Diagnosis',
-        message: `Technician discovered: "${title}" (+₦${additionalCostNaira.toLocaleString()}). Tap to review photo evidence and approve/decline.`,
+        message: `Technician discovered: "${title}" (+${formatNaira(additionalCostNaira)}). Tap to review photo evidence and approve/decline.`,
         type: 'STATUS_CHANGE',
         repairId: job.id,
       });
@@ -561,13 +562,13 @@ export class RepairWorkflowService {
         status: 'REPAIR_IN_PROGRESS',
         timestamp: now,
         actorRole: 'customer',
-        note: `Customer approved additional diagnosis (${job.additionalDiagnosis.title}) for +₦${job.additionalDiagnosis.additionalCostNaira.toLocaleString()}. Final amount: ₦${job.finalAmount.toLocaleString()}`,
+        note: `Customer approved additional diagnosis (${job.additionalDiagnosis.title}) for +${formatNaira(job.additionalDiagnosis.additionalCostNaira)}. Final amount: ${formatNaira(job.finalAmount)}`,
       });
 
       NotificationService.send({
         userId: job.technicianId,
         title: 'Additional Diagnosis Approved!',
-        message: `Customer approved the additional repair: "${job.additionalDiagnosis.title}" (+₦${job.additionalDiagnosis.additionalCostNaira.toLocaleString()}). You may proceed with repair.`,
+        message: `Customer approved the additional repair: "${job.additionalDiagnosis.title}" (+${formatNaira(job.additionalDiagnosis.additionalCostNaira)}). You may proceed with repair.`,
         type: 'STATUS_CHANGE',
         repairId: job.id,
       });
@@ -971,9 +972,9 @@ export class RepairWorkflowService {
           timestamp: now,
           actorRole,
           note: reason
-            ? `Cancelled: ${reason}${refundProcessed ? ` (Refunded ₦${refundAmount.toLocaleString()} to customer)` : ''}`
+            ? `Cancelled: ${reason}${refundProcessed ? ` (Refunded ${formatNaira(refundAmount)} to customer)` : ''}`
             : refundProcessed
-              ? `Cancelled by user (Refund of ₦${refundAmount.toLocaleString()} initiated via Paystack)`
+              ? `Cancelled by user (Refund of ${formatNaira(refundAmount)} initiated via Paystack)`
               : 'Cancelled by user',
         });
 
@@ -987,7 +988,7 @@ export class RepairWorkflowService {
         NotificationService.send({
           userId: notifyTarget,
           title: 'Repair Job Cancelled',
-          message: `Repair #${job.id} has been cancelled.${refundProcessed ? ` Refund of ₦${refundAmount.toLocaleString()} has been initiated.` : ''}`,
+          message: `Repair #${job.id} has been cancelled.${refundProcessed ? ` Refund of ${formatNaira(refundAmount)} has been initiated.` : ''}`,
           type: 'STATUS_CHANGE',
           repairId: job.id,
         });

@@ -1,95 +1,57 @@
 import { Response } from 'express';
 import { db } from '../../db';
-import { AuthService } from '../../services/authService';
-import { PaymentService } from '../../services/paymentService';
-import { paginate } from '../../utils/pagination';
+import { AuditService } from '../../services/auditService';
+import { AdminAuthService, adminReauthRequired } from '../../services/adminAuthService';
 import { apiRouter, AuthenticatedRequest, requireAuth, requireRole } from './shared';
 
 /* -------------------------------------------------------------
- * 11B. ADMIN VERIFICATION & DISPUTES ENDPOINTS
+ * 11B. LEGACY ADMIN ENDPOINTS (kept for API compatibility; the admin portal lives in adminPortal.ts)
+ *  - POST /admin/technicians/:id/verify   (no longer creates users/profiles; audited; requires admin re-auth)
+ *  - POST /dev/reset-seed                 (development only)
+ * GET /admin/disputes and POST /admin/disputes/:jobId/resolve moved to adminPortal.ts (same paths, richer + audited).
  * ----------------------------------------------------------- */
 apiRouter.post('/admin/technicians/:id/verify', requireAuth, requireRole(['admin']), (req: AuthenticatedRequest, res: Response) => {
-  const techId = req.params.id;
-  let tech = db.technicianProfiles.find((t) => t.userId === techId || (t as any).id === techId);
-  if (!tech) {
-    let user = db.users.find((u) => u.id === techId || (u.email && u.email.toLowerCase() === techId.toLowerCase()));
-    if (!user) {
-      user = {
-        id: techId,
-        email: techId.includes('@') ? techId : `tech_${techId}@fixhub.local`,
-        name: techId.includes('@') ? techId.split('@')[0] : 'Fixhub Technician',
-        phone: '',
-        role: 'technician',
-        createdAt: new Date().toISOString(),
-        emailVerified: true,
-        phoneVerified: false,
-        passwordHash: '',
-      };
-      db.users.push(user);
+  if (adminReauthRequired()) {
+    const check = AdminAuthService.confirmPassword(req.user!.id, req.body?.adminPassword);
+    if (!check.ok) {
+      return res.status(check.reason === 'LOCKED' ? 423 : 403).json({ error: 'Admin password confirmation failed.', code: 'ADMIN_REAUTH_FAILED' });
     }
-    tech = AuthService.ensureTechnicianProfile(user);
+  }
+  const techId = String(req.params.id);
+  const tech = db.technicianProfiles.find((t) => t.userId === techId || (t as any).id === techId);
+  if (!tech) {
+    return res.status(404).json({ error: 'Technician not found.' });
   }
 
+  const before = { ...tech.verificationStatus, isVerified: Boolean(tech.isVerified) };
   const { basic, locationConfirmed, identityVerified, businessVerified, payoutVerified, isVerified } = req.body;
+  const flag = (v: unknown, current: boolean | undefined, dflt: boolean) => (typeof v === 'boolean' ? v : current ?? dflt);
 
   tech.verificationStatus = {
-    basic: basic ?? tech.verificationStatus?.basic ?? true,
-    locationConfirmed: locationConfirmed ?? tech.verificationStatus?.locationConfirmed ?? false,
-    identityVerified: identityVerified ?? tech.verificationStatus?.identityVerified ?? false,
-    businessVerified: businessVerified ?? tech.verificationStatus?.businessVerified ?? false,
-    payoutVerified: payoutVerified ?? tech.verificationStatus?.payoutVerified ?? false,
+    ...tech.verificationStatus,
+    basic: flag(basic, tech.verificationStatus?.basic, true),
+    locationConfirmed: flag(locationConfirmed, tech.verificationStatus?.locationConfirmed, false),
+    identityVerified: flag(identityVerified, tech.verificationStatus?.identityVerified, false),
+    businessVerified: flag(businessVerified, tech.verificationStatus?.businessVerified, false),
+    payoutVerified: flag(payoutVerified, tech.verificationStatus?.payoutVerified, false),
   };
 
-  (tech as any).isVerified = isVerified ?? (
-    tech.verificationStatus.identityVerified &&
-    tech.verificationStatus.businessVerified &&
-    tech.verificationStatus.locationConfirmed
-  );
+  tech.isVerified =
+    typeof isVerified === 'boolean'
+      ? isVerified
+      : tech.verificationStatus.identityVerified && tech.verificationStatus.businessVerified && tech.verificationStatus.locationConfirmed;
 
-  return res.json({ success: true, technician: tech });
-});
-
-apiRouter.get('/admin/disputes', requireAuth, requireRole(['admin']), (req: AuthenticatedRequest, res: Response) => {
-  const disputedJobs = db.repairJobs.filter((j) => j.status === 'DISPUTED');
-  return res.json(paginate(req, res, disputedJobs));
-});
-
-apiRouter.post('/admin/disputes/:jobId/resolve', requireAuth, requireRole(['admin']), async (req: AuthenticatedRequest, res: Response) => {
-  const { jobId } = req.params;
-  const { decision, resolutionNotes } = req.body;
-
-  const job = db.repairJobs.find((j) => j.id === jobId);
-  if (!job) {
-    return res.status(404).json({ error: 'Disputed job not found.' });
-  }
-
-  if (job.status !== 'DISPUTED') {
-    return res.status(400).json({ error: 'Job is not currently in DISPUTED status.' });
-  }
-
-  if (decision === 'REFUND_CUSTOMER') {
-    job.status = 'CANCELLED';
-    const payment = db.payments.find((p) => p.repairId === job.id);
-    if (payment) {
-      await PaymentService.recordRefund({
-        paymentId: payment.id,
-        reason: resolutionNotes || 'Admin dispute resolution: Customer refund approved',
-        actorId: req.user!.id,
-        actorRole: 'admin',
-      });
-    }
-  } else if (decision === 'RELEASE_TECHNICIAN') {
-    job.status = 'COMPLETED';
-    await PaymentService.releaseTechnicianFunds(
-      job.id,
-      req.user!.id,
-      'admin'
-    );
-  } else {
-    return res.status(400).json({ error: 'Invalid decision. Must be REFUND_CUSTOMER or RELEASE_TECHNICIAN.' });
-  }
-
-  return res.json({ success: true, job, decision });
+  AuditService.log({
+    actorId: req.user!.id,
+    actorRole: 'admin',
+    action: 'ADMIN_TECHNICIAN_VERIFICATION_UPDATED',
+    resourceType: 'TECHNICIAN',
+    resourceId: tech.userId,
+    details: { before, after: { ...tech.verificationStatus, isVerified: tech.isVerified }, via: 'legacy-endpoint' },
+    ipAddress: req.ip,
+  });
+  db.save();
+  return res.json({ success: true, technician: { ...tech, bankChangeVerification: undefined } });
 });
 
 /* -------------------------------------------------------------

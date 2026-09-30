@@ -10,6 +10,7 @@ import {
 import { AuditService } from './auditService';
 import { NotificationService } from './notificationService';
 import { PaystackClient } from './paystackClient';
+import { formatNaira } from '../../src/utils/format';
 
 export interface InitializePaymentParams {
   repairJobId: string;
@@ -275,7 +276,7 @@ export class PaymentService {
     NotificationService.send({
       userId: customerId,
       title: 'Payment Initialized',
-      message: `Payment of ₦${totalAmount.toLocaleString()} initiated for ${job.deviceBrand} ${job.deviceModel} repair.`,
+      message: `Payment of ${formatNaira(totalAmount)} initiated for ${job.deviceBrand} ${job.deviceModel} repair.`,
       type: 'PAYMENT',
       repairId: job.id,
     });
@@ -395,7 +396,7 @@ export class PaymentService {
       NotificationService.send({
         userId: payment.customerId,
         title: 'Payment Failed',
-        message: `Your payment of ₦${payment.amountNaira.toLocaleString()} could not be confirmed. You may retry checkout.`,
+        message: `Your payment of ${formatNaira(payment.amountNaira)} could not be confirmed. You may retry checkout.`,
         type: 'PAYMENT',
         repairId: job.id,
       });
@@ -498,7 +499,7 @@ export class PaymentService {
         status: 'PAYMENT_CONFIRMED',
         timestamp: paidAt,
         actorRole: 'customer',
-        note: `Payment of ₦${payment.amountNaira.toLocaleString()} confirmed via Paystack (Ref: ${payment.transactionRef}).`,
+        note: `Payment of ${formatNaira(payment.amountNaira)} confirmed via Paystack (Ref: ${payment.transactionRef}).`,
       });
       job.statusHistory.push({
         status: 'BOOKED',
@@ -690,7 +691,7 @@ export class PaymentService {
     NotificationService.send({
       userId: payment.customerId,
       title: 'Payment Confirmed',
-      message: `Your payment of ₦${payment.amountNaira.toLocaleString()} is confirmed. Your booking (Ref: ${job.bookingRef || job.id}) is active.`,
+      message: `Your payment of ${formatNaira(payment.amountNaira)} is confirmed. Your booking (Ref: ${job.bookingRef || job.id}) is active.`,
       type: 'PAYMENT',
       repairId: job.id,
     });
@@ -698,7 +699,7 @@ export class PaymentService {
     NotificationService.send({
       userId: job.technicianId,
       title: 'Repair Booking Confirmed',
-      message: `Customer confirmed payment of ₦${payment.amountNaira.toLocaleString()} for ${job.deviceBrand} ${job.deviceModel}. Estimated net earnings: ₦${payment.technicianPayoutNaira.toLocaleString()} (Held pending completion).`,
+      message: `Customer confirmed payment of ${formatNaira(payment.amountNaira)} for ${job.deviceBrand} ${job.deviceModel}. Estimated net earnings: ${formatNaira(payment.technicianPayoutNaira)} (Held pending completion).`,
       type: 'PAYMENT',
       repairId: job.id,
     });
@@ -859,7 +860,7 @@ export class PaymentService {
           NotificationService.send({
             userId: payout.technicianId,
             title: 'Payout Delivered',
-            message: `Your transfer of ₦${payout.amountNaira.toLocaleString()} has been confirmed by your bank via Paystack.`,
+            message: `Your transfer of ${formatNaira(payout.amountNaira)} has been confirmed by your bank via Paystack.`,
             type: 'PAYMENT',
           });
 
@@ -892,7 +893,7 @@ export class PaymentService {
           NotificationService.send({
             userId: payout.technicianId,
             title: 'Payout Failed',
-            message: `Your transfer of ₦${payout.amountNaira.toLocaleString()} failed: ${payout.failureReason}. Your earnings remain eligible.`,
+            message: `Your transfer of ${formatNaira(payout.amountNaira)} failed: ${payout.failureReason}. Your earnings remain eligible.`,
             type: 'PAYMENT',
           });
 
@@ -1033,7 +1034,7 @@ export class PaymentService {
     if (refundAmount > remainingRefundable) {
       return {
         success: false,
-        error: `Refund amount exceeds remaining refundable balance of ₦${remainingRefundable.toLocaleString()}.`,
+        error: `Refund amount exceeds remaining refundable balance of ${formatNaira(remainingRefundable)}.`,
       };
     }
 
@@ -1083,7 +1084,7 @@ export class PaymentService {
           status: 'REFUNDED',
           timestamp: now,
           actorRole,
-          note: `Refund of ₦${refundAmount.toLocaleString()} processed via Paystack. Reason: ${reason}`,
+          note: `Refund of ${formatNaira(refundAmount)} processed via Paystack. Reason: ${reason}`,
         });
       }
 
@@ -1112,7 +1113,7 @@ export class PaymentService {
     NotificationService.send({
       userId: payment.customerId,
       title: 'Refund Processed',
-      message: `A refund of ₦${refundAmount.toLocaleString()} has been processed via Paystack for repair #${payment.repairId}.`,
+      message: `A refund of ${formatNaira(refundAmount)} has been processed via Paystack for repair #${payment.repairId}.`,
       type: 'PAYMENT',
       repairId: payment.repairId,
     });
@@ -1171,7 +1172,7 @@ export class PaymentService {
       return {
         success: false,
         eligibleBalanceNaira: availablePayoutNaira,
-        error: `Insufficient eligible earnings. Available for payout: ₦${availablePayoutNaira.toLocaleString()} (Note: Active repair earnings are held until customer pickup).`,
+        error: `Insufficient eligible earnings. Available for payout: ${formatNaira(availablePayoutNaira)} (Note: Active repair earnings are held until customer pickup).`,
       };
     }
 
@@ -1203,6 +1204,49 @@ export class PaymentService {
           error: 'Invalid bank account details. A valid 10-digit NUBAN account number and Nigerian bank code are required.',
         };
       }
+    }
+
+    // 3b. Optional four-eyes control (PAYOUT_APPROVAL_REQUIRED=true): the request is recorded as PENDING and NO money
+    // moves until an admin approves it in the admin portal (PaymentService.approvePendingPayout). The requested amount
+    // stays reserved (PENDING payouts are subtracted from the available balance above).
+    if (PaymentService.payoutApprovalRequired()) {
+      const heldAt = new Date().toISOString();
+      const heldId = `payout_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const held: PayoutRecord = {
+        id: heldId,
+        technicianId,
+        amountNaira,
+        currency: 'NGN',
+        destinationAccount,
+        provider: 'PAYSTACK_TRANSFERS',
+        status: 'PENDING',
+        createdAt: heldAt,
+        updatedAt: heldAt,
+      };
+      await db.transaction(async (tx) => {
+        await PaymentService.ensureUserRows(tx, [technicianId], { [technicianId]: 'technician' });
+        db.payouts.push(held);
+        await tx.query(
+          `INSERT INTO payouts (id, technician_id, amount_naira, bank_code, account_number, account_name, provider_reference, status, created_at, updated_at, processed_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          [held.id, technicianId, amountNaira, destinationAccount!.bankCode, destinationAccount!.accountNumber, destinationAccount!.accountName, null, 'PENDING', heldAt, heldAt, null]
+        );
+      });
+      AuditService.log({
+        actorId: technicianId,
+        actorRole: 'technician',
+        action: 'PAYOUT_REQUESTED_PENDING_APPROVAL',
+        resourceType: 'PAYOUT',
+        resourceId: heldId,
+        details: { amountNaira },
+      });
+      NotificationService.send({
+        userId: technicianId,
+        title: 'Payout Request Received',
+        message: `Your payout request for ${formatNaira(amountNaira)} is waiting for Fixhub approval. You will be notified once it is processed.`,
+        type: 'PAYMENT',
+      });
+      return { success: true, payout: held, eligibleBalanceNaira: availablePayoutNaira - amountNaira };
     }
 
     // 4. Create Paystack Transfer Recipient
@@ -1326,11 +1370,127 @@ export class PaymentService {
     NotificationService.send({
       userId: technicianId,
       title: 'Payout Request Submitted',
-      message: `Your payout request for ₦${amountNaira.toLocaleString()} is processing via Paystack Transfers.`,
+      message: `Your payout request for ${formatNaira(amountNaira)} is processing via Paystack Transfers.`,
       type: 'PAYMENT',
     });
 
     return { success: true, payout, eligibleBalanceNaira: availablePayoutNaira - amountNaira };
+  }
+
+  /** PAYOUT_APPROVAL_REQUIRED=true turns on admin approval for every technician payout request (default off). */
+  public static payoutApprovalRequired(env: NodeJS.ProcessEnv = process.env): boolean {
+    return /^(1|true|yes|on)$/i.test((env.PAYOUT_APPROVAL_REQUIRED || '').trim());
+  }
+
+  /** Eligible earnings minus payouts that are already reserved, for one technician. */
+  public static availablePayoutFor(technicianId: string, excludePayoutId?: string): number {
+    const eligible = db.technicianEarnings
+      .filter((e) => e.technicianId === technicianId && e.status === 'ELIGIBLE_FOR_PAYOUT')
+      .reduce((sum, e) => sum + e.netEarningsNaira, 0);
+    const locked = db.payouts
+      .filter((p) => p.technicianId === technicianId && p.id !== excludePayoutId && (p.status === 'PENDING' || p.status === 'PROCESSING'))
+      .reduce((sum, p) => sum + p.amountNaira, 0);
+    return Math.max(0, eligible - locked);
+  }
+
+  /**
+   * Admin approves a payout that was held for review: registers the recipient and starts the Paystack transfer.
+   * Only payouts that are PENDING and have never reached the provider can be approved (no double transfer).
+   */
+  public static async approvePendingPayout(params: { payoutId: string; actorId: string }): Promise<{ success: boolean; payout?: PayoutRecord; error?: string }> {
+    const payout = db.payouts.find((p) => p.id === params.payoutId);
+    if (!payout) return { success: false, error: 'Payout not found.' };
+    if (payout.status !== 'PENDING' || payout.providerReference) {
+      return { success: false, error: `Only payouts waiting for approval can be approved (this one is ${payout.status}).` };
+    }
+    const dest = payout.destinationAccount;
+    if (!dest || !/^\d{10}$/.test(String(dest.accountNumber)) || !dest.bankCode) {
+      return { success: false, error: 'The payout has no valid destination bank account. Reject it and ask the technician to update their bank details.' };
+    }
+    // Claim the payout before any await so two admins can never both send it.
+    payout.status = 'PROCESSING';
+    payout.updatedAt = new Date().toISOString();
+
+    const rollback = (msg: string) => {
+      payout.status = 'PENDING';
+      payout.updatedAt = new Date().toISOString();
+      return { success: false as const, error: msg };
+    };
+
+    const recipientRes = await PaystackClient.createTransferRecipient({ name: dest.accountName, accountNumber: dest.accountNumber, bankCode: dest.bankCode });
+    if (!recipientRes.success || !recipientRes.recipientCode) {
+      return rollback(recipientRes.message || 'Failed to register transfer recipient at Paystack.');
+    }
+    const transferRef = `TRF-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    const transferRes = await PaystackClient.initiateTransfer({
+      amountKobo: payout.amountNaira * 100,
+      recipientCode: recipientRes.recipientCode,
+      reference: transferRef,
+      reason: 'Fix Hub Technician Repair Earnings Payout',
+    });
+    if (!transferRes.success) {
+      return rollback(transferRes.message || 'Failed to initiate transfer via Paystack.');
+    }
+
+    const now = new Date().toISOString();
+    const completed = transferRes.status === 'success';
+    payout.providerReference = transferRes.transferCode || transferRef;
+    payout.status = completed ? 'COMPLETED' : 'PROCESSING';
+    payout.updatedAt = now;
+    payout.processedAt = completed ? now : undefined;
+    payout.reviewedBy = params.actorId;
+    payout.reviewedAt = now;
+
+    await db.transaction(async (tx) => {
+      await tx.query(
+        'UPDATE payouts SET status = $1, provider_reference = $2, processed_at = $3, updated_at = $4 WHERE id = $5',
+        [payout.status, payout.providerReference, payout.processedAt || null, now, payout.id]
+      );
+      if (completed) {
+        let remaining = payout.amountNaira;
+        for (const earn of db.technicianEarnings.filter((e) => e.technicianId === payout.technicianId && e.status === 'ELIGIBLE_FOR_PAYOUT')) {
+          if (remaining <= 0) break;
+          earn.status = 'PAID_OUT';
+          earn.paidOutAt = now;
+          earn.updatedAt = now;
+          await tx.query('UPDATE technician_earnings SET status = $1, paid_out_at = $2, updated_at = $2 WHERE id = $3', ['PAID_OUT', now, earn.id]);
+          remaining -= earn.netEarningsNaira;
+        }
+      }
+    });
+
+    NotificationService.send({
+      userId: payout.technicianId,
+      title: 'Payout Approved',
+      message: `Your payout of ${formatNaira(payout.amountNaira)} was approved and is ${completed ? 'on its way to your bank' : 'being processed via Paystack Transfers'}.`,
+      type: 'PAYMENT',
+    });
+    return { success: true, payout };
+  }
+
+  /** Admin rejects a payout that was held for review. The earnings stay eligible; nothing was sent to the provider. */
+  public static async rejectPendingPayout(params: { payoutId: string; actorId: string; reason: string }): Promise<{ success: boolean; payout?: PayoutRecord; error?: string }> {
+    const payout = db.payouts.find((p) => p.id === params.payoutId);
+    if (!payout) return { success: false, error: 'Payout not found.' };
+    if (payout.status !== 'PENDING' || payout.providerReference) {
+      return { success: false, error: `Only payouts waiting for approval can be rejected (this one is ${payout.status}).` };
+    }
+    const now = new Date().toISOString();
+    payout.status = 'REJECTED';
+    payout.failureReason = params.reason;
+    payout.updatedAt = now;
+    payout.reviewedBy = params.actorId;
+    payout.reviewedAt = now;
+    await db.transaction(async (tx) => {
+      await tx.query('UPDATE payouts SET status = $1, failure_reason = $2, updated_at = $3 WHERE id = $4', ['REJECTED', params.reason, now, payout.id]);
+    });
+    NotificationService.send({
+      userId: payout.technicianId,
+      title: 'Payout Not Approved',
+      message: `Your payout request for ${formatNaira(payout.amountNaira)} was not approved: ${params.reason} Your earnings remain available.`,
+      type: 'PAYMENT',
+    });
+    return { success: true, payout };
   }
 
   /**
@@ -1380,7 +1540,7 @@ export class PaymentService {
     NotificationService.send({
       userId: payment.technicianId,
       title: 'Earnings Eligible for Payout',
-      message: `₦${payment.technicianPayoutNaira.toLocaleString()} is now eligible for payout for repair #${payment.repairId}.`,
+      message: `${formatNaira(payment.technicianPayoutNaira)} is now eligible for payout for repair #${payment.repairId}.`,
       type: 'PAYMENT',
       repairId: payment.repairId,
     });
