@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import http from 'http';
 import path from 'path';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -17,6 +18,12 @@ import { buildCspMiddleware } from './server/config/csp';
 import { globalErrorHandler, installProcessSafeguards } from './server/middleware/errorHandler';
 
 installProcessSafeguards();
+
+// Render injects the service's public https URL as RENDER_EXTERNAL_URL: use it as APP_URL (CORS allow-list, Paystack callback)
+// unless APP_URL was set explicitly, so a Render deploy needs no manual URL entry.
+if (!process.env.APP_URL?.trim() && process.env.RENDER_EXTERNAL_URL?.trim()) {
+  process.env.APP_URL = process.env.RENDER_EXTERNAL_URL.trim().replace(/\/+$/, '');
+}
 
 // Production Environment & Secret Validation - Fail fast before booting server
 export function validateProductionStartup(
@@ -65,6 +72,30 @@ async function startServer() {
     getJwtSecret(); // throws (and the startServer catch below exits) if unusable
   }
 
+  // EARLY_LISTEN=true (hosts that start the NEW instance before stopping the old one, e.g. Render): open the port at once so the
+  // platform's health check passes while we wait for the old instance to release the writer lock. Until the app is ready every
+  // route except /health answers 503 (Retry-After). The handler is swapped for the real Express app below.
+  let requestHandler: http.RequestListener = (req, res) => {
+    if (req.url === '/health' || req.url?.startsWith('/health?')) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ status: 'starting' }));
+    }
+    res.writeHead(503, { 'Content-Type': 'text/plain', 'Retry-After': '5' });
+    res.end('Fixhub is starting, please retry in a few seconds.');
+  };
+  const earlyListen = /^(1|true)$/i.test(process.env.EARLY_LISTEN || '');
+  const httpServer = http.createServer((req, res) => requestHandler(req, res));
+  const PORT = Number(process.env.PORT) || 3000;
+  if (earlyListen) {
+    await new Promise<void>((resolve, reject) => {
+      httpServer.once('error', reject);
+      httpServer.listen(PORT, '0.0.0.0', () => {
+        console.log(`[server] EARLY_LISTEN: port ${PORT} open, waiting for the database / writer lock...`);
+        resolve();
+      });
+    });
+  }
+
   // Wait for the database schema to be applied before accepting traffic (rejects -> process exits 1).
   await pgDb.ready;
   // Load durable state from PostgreSQL (or bootstrap an empty database) BEFORE accepting traffic.
@@ -85,7 +116,6 @@ async function startServer() {
   }
 
   const app = express();
-  const PORT = Number(process.env.PORT) || 3000;
 
   // Trust proxy for reverse proxy (Cloud Run / Nginx)
   app.set('trust proxy', 1);
@@ -189,9 +219,14 @@ async function startServer() {
   // Global Error Handler (client errors keep their status, everything else is a generic 500)
   app.use(globalErrorHandler);
 
-  const httpServer = app.listen(PORT, '0.0.0.0', () => {
+  requestHandler = app;
+  if (earlyListen) {
     console.log(`Fix Hub Server running on http://0.0.0.0:${PORT}`);
-  });
+  } else {
+    httpServer.listen(PORT, '0.0.0.0', () => {
+      console.log(`Fix Hub Server running on http://0.0.0.0:${PORT}`);
+    });
+  }
 
   // Graceful shutdown: stop accepting connections, flush pending writes, release the DB.
   let shuttingDown = false;
