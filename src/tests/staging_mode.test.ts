@@ -114,3 +114,101 @@ export async function runStagingModeTests(): Promise<{ passed: number; failed: n
   console.log(`\nStaging mode tests: ${passed} passed, ${failed} failed`);
   return { passed, failed };
 }
+
+/**
+ * EARLY_LISTEN hand-over (needs a REAL PostgreSQL: FIXHUB_USE_POSTGRES=true + DATABASE_URL, as in the CI postgres job).
+ * Instance A holds the writer lock; instance B (started while A is alive, like a Render deploy) must open its port at once
+ * (/health = "starting", everything else 503) and become fully ready once A shuts down on SIGTERM.
+ * Runs in a throw-away database so it never touches the data of the surrounding test run.
+ */
+export async function runEarlyListenHandoverTest(): Promise<{ passed: number; failed: number }> {
+  const { pgDb } = await import('../../server/db/pgClient');
+  await pgDb.ready;
+  if (pgDb.isMemoryMode || !process.env.DATABASE_URL) {
+    console.log('  [SKIP] EARLY_LISTEN hand-over test needs a real PostgreSQL (FIXHUB_USE_POSTGRES=true + DATABASE_URL)');
+    return { passed: 0, failed: 0 };
+  }
+  console.log('\n--- Running EARLY_LISTEN Hand-over Test (real PostgreSQL) ---');
+  const { spawn } = await import('child_process');
+  const { Client } = await import('pg');
+  let passed = 0;
+  let failed = 0;
+  const assert = (cond: boolean, name: string, detail?: string) => {
+    if (cond) { console.log(`  [PASS] ${name}`); passed++; } else { console.error(`  [FAIL] ${name} ${detail ? `-> ${detail}` : ''}`); failed++; }
+  };
+
+  const dbName = `fixhub_early_${Date.now()}`;
+  const adminUrl = new URL(process.env.DATABASE_URL);
+  const admin = new Client({ connectionString: adminUrl.toString() });
+  await admin.connect();
+  await admin.query(`CREATE DATABASE ${dbName}`);
+  const scratchUrl = new URL(adminUrl.toString());
+  scratchUrl.pathname = `/${dbName}`;
+
+  const procs: import('child_process').ChildProcess[] = [];
+  const start = (port: number, extra: Record<string, string>) => {
+    const p = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], {
+      cwd: process.cwd(),
+      env: {
+        PATH: process.env.PATH || '', HOME: process.env.HOME || '', NODE_ENV: 'production', PORT: String(port),
+        DATABASE_URL: scratchUrl.toString(), JWT_SECRET: 'j'.repeat(48),
+        PAYSTACK_SECRET_KEY: 'sk_test_' + 'z'.repeat(30), ALLOW_PAYSTACK_TEST_KEY: 'true', SMS_DEV_MODE: 'true', ALLOW_SMS_LOG_OTP: 'true',
+        EARLY_LISTEN: 'true', ...extra,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let out = '';
+    p.stdout?.on('data', (d) => (out += d));
+    p.stderr?.on('data', (d) => (out += d));
+    procs.push(p);
+    return { p, log: () => out };
+  };
+  const get = async (port: number, path: string) => {
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}${path}`, { signal: AbortSignal.timeout(3000) });
+      return { status: r.status, body: await r.text() };
+    } catch { return { status: 0, body: '' }; }
+  };
+  const until = async (fn: () => Promise<boolean>, ms: number) => {
+    const end = Date.now() + ms;
+    while (Date.now() < end) { if (await fn()) return true; await new Promise((r) => setTimeout(r, 400)); }
+    return false;
+  };
+
+  try {
+    const PA = 39411 + Math.floor(Math.random() * 500);
+    const PB = PA + 1;
+    const a = start(PA, {});
+    const aReady = await until(async () => (await get(PA, '/health')).body.includes('"database":"connected"'), 60000);
+    assert(aReady, 'instance A boots and becomes ready');
+
+    const b = start(PB, { WRITER_LOCK_WAIT_MS: '60000', RENDER_EXTERNAL_URL: 'https://fixhub-example.onrender.com/' });
+    const bStarting = await until(async () => (await get(PB, '/health')).body.includes('"starting"'), 30000);
+    assert(bStarting, 'instance B opens its port immediately and answers /health with "starting" while A holds the lock');
+    const other = await get(PB, '/api/health');
+    assert(other.status === 503, 'instance B answers other routes with 503 until it owns the writer lock', `status=${other.status}`);
+    assert(b.p.exitCode === null, 'instance B keeps waiting (does not exit) for the lock');
+
+    a.p.kill('SIGTERM');
+    const aGone = await until(async () => a.p.exitCode !== null, 20000);
+    assert(aGone && a.p.exitCode === 0, 'instance A shuts down cleanly on SIGTERM (exit 0)', `exit=${a.p.exitCode}`);
+    assert(/SIGTERM received, flushing state/.test(a.log()), 'instance A logged the graceful flush');
+
+    const bReady = await until(async () => (await get(PB, '/health')).body.includes('"database":"connected"'), 40000);
+    assert(bReady, 'instance B takes over the writer lock and becomes ready after A exits');
+    assert((await get(PB, '/api/health')).status === 200, 'instance B serves the API after hand-over');
+    const cors = await fetch(`http://127.0.0.1:${PB}/api/health`, { headers: { Origin: 'https://fixhub-example.onrender.com' } });
+    assert(cors.headers.get('access-control-allow-origin') === 'https://fixhub-example.onrender.com', 'APP_URL defaults to RENDER_EXTERNAL_URL (CORS allows the Render origin)');
+    const evil = await fetch(`http://127.0.0.1:${PB}/api/health`, { headers: { Origin: 'https://evil.example.com' } });
+    assert(!evil.headers.get('access-control-allow-origin'), 'other origins still get no CORS headers');
+    b.p.kill('SIGTERM');
+    await until(async () => b.p.exitCode !== null, 20000);
+  } finally {
+    for (const p of procs) if (p.exitCode === null) p.kill('SIGKILL');
+    await new Promise((r) => setTimeout(r, 500));
+    await admin.query(`DROP DATABASE IF EXISTS ${dbName} WITH (FORCE)`).catch(() => {});
+    await admin.end().catch(() => {});
+  }
+  console.log(`\nEARLY_LISTEN hand-over test: ${passed} passed, ${failed} failed`);
+  return { passed, failed };
+}
