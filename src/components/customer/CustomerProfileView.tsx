@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { ApiClient } from '../../api/client';
+import { SetPasswordForm } from '../auth/SetPasswordForm';
+import { ReauthPasswordPrompt } from '../auth/ReauthPasswordPrompt';
+import { validateNewPassword } from '../../utils/passwordPolicy';
 import {
   User,
   ShieldCheck,
@@ -62,8 +65,6 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
   const [exportingData, setExportingData] = useState<boolean>(false);
   const [copiedId, setCopiedId] = useState<boolean>(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
-  const [deletingAccount, setDeletingAccount] = useState<boolean>(false);
-  const [deletePassword, setDeletePassword] = useState<string>('');
 
   // Email/Phone verification in Security Modal
   const [emailVerifying, setEmailVerifying] = useState<boolean>(false);
@@ -140,16 +141,9 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
     e.preventDefault();
     setPasswordMsg(null);
 
-    if (newPassword.length < 8) {
-      setPasswordMsg({ type: 'error', text: 'New password must be at least 8 characters.' });
-      return;
-    }
-    if (!/\d/.test(newPassword)) {
-      setPasswordMsg({ type: 'error', text: 'New password must contain at least one number.' });
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordMsg({ type: 'error', text: 'New passwords do not match.' });
+    const problem = validateNewPassword(newPassword, confirmPassword);
+    if (problem) {
+      setPasswordMsg({ type: 'error', text: problem });
       return;
     }
 
@@ -194,16 +188,10 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
     }
   };
 
-  const handleDeleteAccount = async () => {
-    setDeletingAccount(true);
-    try {
-      await ApiClient.deleteAccount(deletePassword);
-      logout();
-    } catch (err: any) {
-      alert('Failed to delete account: ' + (err.message || 'Please contact support'));
-      setDeletingAccount(false);
-      setDeletePassword('');
-    }
+  // Throws on failure so ReauthPasswordPrompt can show the error, or ask to set a password first (403 PASSWORD_NOT_SET).
+  const handleDeleteAccount = async (password: string) => {
+    await ApiClient.deleteAccount(password);
+    logout();
   };
 
   const handleSendEmailVerification = async () => {
@@ -640,7 +628,16 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
                 </div>
               </div>
 
-              {/* Password Management */}
+              {/* Password Management: social-login-only accounts create their first password; others change it */}
+              {user?.hasPassword === false ? (
+                <div className="space-y-3" data-testid="set-password-section">
+                  <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <KeyRound className="w-4 h-4 text-indigo-600" />
+                    <span>Set a Password</span>
+                  </h4>
+                  <SetPasswordForm intro="You signed in with Google, so this account has no password yet. Set one to enable email sign-in and to confirm sensitive actions such as deleting your account. Google sign-in keeps working." />
+                </div>
+              ) : (
               <form onSubmit={handleChangePassword} className="space-y-3">
                 <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                   <KeyRound className="w-4 h-4 text-indigo-600" />
@@ -667,10 +664,11 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                      Current Password (Optional if signed in via Google)
+                      Current Password
                     </label>
                     <input
                       type="password"
+                      required
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
                       placeholder="Enter current password"
@@ -720,6 +718,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
                   </button>
                 </div>
               </form>
+              )}
 
               {/* Data & Privacy (NDPR Compliance) */}
               <div className="space-y-3 pt-2">
@@ -765,32 +764,13 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
                         <p className="text-[11px] text-rose-800 leading-relaxed">
                           This will immediately delete your customer profile and revoke session access. This action cannot be undone.
                         </p>
-                        <input
-                          id="delete-account-password"
-                          type="password"
-                          autoComplete="current-password"
-                          aria-label="Confirm your password to delete your account"
-                          placeholder="Confirm your password"
-                          value={deletePassword}
-                          onChange={(e) => setDeletePassword(e.target.value)}
-                          className="w-full px-3 py-2 rounded-lg border border-rose-200 bg-white text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-rose-400"
+                        <ReauthPasswordPrompt
+                          tone="danger"
+                          inputId="delete-account-password"
+                          confirmLabel="Yes, Delete Account"
+                          onConfirm={handleDeleteAccount}
+                          onCancel={() => setShowDeleteConfirm(false)}
                         />
-                        <div className="flex items-center gap-2 pt-1">
-                          <button
-                            onClick={() => { setShowDeleteConfirm(false); setDeletePassword(''); }}
-                            className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={handleDeleteAccount}
-                            disabled={deletingAccount || !deletePassword}
-                            className="px-3 py-1.5 bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-rose-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1 cursor-pointer"
-                          >
-                            {deletingAccount ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                            <span>Yes, Delete Account</span>
-                          </button>
-                        </div>
                       </div>
                     )}
                   </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { ApiClient } from '../../api/client';
+import { SetPasswordForm } from '../auth/SetPasswordForm';
 import { NIGERIAN_BANKS, NigerianBank, getBankCodeByName, getBankNameByCode } from '../../data/nigerianBanks';
 import { SearchableBankSelect } from '../common/SearchableBankSelect';
 import { TechnicianVerificationModal } from './TechnicianVerificationModal';
@@ -600,6 +601,17 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
           <ChevronRight className="w-4 h-4 text-slate-400" />
         </button>
       </div>
+
+      {/* Social-login-only accounts (Google) have no password yet: let them create one */}
+      {user?.hasPassword === false && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3" data-testid="set-password-section">
+          <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+            <KeyRound className="w-4 h-4 text-indigo-600" />
+            <span>Set a Password</span>
+          </h4>
+          <SetPasswordForm intro="You signed in with Google, so this account has no password yet. Set one to enable email sign-in and to confirm sensitive actions. Google sign-in keeps working." />
+        </div>
+      )}
 
       {/* Logout Action */}
       <div className="pt-2">

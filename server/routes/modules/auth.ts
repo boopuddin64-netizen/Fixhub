@@ -193,7 +193,50 @@ apiRouter.post('/auth/change-password', requireAuth, authRateLimiter, (req: Auth
     return res.status(400).json({ error: result.error });
   }
 
-  return res.json({ success: true, message: result.message || 'Password changed successfully.' });
+  AuditService.log({
+    actorId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'PASSWORD_CHANGED',
+    resourceType: 'USER',
+    resourceId: req.user!.id,
+    details: {},
+    ipAddress: req.ip,
+  });
+
+  // Other sessions were signed out by the password change; return a fresh token for this one.
+  return res.json({ success: true, message: result.message || 'Password changed successfully.', token: result.token });
+});
+
+/**
+ * Set a FIRST password on an account that has none (social / Google sign-in only). Authenticated; refused with 409
+ * when the account already has a password (changing one needs the current password: POST /auth/change-password).
+ * Same password rules as registration; bcrypt cost 12; audit-logged (never with the password); other sessions are
+ * signed out and the response carries a fresh token that the client must store.
+ */
+apiRouter.post('/auth/set-password', authRateLimiter, requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  const newPassword = req.body?.newPassword ?? req.body?.password;
+  if (typeof newPassword !== 'string' || newPassword.length === 0) {
+    return res.status(400).json({ error: 'New password is required.', code: 'WEAK_PASSWORD' });
+  }
+
+  const result = AuthService.setPassword(req.user!.id, newPassword.slice(0, 200));
+  if ('error' in result) {
+    return res.status(result.status).json({ error: result.error, code: result.code });
+  }
+
+  AuditService.log({
+    actorId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'PASSWORD_SET',
+    resourceType: 'USER',
+    resourceId: req.user!.id,
+    details: { method: 'set-password', hadPassword: false },
+    ipAddress: req.ip,
+  });
+
+  // The old token is now invalid (session version bumped): hand back a fresh one.
+  const session = AuthService.getUserSession(req.user!.id);
+  return res.json({ success: true, message: result.message, token: result.token, user: session?.user });
 });
 
 apiRouter.post('/auth/verify-email/request', codeSendRateLimiter, requireAuth, async (req: AuthenticatedRequest, res: Response) => {
@@ -283,7 +326,7 @@ apiRouter.get('/account/export-data', requireAuth, (req: AuthenticatedRequest, r
       exportedAt: new Date().toISOString(),
       userId,
     },
-    user,
+    user: user ? AuthService.toPublicUser(user) : undefined,
     customerProfile,
     technicianProfile,
     repairRequests,
@@ -377,5 +420,5 @@ apiRouter.put('/customer/profile', requireAuth, requireRole(['customer']), (req:
   });
 
   const session = AuthService.getUserSession(req.user!.id);
-  return res.json({ success: true, user, profile: cust, session });
+  return res.json({ success: true, user: AuthService.toPublicUser(user), profile: cust, session });
 });

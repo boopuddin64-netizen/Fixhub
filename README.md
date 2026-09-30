@@ -121,7 +121,12 @@ script in `index.html` is allowed by SHA-256 hash computed at boot from `dist/in
   `GET /api/jobs/:id`, quotes) only while they have a paid, not-yet-closed job with that technician.
 - Sensitive account actions (`DELETE /api/account/me`, `POST /api/auth/switch-role`) require the current password in the JSON
   body (`{ "password": "..." }`); wrong/missing password → `403`. Social-login-only accounts (no password) get
-  `403 PASSWORD_NOT_SET` and must set a password first.
+  `403 PASSWORD_NOT_SET` and must set a password first: `POST /api/auth/set-password` `{ "newPassword": "..." }`
+  (authenticated; only for accounts with no password, otherwise `409 PASSWORD_ALREADY_SET`; same rules as registration -
+  min 8 chars incl. a digit; bcrypt cost 12; audit-logged as `PASSWORD_SET`). It signs other sessions out and returns a fresh
+  `token` (the web client stores it). `POST /api/auth/change-password` now also returns a fresh `token` for the same reason.
+  The public user object gained `hasPassword` (never the hash); the Profile > Account & Security screens show a
+  "Set a Password" form for Google-only accounts and the delete-account dialog offers it when the API answers `PASSWORD_NOT_SET`.
 - Password-reset, e-mail and phone verification codes are stored as HMACs in `verification_codes` and survive restarts.
 
 ## CI
