@@ -563,6 +563,8 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
                   />
                   <button
                     type="button"
+                    aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+                    aria-pressed={showLoginPassword}
                     onClick={() => setShowLoginPassword(!showLoginPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
                   >
@@ -708,6 +710,8 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
                     />
                     <button
                       type="button"
+                      aria-label={showForgotNewPassword ? 'Hide password' : 'Show password'}
+                      aria-pressed={showForgotNewPassword}
                       onClick={() => setShowForgotNewPassword(!showForgotNewPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
                     >
@@ -807,6 +811,8 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
                   />
                   <button
                     type="button"
+                    aria-label={showCustPassword ? 'Hide password' : 'Show password'}
+                    aria-pressed={showCustPassword}
                     onClick={() => setShowCustPassword(!showCustPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
                   >
@@ -831,6 +837,8 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
                   />
                   <button
                     type="button"
+                    aria-label={showCustConfirmPassword ? 'Hide password' : 'Show password'}
+                    aria-pressed={showCustConfirmPassword}
                     onClick={() => setShowCustConfirmPassword(!showCustConfirmPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
                   >
@@ -1153,6 +1161,8 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
                   />
                   <button
                     type="button"
+                    aria-label={showTechPassword ? 'Hide password' : 'Show password'}
+                    aria-pressed={showTechPassword}
                     onClick={() => setShowTechPassword(!showTechPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
                   >
@@ -1175,6 +1185,8 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
                   />
                   <button
                     type="button"
+                    aria-label={showTechConfirmPassword ? 'Hide password' : 'Show password'}
+                    aria-pressed={showTechConfirmPassword}
                     onClick={() => setShowTechConfirmPassword(!showTechConfirmPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
                   >
