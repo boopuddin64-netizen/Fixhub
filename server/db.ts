@@ -98,6 +98,10 @@ export interface DatabaseSchema {
     metadata: Record<string, unknown>;
     reviewed: boolean;
     timestamp: string;
+    /** filled in by the admin portal when the event is reviewed */
+    reviewedBy?: string;
+    reviewedAt?: string;
+    reviewNote?: string;
   }>;
 }
 
@@ -146,6 +150,9 @@ export class Database {
     metadata: Record<string, unknown>;
     reviewed: boolean;
     timestamp: string;
+    reviewedBy?: string;
+    reviewedAt?: string;
+    reviewNote?: string;
   }> = [];
 
   /** SHA-256 hashes of revoked JWTs (logout / account deletion). Durable via the `revoked_tokens` table. */
@@ -177,6 +184,11 @@ export class Database {
 
   public get isPersistent(): boolean {
     return this.persistenceActive;
+  }
+
+  /** true when this process holds the single-writer advisory lock (always false on the in-memory fallback) */
+  public get holdsWriterLock(): boolean {
+    return this.writerLockClient !== null;
   }
 
   /**

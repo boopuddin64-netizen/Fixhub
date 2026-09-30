@@ -11,6 +11,7 @@ import { buildCorsOptions } from './server/config/cors';
 import { cspReportRateLimiter } from './server/middleware/rateLimiters';
 import { pgDb } from './server/db/pgClient';
 import { getJwtSecret } from './server/services/authService';
+import { bootstrapAdminFromEnv } from './server/services/adminAuthService';
 import { buildCspMiddleware } from './server/config/csp';
 import { globalErrorHandler, installProcessSafeguards } from './server/middleware/errorHandler';
 
@@ -69,6 +70,18 @@ async function startServer() {
   const { hydrated } = await db.init();
   console.log(hydrated ? '[db] Restored application state from PostgreSQL.' : '[db] Empty database initialised.');
   db.startBackgroundFlush();
+
+  // Optional first-admin bootstrap for platforms without shell access (ADMIN_BOOTSTRAP_EMAIL + ADMIN_BOOTSTRAP_PASSWORD).
+  // Only ever CREATES a missing admin (never touches an existing one) and forces a password change at first sign-in.
+  const bootstrap = bootstrapAdminFromEnv(process.env);
+  if (bootstrap) {
+    if (!bootstrap.ok) console.error(`[admin] bootstrap skipped: ${bootstrap.error}`);
+    else if (bootstrap.status === 'exists') console.warn(`[admin] ${bootstrap.email} already exists - remove ADMIN_BOOTSTRAP_EMAIL / ADMIN_BOOTSTRAP_PASSWORD from the environment.`);
+    else {
+      console.warn(`[admin] admin ${bootstrap.email} ${bootstrap.status} from ADMIN_BOOTSTRAP_*: sign in at /admin, choose a new password, then REMOVE ADMIN_BOOTSTRAP_EMAIL / ADMIN_BOOTSTRAP_PASSWORD from the environment.`);
+      await db.flush().catch((e) => console.error('[admin] could not persist the bootstrap admin:', e?.message || e));
+    }
+  }
 
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;

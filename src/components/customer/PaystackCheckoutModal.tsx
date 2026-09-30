@@ -15,6 +15,7 @@ import {
   ArrowRight,
   RefreshCw,
 } from 'lucide-react';
+import { formatNaira } from '../../utils/format';
 
 export interface PaystackCheckoutModalProps {
   job: RepairJob;
@@ -127,11 +128,11 @@ export const PaystackCheckoutModal: React.FC<PaystackCheckoutModalProps> = ({
                   <>
                     <div className="flex items-center justify-between text-xs text-slate-500">
                       <span>Parts Cost ({quote.partsQuality?.replace('_', ' ') || 'Standard'}):</span>
-                      <span className="font-semibold text-slate-800">₦{quote.partsCost.toLocaleString()}</span>
+                      <span className="font-semibold text-slate-800">{formatNaira(quote.partsCost)}</span>
                     </div>
                     <div className="flex items-center justify-between text-xs text-slate-500">
                       <span>Labor & Calibration:</span>
-                      <span className="font-semibold text-slate-800">₦{quote.laborCost.toLocaleString()}</span>
+                      <span className="font-semibold text-slate-800">{formatNaira(quote.laborCost)}</span>
                     </div>
                     {quote.warrantyDays > 0 && (
                       <div className="flex items-center justify-between text-xs text-slate-500">
@@ -143,7 +144,7 @@ export const PaystackCheckoutModal: React.FC<PaystackCheckoutModalProps> = ({
                 )}
                 <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
                   <span className="text-sm font-bold text-slate-900">Total Authoritative Amount:</span>
-                  <span className="text-xl font-extrabold text-blue-700">₦{amount.toLocaleString()}</span>
+                  <span className="text-xl font-extrabold text-blue-700">{formatNaira(amount)}</span>
                 </div>
               </div>
 
@@ -210,7 +211,7 @@ export const PaystackCheckoutModal: React.FC<PaystackCheckoutModalProps> = ({
                 className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Lock className="w-4 h-4" />
-                <span>Pay ₦{amount.toLocaleString()} with Paystack</span>
+                <span>Pay {formatNaira(amount)} with Paystack</span>
               </button>
             </div>
           )}
@@ -240,7 +241,7 @@ export const PaystackCheckoutModal: React.FC<PaystackCheckoutModalProps> = ({
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-slate-800">
                   <span className="text-xs font-semibold text-slate-300">Amount Due:</span>
-                  <span className="text-lg font-extrabold text-emerald-400">₦{amount.toLocaleString()}</span>
+                  <span className="text-lg font-extrabold text-emerald-400">{formatNaira(amount)}</span>
                 </div>
               </div>
 
@@ -324,7 +325,7 @@ export const PaystackCheckoutModal: React.FC<PaystackCheckoutModalProps> = ({
               <div>
                 <h4 className="text-base font-extrabold text-slate-900">Payment Confirmed!</h4>
                 <p className="text-xs text-slate-600 mt-1">
-                  ₦{amount.toLocaleString()} received via Paystack. Your repair booking is officially confirmed.
+                  {formatNaira(amount)} received via Paystack. Your repair booking is officially confirmed.
                 </p>
               </div>
               <button

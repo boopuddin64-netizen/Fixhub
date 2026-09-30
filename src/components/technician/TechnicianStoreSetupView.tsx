@@ -20,6 +20,7 @@ import {
   Loader2,
   AlertCircle
 } from 'lucide-react';
+import { formatNaira } from '../../utils/format';
 
 interface TechnicianStoreSetupViewProps {
   onSetupCompleted: () => void;
@@ -797,7 +798,7 @@ export const TechnicianStoreSetupView: React.FC<TechnicianStoreSetupViewProps> =
                     <div>
                       <div className="flex items-center justify-between text-xs font-extrabold text-white">
                         <span className="truncate pr-2">{p.name}</span>
-                        <span className="text-emerald-400 font-mono shrink-0">₦{Number(p.priceNaira).toLocaleString()}</span>
+                        <span className="text-emerald-400 font-mono shrink-0">{formatNaira(Number(p.priceNaira))}</span>
                       </div>
                       <p className="text-[11px] text-slate-400 mt-0.5">
                         {p.deviceBrand} {p.deviceModel} • {p.quality?.replace(/_/g, ' ')}

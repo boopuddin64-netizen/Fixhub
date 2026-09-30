@@ -38,6 +38,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab, a
   return (
     <nav
       id="bottom-navigation-bar"
+      aria-label="Main navigation"
       className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg pb-[env(safe-area-inset-bottom)]"
     >
       <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-around">
@@ -48,6 +49,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab, a
             <button
               key={tab.id}
               id={`nav-tab-${tab.id}`}
+              aria-current={isActive ? 'page' : undefined}
+              aria-label={tab.badge ? `${tab.label}, ${tab.badge} active` : tab.label}
               onClick={() => onSelectTab(tab.id)}
               className={`relative flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all cursor-pointer ${
                 isActive ? 'text-blue-600 font-bold' : 'text-slate-500 hover:text-slate-800 font-medium'

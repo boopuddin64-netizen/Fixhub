@@ -5,6 +5,7 @@ import { AuditService } from '../../services/auditService';
 import { authRateLimiter, codeAttemptRateLimiter, codeSendRateLimiter } from '../../middleware/rateLimiters';
 import { UserRole } from '../../../src/types/index';
 import { isNonEmptyString, sanitizeString } from '../../utils/validation';
+import { isValidNgPhone, PHONE_FORMAT_HINT } from '../../../src/utils/format';
 import { apiRouter, AuthenticatedRequest, requireAuth, requireRole, requirePasswordConfirmation } from './shared';
 
 /* -------------------------------------------------------------
@@ -14,6 +15,9 @@ apiRouter.post('/auth/register-customer', authRateLimiter, (req: Request, res: R
   const { name, phone, email, password, address, landmark, city, state, isBorrowedDevice } = req.body;
   if (!isNonEmptyString(name) || !isNonEmptyString(phone) || !isNonEmptyString(email)) {
     return res.status(400).json({ error: 'Name, phone, and email are required.' });
+  }
+  if (!isValidNgPhone(phone)) {
+    return res.status(400).json({ error: `Enter a valid Nigerian mobile number. ${PHONE_FORMAT_HINT}`, code: 'INVALID_PHONE', field: 'phone' });
   }
 
   const result = AuthService.registerCustomer({
@@ -39,6 +43,9 @@ apiRouter.post('/auth/register-technician', authRateLimiter, (req: Request, res:
   const { name, phone, email, businessName, password, shopAddress, landmark, area, city, state, supportedBrands } = req.body;
   if (!isNonEmptyString(name) || !isNonEmptyString(phone) || !isNonEmptyString(email) || !isNonEmptyString(businessName) || !isNonEmptyString(shopAddress)) {
     return res.status(400).json({ error: 'Name, phone, email, business name, and shop address are required.' });
+  }
+  if (!isValidNgPhone(phone)) {
+    return res.status(400).json({ error: `Enter a valid Nigerian mobile number. ${PHONE_FORMAT_HINT}`, code: 'INVALID_PHONE', field: 'phone' });
   }
 
   const result = AuthService.registerTechnician({
@@ -93,6 +100,9 @@ apiRouter.post('/auth/switch-role', authRateLimiter, requireAuth, (req: Authenti
   const { role } = req.body;
   if (!role || !['customer', 'technician'].includes(role)) {
     return res.status(400).json({ error: 'Role must be customer or technician.' });
+  }
+  if (req.user!.role === 'admin') {
+    return res.status(403).json({ error: 'Admin accounts cannot switch roles.' });
   }
   if (!requirePasswordConfirmation(req, res)) return;
   let user = db.users.find((u) => u.id === req.user!.id);
@@ -341,6 +351,9 @@ apiRouter.get('/account/export-data', requireAuth, (req: AuthenticatedRequest, r
 
 apiRouter.delete('/account/me', authRateLimiter, requireAuth, (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
+  if (req.user!.role === 'admin') {
+    return res.status(403).json({ error: 'Admin accounts cannot be deleted here. Ask another admin to suspend the account.' });
+  }
   if (!requirePasswordConfirmation(req, res)) return;
 
   // 1. Remove user

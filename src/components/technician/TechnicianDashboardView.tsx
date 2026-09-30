@@ -29,6 +29,7 @@ import {
   X,
   Lock,
 } from 'lucide-react';
+import { formatNaira } from '../../utils/format';
 
 interface TechnicianDashboardViewProps {
   onOpenJob: (jobId: string) => void;
@@ -149,7 +150,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
     if (amt > financials.availablePayoutNaira) {
       setPayoutMsg({
         type: 'error',
-        text: `Requested amount exceeds available balance of ₦${financials.availablePayoutNaira.toLocaleString()}. (Note: Active repair funds are held until customer pickup).`,
+        text: `Requested amount exceeds available balance of ${formatNaira(financials.availablePayoutNaira)}. (Note: Active repair funds are held until customer pickup).`,
       });
       return;
     }
@@ -166,7 +167,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
       if (!res.success) {
         setPayoutMsg({ type: 'error', text: res.error || 'Payout request failed.' });
       } else {
-        setPayoutMsg({ type: 'success', text: `Payout request for ₦${amt.toLocaleString()} submitted successfully.` });
+        setPayoutMsg({ type: 'success', text: `Payout request for ${formatNaira(amt)} submitted successfully.` });
         setPayoutAmountInput('');
         fetchDashboardData();
       }
@@ -272,7 +273,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Held Repair Earnings</span>
-          <span className="text-xl font-black text-emerald-700">₦{(financials.heldEarningsNaira || 0).toLocaleString()}</span>
+          <span className="text-xl font-black text-emerald-700">{formatNaira((financials.heldEarningsNaira || 0))}</span>
           <span className="text-[11px] text-slate-500 font-medium block">Held pending customer pickup</span>
         </div>
       </div>
@@ -458,21 +459,21 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
                     <div className="p-3 bg-slate-50 rounded-xl space-y-1 text-xs text-slate-600">
                       <div className="flex justify-between">
                         <span>Parts ({((q.partsQuality as any) || 'STANDARD_AFTERMARKET').replace(/_/g, ' ')}):</span>
-                        <span className="font-semibold text-slate-800">₦{(q.partsCost || 0).toLocaleString()}</span>
+                        <span className="font-semibold text-slate-800">{formatNaira((q.partsCost || 0))}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Labor & Diagnostics:</span>
-                        <span className="font-semibold text-slate-800">₦{(q.laborCost || 0).toLocaleString()}</span>
+                        <span className="font-semibold text-slate-800">{formatNaira((q.laborCost || 0))}</span>
                       </div>
                       {q.diagnosticCost > 0 && (
                         <div className="flex justify-between">
                           <span>Diagnostic Fee:</span>
-                          <span className="font-semibold text-slate-800">₦{(q.diagnosticCost).toLocaleString()}</span>
+                          <span className="font-semibold text-slate-800">{formatNaira((q.diagnosticCost))}</span>
                         </div>
                       )}
                       <div className="pt-1 border-t border-slate-200 flex justify-between font-bold text-slate-900">
                         <span>Total Quoted:</span>
-                        <span className="text-blue-700 text-sm">₦{q.totalAmount.toLocaleString()}</span>
+                        <span className="text-blue-700 text-sm">{formatNaira(q.totalAmount)}</span>
                       </div>
                     </div>
 
@@ -542,7 +543,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
                       <StatusBadge status={job.status} size="sm" />
                     </div>
                     <p className="text-xs text-slate-500 mt-1">
-                      Ref: <span className="font-mono text-slate-700 font-bold">{job.bookingRef || job.id}</span> • Amount: <strong className="text-emerald-700">₦{(job.finalAmount || job.originalQuoteAmount || 0).toLocaleString()}</strong>
+                      Ref: <span className="font-mono text-slate-700 font-bold">{job.bookingRef || job.id}</span> • Amount: <strong className="text-emerald-700">{formatNaira((job.finalAmount || job.originalQuoteAmount || 0))}</strong>
                     </p>
                   </div>
 
@@ -564,7 +565,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Held by Fixhub</span>
-              <span className="text-2xl font-black text-amber-600">₦{financials.heldEarningsNaira.toLocaleString()}</span>
+              <span className="text-2xl font-black text-amber-600">{formatNaira(financials.heldEarningsNaira)}</span>
               <p className="text-xs text-slate-500 leading-relaxed">
                 Active repair earnings held securely until customer tests and completes physical pickup.
               </p>
@@ -572,7 +573,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
 
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Eligible for Payout</span>
-              <span className="text-2xl font-black text-emerald-600">₦{financials.availablePayoutNaira.toLocaleString()}</span>
+              <span className="text-2xl font-black text-emerald-600">{formatNaira(financials.availablePayoutNaira)}</span>
               <p className="text-xs text-slate-500 leading-relaxed">
                 Available balance cleared from completed repairs ready for bank withdrawal.
               </p>
@@ -580,7 +581,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
 
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Total Completed Payouts</span>
-              <span className="text-2xl font-black text-slate-900">₦{financials.totalCompletedPayoutsNaira.toLocaleString()}</span>
+              <span className="text-2xl font-black text-slate-900">{formatNaira(financials.totalCompletedPayoutsNaira)}</span>
               <p className="text-xs text-slate-500 leading-relaxed">
                 Settled withdrawals to your bank. Fixhub platform fee: {financials.commissionRatePercent}%.
               </p>
@@ -595,7 +596,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
                 <p className="text-xs text-slate-500">Withdraw available eligible earnings directly to your verified bank account.</p>
               </div>
               <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 w-fit">
-                Eligible Balance: ₦{financials.availablePayoutNaira.toLocaleString()}
+                Eligible Balance: {formatNaira(financials.availablePayoutNaira)}
               </span>
             </div>
 
@@ -680,7 +681,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
                       const val = e.target.value.replace(/\D/g, '');
                       setPayoutAmountInput(val);
                     }}
-                    placeholder={financials.availablePayoutNaira > 0 ? `Max: ₦${financials.availablePayoutNaira.toLocaleString()}` : '0'}
+                    placeholder={financials.availablePayoutNaira > 0 ? `Max: ${formatNaira(financials.availablePayoutNaira)}` : '0'}
                     className="w-full pl-8 pr-28 py-2.5 text-base sm:text-sm font-bold border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white"
                   />
                   {financials.availablePayoutNaira > 0 && (
@@ -739,9 +740,9 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
                     {earningsList.map((e) => (
                       <tr key={e.id} className="hover:bg-slate-50/80">
                         <td className="p-3 font-mono font-bold text-slate-800">{e.repairId}</td>
-                        <td className="p-3 font-semibold text-slate-900">₦{e.grossAmountNaira.toLocaleString()}</td>
-                        <td className="p-3 text-slate-500">-₦{e.platformFeeNaira.toLocaleString()}</td>
-                        <td className="p-3 font-bold text-emerald-700">₦{e.netEarningsNaira.toLocaleString()}</td>
+                        <td className="p-3 font-semibold text-slate-900">{formatNaira(e.grossAmountNaira)}</td>
+                        <td className="p-3 text-slate-500">-{formatNaira(e.platformFeeNaira)}</td>
+                        <td className="p-3 font-bold text-emerald-700">{formatNaira(e.netEarningsNaira)}</td>
                         <td className="p-3">
                           <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
                             e.status === 'HELD'
@@ -790,7 +791,7 @@ export const TechnicianDashboardView: React.FC<TechnicianDashboardViewProps> = (
                     {payoutList.map((p) => (
                       <tr key={p.id} className="hover:bg-slate-50/80">
                         <td className="p-3 font-mono font-bold text-slate-800">{p.id}</td>
-                        <td className="p-3 font-bold text-slate-900">₦{p.amountNaira.toLocaleString()}</td>
+                        <td className="p-3 font-bold text-slate-900">{formatNaira(p.amountNaira)}</td>
                         <td className="p-3 text-slate-600">
                           {p.destinationAccount?.bankName} ({p.destinationAccount?.accountNumber})
                         </td>

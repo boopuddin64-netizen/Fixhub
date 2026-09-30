@@ -27,6 +27,7 @@ import {
   Camera,
   Volume2
 } from 'lucide-react';
+import { formatNaira } from '../../utils/format';
 
 interface CustomerHomeViewProps {
   onStartRepair: (options?: {
@@ -367,7 +368,7 @@ export const CustomerHomeView: React.FC<CustomerHomeViewProps> = ({
                     Issues: <span className="font-semibold text-slate-700">{(job.issues || []).join(', ')}</span>
                   </p>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    Secured Payment: <span className="font-bold text-emerald-700">₦{job.finalAmount.toLocaleString()}</span>
+                    Secured Payment: <span className="font-bold text-emerald-700">{formatNaira(job.finalAmount)}</span>
                   </p>
                 </div>
               </div>

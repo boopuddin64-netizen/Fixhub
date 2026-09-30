@@ -55,6 +55,10 @@ export class TechnicianMatchingService {
       if (!tech.shopLocation) {
         continue;
       }
+      // Technicians suspended by an admin are never offered to customers.
+      if (db.users.find((u) => u.id === tech.userId)?.status === 'suspended') {
+        continue;
+      }
 
       const techHasCoords = typeof tech.shopLocation.lat === 'number' && 
                             typeof tech.shopLocation.lng === 'number' && 

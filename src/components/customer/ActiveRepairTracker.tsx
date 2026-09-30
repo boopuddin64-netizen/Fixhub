@@ -20,6 +20,8 @@ import {
   ExternalLink,
   Sparkles
 } from 'lucide-react';
+import { formatNaira, formatDate } from '../../utils/format';
+import { computeTimeline } from '../../utils/repairTimeline';
 
 interface ActiveRepairTrackerProps {
   job: RepairJob;
@@ -67,76 +69,7 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
     };
   }, [job.id, job.status, technician?.phone]);
 
-  const steps = [
-    {
-      label: 'Booked',
-      done: [
-        'BOOKED',
-        'DEVICE_DROPPED_OFF',
-        'DEVICE_RECEIVED',
-        'DIAGNOSING',
-        'REPAIR_IN_PROGRESS',
-        'ADDITIONAL_DIAGNOSIS',
-        'READY_FOR_PICKUP',
-        'PICKED_UP',
-        'COMPLETED',
-      ].includes(job.status),
-    },
-    {
-      label: 'Drop Off',
-      done: [
-        'DEVICE_DROPPED_OFF',
-        'DEVICE_RECEIVED',
-        'DIAGNOSING',
-        'REPAIR_IN_PROGRESS',
-        'ADDITIONAL_DIAGNOSIS',
-        'READY_FOR_PICKUP',
-        'PICKED_UP',
-        'COMPLETED',
-      ].includes(job.status),
-    },
-    {
-      label: 'Checked In',
-      done: [
-        'DEVICE_RECEIVED',
-        'DIAGNOSING',
-        'REPAIR_IN_PROGRESS',
-        'ADDITIONAL_DIAGNOSIS',
-        'READY_FOR_PICKUP',
-        'PICKED_UP',
-        'COMPLETED',
-      ].includes(job.status),
-    },
-    {
-      label: 'Diagnosis & Repair',
-      done: [
-        'REPAIR_IN_PROGRESS',
-        'ADDITIONAL_DIAGNOSIS',
-        'READY_FOR_PICKUP',
-        'PICKED_UP',
-        'COMPLETED',
-      ].includes(job.status),
-    },
-    {
-      label: 'Ready for Pickup',
-      done: [
-        'READY_FOR_PICKUP',
-        'PICKED_UP',
-        'COMPLETED',
-      ].includes(job.status),
-    },
-    {
-      label: 'Picked Up',
-      done: [
-        'PICKED_UP',
-        'COMPLETED',
-      ].includes(job.status),
-    },
-    {
-      label: 'Warranty',
-      done: job.status === 'COMPLETED',
-    },
-  ];
+  const timeline = computeTimeline(job.status, job.statusHistory);
 
   const handleAdditionalDiagnosisResponse = async (approved: boolean) => {
     setIsRespondingDiagnosis(true);
@@ -270,33 +203,49 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
 
         {/* Multi-step Visual Tracker */}
         <div className="pt-3 border-t border-slate-800">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3">Repair Progress</p>
-          <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 text-center text-xs">
-            {steps.map((s, idx) => (
-              <div
-                key={idx}
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Repair Progress</p>
+            <p className="text-[11px] font-semibold text-slate-300">{timeline.summary}</p>
+          </div>
+          {timeline.terminal && (
+            <div role="status" className={`mb-3 rounded-xl px-3 py-2 text-xs font-semibold border ${
+              timeline.terminal === 'DISPUTED' ? 'bg-amber-950/60 border-amber-500/40 text-amber-200'
+              : timeline.terminal === 'REFUNDED' ? 'bg-violet-950/60 border-violet-500/40 text-violet-200'
+              : 'bg-slate-800 border-slate-600 text-slate-300'}`}>
+              {timeline.terminal === 'DISPUTED' ? 'Dispute under review — your payment is held safely.' : timeline.terminal === 'REFUNDED' ? 'Your payment was refunded.' : 'This repair was cancelled.'}
+            </div>
+          )}
+          <ol className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 text-center text-xs" aria-label={`Repair progress: ${timeline.summary}`}>
+            {timeline.steps.map((s) => (
+              <li
+                key={s.key}
+                aria-current={s.state === 'current' ? 'step' : undefined}
                 className={`p-2 rounded-xl border transition-all ${
-                  s.done
+                  s.state === 'done'
                     ? 'border-cyan-500/40 bg-cyan-950/40 text-cyan-300 font-semibold'
-                    : 'border-slate-800 bg-slate-900/60 text-slate-500 font-normal'
+                    : s.state === 'current'
+                    ? 'border-blue-400/60 bg-blue-950/40 text-blue-200 font-semibold'
+                    : 'border-slate-800 bg-slate-900/60 text-slate-400 font-normal'
                 }`}
               >
                 <div className="flex items-center justify-center mb-1">
-                  {s.done ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
+                  {s.state === 'done' ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" aria-hidden="true" />
                   ) : (
-                    <div className="w-2.5 h-2.5 rounded-full border border-slate-600" />
+                    <div className={`w-2.5 h-2.5 rounded-full border ${s.state === 'current' ? 'border-blue-400 bg-blue-500/40 animate-pulse' : 'border-slate-600'}`} aria-hidden="true" />
                   )}
                 </div>
                 <span className="text-[9px] sm:text-[10px] leading-tight block">{s.label}</span>
-              </div>
+                {s.at && <span className="text-[9px] text-slate-400 block mt-0.5">{formatDate(s.at)}</span>}
+                <span className="sr-only">{s.state === 'done' ? 'completed' : s.state === 'current' ? 'in progress' : 'not started'}</span>
+              </li>
             ))}
-          </div>
+          </ol>
         </div>
       </div>
 
       {actionError && (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+        <div role="alert" className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>{actionError}</span>
         </div>
@@ -359,7 +308,7 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
             </div>
             <div className="bg-white/10 p-4 rounded-xl text-center border border-white/20 shrink-0">
               <span className="text-[10px] uppercase font-bold text-emerald-200 block">Total Amount</span>
-              <span className="text-xl font-black text-white">₦{(job.finalAmount || job.originalQuoteAmount || job.totalAmountNaira || 0).toLocaleString()}</span>
+              <span className="text-xl font-black text-white">{formatNaira((job.finalAmount || job.originalQuoteAmount || job.totalAmountNaira || 0))}</span>
             </div>
           </div>
 
@@ -370,7 +319,7 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
               className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <ShieldCheck className="w-5 h-5 text-slate-950" />
-              <span>Pay Now (₦{(job.finalAmount || job.originalQuoteAmount || job.totalAmountNaira || 0).toLocaleString()})</span>
+              <span>Pay Now ({formatNaira((job.finalAmount || job.originalQuoteAmount || job.totalAmountNaira || 0))})</span>
             </button>
           )}
         </div>
@@ -427,7 +376,7 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
           </p>
           <div className="flex items-center justify-between pt-2 border-t border-amber-200 text-xs font-bold">
             <span>Additional Cost:</span>
-            <span className="text-amber-900 text-sm">+₦{job.additionalDiagnosis.additionalCostNaira.toLocaleString()}</span>
+            <span className="text-amber-900 text-sm">+{formatNaira(job.additionalDiagnosis.additionalCostNaira)}</span>
           </div>
           <div className="flex items-center gap-3 pt-2">
             <button
@@ -436,7 +385,7 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
               onClick={() => handleAdditionalDiagnosisResponse(true)}
               className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer disabled:opacity-50"
             >
-              {isRespondingDiagnosis ? 'Processing...' : `Approve (+₦${job.additionalDiagnosis.additionalCostNaira.toLocaleString()})`}
+              {isRespondingDiagnosis ? 'Processing...' : `Approve (+${formatNaira(job.additionalDiagnosis.additionalCostNaira)})`}
             </button>
             <button
               id="decline-additional-diagnosis-btn"
@@ -579,7 +528,7 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
                       <span>• {part.warrantyDays} Days Warranty</span>
                     </div>
                   </div>
-                  <span className="font-extrabold text-slate-900">₦{part.priceNaira.toLocaleString()}</span>
+                  <span className="font-extrabold text-slate-900">{formatNaira(part.priceNaira)}</span>
                 </div>
               ))}
             </div>
@@ -737,7 +686,7 @@ export const ActiveRepairTracker: React.FC<ActiveRepairTrackerProps> = ({
                   <p className="text-xs text-amber-800 leading-relaxed">
                     Since you've already paid, this repair will be cancelled and your full payment of{' '}
                     <span className="font-bold text-slate-900">
-                      ₦{(job.finalAmount || job.originalQuoteAmount || quote?.totalAmount || 0).toLocaleString()}
+                      {formatNaira((job.finalAmount || job.originalQuoteAmount || quote?.totalAmount || 0))}
                     </span>{' '}
                     will be refunded to your original payment method via Paystack within 3–5 business days.
                   </p>

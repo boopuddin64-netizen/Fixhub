@@ -16,6 +16,7 @@ import {
   Lock,
   ArrowRight,
 } from 'lucide-react';
+import { formatNaira } from '../../utils/format';
 
 interface QuoteBuilderModalProps {
   request: RepairRequest;
@@ -406,7 +407,7 @@ export const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({
               <div className="space-y-2">
                 <div className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
                   <span>Selected Parts ({selectedParts.length})</span>
-                  <span className="text-emerald-700 font-extrabold">Subtotal: ₦{partsCost.toLocaleString()}</span>
+                  <span className="text-emerald-700 font-extrabold">Subtotal: {formatNaira(partsCost)}</span>
                 </div>
                 <div className="divide-y divide-slate-200 bg-white rounded-xl border border-slate-200 overflow-hidden">
                   {selectedParts.map((sp) => {
@@ -427,7 +428,7 @@ export const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({
                             <span>{sp.item.warrantyDays} Days Warranty</span>
                             <span>•</span>
                             <span className="flex items-center gap-1 text-slate-600">
-                              <Lock className="w-3 h-3 text-slate-400" /> ₦{unitPrice.toLocaleString()} / unit
+                              <Lock className="w-3 h-3 text-slate-400" /> {formatNaira(unitPrice)} / unit
                             </span>
                           </div>
                         </div>
@@ -445,7 +446,7 @@ export const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({
                             />
                           </div>
                           <div className="text-right min-w-[70px]">
-                            <p className="font-extrabold text-slate-900">₦{(unitPrice * sp.quantity).toLocaleString()}</p>
+                            <p className="font-extrabold text-slate-900">{formatNaira((unitPrice * sp.quantity))}</p>
                           </div>
                           <button
                             type="button"
@@ -511,7 +512,7 @@ export const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({
                           <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5">
                             <span className="font-semibold text-slate-700">{item.brand}</span>
                             <span>•</span>
-                            <span className="text-emerald-700 font-bold">₦{(item.unitPriceNaira || item.priceNaira).toLocaleString()}</span>
+                            <span className="text-emerald-700 font-bold">{formatNaira((item.unitPriceNaira || item.priceNaira))}</span>
                           </div>
                         </div>
                         <span
@@ -659,22 +660,22 @@ export const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({
           <div className="p-4 rounded-xl bg-slate-900 text-white space-y-2">
             <div className="flex items-center justify-between text-xs text-slate-300">
               <span>Verified Parts Subtotal:</span>
-              <span className="font-semibold text-white">₦{partsCost.toLocaleString()}</span>
+              <span className="font-semibold text-white">{formatNaira(partsCost)}</span>
             </div>
             <div className="flex items-center justify-between text-xs text-slate-300">
               <span>Labor & Services:</span>
               <span className="font-semibold text-white">
-                ₦{(Number(laborCost || 0) + Number(diagnosticCost || 0) + Number(otherCost || 0)).toLocaleString()}
+                {formatNaira((Number(laborCost || 0) + Number(diagnosticCost || 0) + Number(otherCost || 0)))}
               </span>
             </div>
             <div className="h-px bg-slate-800 my-1" />
             <div className="flex items-center justify-between text-sm">
               <span className="font-bold text-slate-200">Customer Total Quote:</span>
-              <span className="font-extrabold text-emerald-400 text-base">₦{totalAmount.toLocaleString()}</span>
+              <span className="font-extrabold text-emerald-400 text-base">{formatNaira(totalAmount)}</span>
             </div>
             <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
-              <span>Fixhub Fee (8.5%): ₦{platformFee.toLocaleString()}</span>
-              <span className="font-bold text-emerald-300">Your Net Payout: ₦{netEarnings.toLocaleString()}</span>
+              <span>Fixhub Fee (8.5%): {formatNaira(platformFee)}</span>
+              <span className="font-bold text-emerald-300">Your Net Payout: {formatNaira(netEarnings)}</span>
             </div>
           </div>
 

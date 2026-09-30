@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { db } from '../../db';
 import { AuditService } from '../../services/auditService';
 import { NotificationService } from '../../services/notificationService';
+import { recomputeTechnicianRating } from '../../services/reviewService';
 import { paginate } from '../../utils/pagination';
 import { isNonEmptyString, sanitizeString, validateNumber } from '../../utils/validation';
 import { apiRouter, AuthenticatedRequest, requireAuth, requireRole } from './shared';
@@ -55,14 +56,8 @@ apiRouter.post('/reviews', requireAuth, requireRole(['customer']), (req: Authent
 
   db.reviews.push(review);
 
-  // Recalculate technician rating average
-  const techReviews = db.reviews.filter((r) => r.technicianId === job.technicianId);
-  const avg = techReviews.reduce((sum, r) => sum + r.rating, 0) / techReviews.length;
-  const tech = db.technicianProfiles.find((t) => t.userId === job.technicianId);
-  if (tech) {
-    tech.rating = Math.round(avg * 10) / 10;
-    tech.reviewCount = techReviews.length;
-  }
+  // Recalculate technician rating average (reviews hidden by an admin do not count)
+  recomputeTechnicianRating(job.technicianId);
 
   NotificationService.send({
     userId: job.technicianId,
@@ -86,7 +81,7 @@ apiRouter.post('/reviews', requireAuth, requireRole(['customer']), (req: Authent
 });
 
 apiRouter.get('/reviews/technician/:id', (req: Request, res: Response) => {
-  const reviews = db.reviews.filter((r) => r.technicianId === req.params.id);
+  const reviews = db.reviews.filter((r) => r.technicianId === req.params.id && !r.hidden);
   return res.json(paginate(req, res, reviews));
 });
 

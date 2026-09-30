@@ -1,6 +1,7 @@
 import React from 'react';
 import { Star, ShieldCheck, Wrench, MapPin, Clock, ArrowRight, ExternalLink } from 'lucide-react';
 import { TechnicianMatchResult } from '../../../types';
+import { formatNaira } from '../../../utils/format';
 
 interface TechnicianDiscoveryCardProps {
   match: TechnicianMatchResult;
@@ -89,14 +90,14 @@ export const TechnicianDiscoveryCard: React.FC<TechnicianDiscoveryCardProps> = (
           <div className="text-right shrink-0 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200/60">
             <span className="text-[10px] uppercase font-bold text-emerald-700 block">Quote Ready</span>
             <span className="text-sm sm:text-base font-extrabold text-slate-900">
-              ₦{match.quote.totalAmount.toLocaleString()}
+              {formatNaira(match.quote.totalAmount)}
             </span>
           </div>
         ) : (
           <div className="text-right shrink-0 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200/60">
             <span className="text-[10px] uppercase font-bold text-slate-400 block">Est. Starting</span>
             <span className="text-xs sm:text-sm font-bold text-slate-700">
-              ~₦{(15000 + (technician.yearsExperience || 3) * 2500).toLocaleString()}
+              ~{formatNaira((15000 + (technician.yearsExperience || 3) * 2500))}
             </span>
           </div>
         )}

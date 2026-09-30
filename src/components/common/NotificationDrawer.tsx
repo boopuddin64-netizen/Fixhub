@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { NotificationItem } from '../../types';
 import { ApiClient } from '../../api/client';
 import {
@@ -8,8 +8,9 @@ import {
   ShieldCheck,
   Wrench,
   X,
-  Clock
+  Megaphone
 } from 'lucide-react';
+import { formatDateTime, timeAgo } from '../../utils/format';
 
 interface NotificationDrawerProps {
   isOpen: boolean;
@@ -26,6 +27,26 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
   onRefresh,
   onSelectRepair,
 }) => {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  // Parents re-render every few seconds (polling) and pass a fresh onClose: keep it in a ref so focus is not re-grabbed.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Escape closes the drawer, focus moves into it on open and returns to the opener on close
+  useEffect(() => {
+    if (!isOpen) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCloseRef.current();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      previouslyFocused?.focus?.();
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleMarkAllRead = async () => {
@@ -60,6 +81,10 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
         return <ShieldCheck className="w-4 h-4 text-emerald-600" />;
       case 'WARRANTY':
         return <CheckCircle2 className="w-4 h-4 text-blue-600" />;
+      case 'SECURITY':
+        return <ShieldCheck className="w-4 h-4 text-rose-600" />;
+      case 'ANNOUNCEMENT':
+        return <Megaphone className="w-4 h-4 text-violet-600" />;
       default:
         return <Wrench className="w-4 h-4 text-indigo-600" />;
     }
@@ -73,6 +98,9 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
     >
       <div
         id="notification-drawer-content"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Notifications"
         className="bg-white w-full max-w-md h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"
         onClick={(e) => e.stopPropagation()}
       >
@@ -93,7 +121,9 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
               Mark all read
             </button>
             <button
+              ref={closeRef}
               onClick={onClose}
+              aria-label="Close notifications"
               className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -113,6 +143,15 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
             notifications.map((item) => (
               <div
                 key={item.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`${item.read ? '' : 'Unread. '}${item.title}`}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleNotificationClick(item);
+                  }
+                }}
                 onClick={() => handleNotificationClick(item)}
                 className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
                   item.read
@@ -127,9 +166,9 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-1">
                       <p className="text-xs font-bold text-slate-900 truncate">{item.title}</p>
-                      <span className="text-[10px] text-slate-400 shrink-0">
-                        {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                      <time className="text-[10px] text-slate-500 shrink-0" dateTime={item.createdAt} title={formatDateTime(item.createdAt)}>
+                        {timeAgo(item.createdAt)}
+                      </time>
                     </div>
                     <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">{item.message}</p>
                     {item.repairId && (

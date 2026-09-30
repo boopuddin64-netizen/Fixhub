@@ -11,6 +11,7 @@ import { paginate } from '../../utils/pagination';
 import { PartsQuality } from '../../../src/types/index';
 import { isNonEmptyString, sanitizeString, validateNumber, sanitizeRepairRequestForTechnician } from '../../utils/validation';
 import { apiRouter, AuthenticatedRequest, requireAuth, requireRole, sanitizeQuoteForCustomer } from './shared';
+import { formatNaira } from '../../../src/utils/format';
 
 /* -------------------------------------------------------------
  * 5. TECHNICIAN QUOTES (Strict Validation & Inventory-Backed Pricing)
@@ -246,7 +247,7 @@ apiRouter.post('/quotes/submit', requireAuth, requireRole(['technician']), (req:
   NotificationService.send({
     userId: request.customerId,
     title: 'New Quote Received!',
-    message: `${tech.businessName} submitted a quote of ₦${totalAmount.toLocaleString()} (${quote.warrantyDays} days warranty) for your ${request.deviceBrand} ${request.deviceModel}.`,
+    message: `${tech.businessName} submitted a quote of ${formatNaira(totalAmount)} (${quote.warrantyDays} days warranty) for your ${request.deviceBrand} ${request.deviceModel}.`,
     type: 'QUOTE',
     repairId: request.id,
   });
@@ -255,7 +256,7 @@ apiRouter.post('/quotes/submit', requireAuth, requireRole(['technician']), (req:
   NotificationService.send({
     userId: req.user!.id,
     title: 'Quote Submitted Successfully',
-    message: `Your quote of ₦${totalAmount.toLocaleString()} for ${request.deviceBrand} ${request.deviceModel} has been sent to the customer.`,
+    message: `Your quote of ${formatNaira(totalAmount)} for ${request.deviceBrand} ${request.deviceModel} has been sent to the customer.`,
     type: 'QUOTE',
     repairId: request.id,
   });

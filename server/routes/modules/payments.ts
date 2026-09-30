@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { PaymentService } from '../../services/paymentService';
+import { AuditService } from '../../services/auditService';
+import { AdminAuthService, adminReauthRequired } from '../../services/adminAuthService';
 import { paymentRateLimiter, webhookRateLimiter } from '../../middleware/rateLimiters';
 import { isNonEmptyString, sanitizeString } from '../../utils/validation';
 import { apiRouter, AuthenticatedRequest, requireAuth, requireRole } from './shared';
@@ -69,6 +71,15 @@ apiRouter.post('/payments/reconcile', requireAuth, requireRole(['admin']), async
   const result = await PaymentService.reconcilePendingPayments({
     maxAgeHours: typeof maxAgeHours === 'number' && maxAgeHours > 0 ? maxAgeHours : 48,
   });
+  AuditService.log({
+    actorId: req.user!.id,
+    actorRole: 'admin',
+    action: 'ADMIN_PAYMENTS_RECONCILED',
+    resourceType: 'PAYMENT',
+    resourceId: 'batch',
+    details: { checked: result.checkedCount, reconciled: result.reconciledCount, failed: result.failedCount, via: 'legacy-endpoint' },
+    ipAddress: req.ip,
+  });
   return res.json(result);
 });
 
@@ -76,6 +87,12 @@ apiRouter.post('/payments/refund', requireAuth, requireRole(['admin']), async (r
   const { paymentId, amountNaira, reason } = req.body;
   if (!paymentId || !reason) {
     return res.status(400).json({ error: 'Payment ID and Refund Reason are required.' });
+  }
+  if (adminReauthRequired()) {
+    const check = AdminAuthService.confirmPassword(req.user!.id, req.body?.adminPassword);
+    if (!check.ok) {
+      return res.status(check.reason === 'LOCKED' ? 423 : 403).json({ error: 'Admin password confirmation failed.', code: 'ADMIN_REAUTH_FAILED' });
+    }
   }
 
   const result = await PaymentService.recordRefund({
