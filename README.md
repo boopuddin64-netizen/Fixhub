@@ -131,6 +131,19 @@ npm run admin:create -- --email you@example.com --name "Your Name"
 4. Health checks: `GET /health` (also reports database reachability).
 5. Ship the whole checkout including `server/db/schema.sql` (read at boot from the working directory) and `dist/`.
 
+### Staging without paid services (test key + logged OTPs)
+
+To run a **real production-mode deployment** (real Postgres, real Paystack API in TEST mode) before you pay for anything,
+set these explicit opt-ins on the host. They are all off by default and are refused / ignored with a live Paystack key:
+
+| Variable | Effect |
+|---|---|
+| `ALLOW_PAYSTACK_TEST_KEY=true` | `NODE_ENV=production` may boot with a genuine Paystack **test** secret key (`sk_test_...`). Mock/placeholder keys are still rejected; the app talks to Paystack's real (test-mode) API, nothing is simulated. |
+| `SMS_DEV_MODE=true` + `ALLOW_SMS_LOG_OTP=true` | No SMS provider needed: SMS bodies (OTP, password-reset and verification codes) and the e-mail verification code are written to the **server log** (`[STAGING SMS]` / `[DEV EMAIL VERIFY]`). `SMS_DEV_MODE` is refused (boot fails; `sendSms` fails closed) with a live `sk_live_` key, and in production without `ALLOW_SMS_LOG_OTP=true`. |
+
+**At launch remove all of them**, set the live `PAYSTACK_SECRET_KEY` and a real `SMS_PROVIDER_API_KEY`; the production validator then
+enforces the strict rules again. Codes in the log are readable by anyone with access to the host's logs: staging only.
+
 ### Single instance only (important)
 
 Application state is cached in memory per process and written through to PostgreSQL (`entity_store`,

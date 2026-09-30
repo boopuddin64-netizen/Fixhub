@@ -1,7 +1,12 @@
 /**
  * Fixhub Authoritative SMS Delivery Service
  * Supports Sendchamp API integration with strict dev/prod safeguards.
+ *
+ * Staging (no paid SMS yet): SMS_DEV_MODE=true writes the message (incl. the OTP) to the server log instead of sending it.
+ * It is refused with a live Paystack key, and in production it additionally needs ALLOW_SMS_LOG_OTP=true (see
+ * server/config/stagingMode.ts). Outside those explicit opt-ins production behaviour is unchanged.
  */
+import { resolveSmsLogMode } from '../config/stagingMode';
 
 export async function sendSms(phoneNumber: string, message: string): Promise<{ success: boolean; error?: string }> {
   const isProd = process.env.NODE_ENV === 'production';
@@ -13,6 +18,17 @@ export async function sendSms(phoneNumber: string, message: string): Promise<{ s
     process.env.AFRICASTALKING_API_KEY;
 
   const cleanPhone = phoneNumber ? phoneNumber.trim() : '';
+
+  // Explicit staging opt-in: log instead of send. A refused/invalid request fails closed (nothing is sent or logged).
+  const logMode = resolveSmsLogMode(process.env);
+  if (logMode.requested) {
+    if (!logMode.active) {
+      console.error(`[SMS SERVICE] ${logMode.error}`);
+      return { success: false, error: 'SMS service unavailable.' };
+    }
+    console.log(`[STAGING SMS] To: ${cleanPhone} | Message: ${message}`);
+    return { success: true };
+  }
 
   // Development mode fallback — log to server console, do not block local testing
   if (!isProd) {
