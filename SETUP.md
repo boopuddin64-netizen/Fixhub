@@ -87,3 +87,19 @@ JWT_SECRET=fixhub-dev-secret-key-production-change-me
 In production (`NODE_ENV=production`):
 1. **Paystack Secret Key Validation**: The server fails loudly and refuses to boot if `PAYSTACK_SECRET_KEY` is missing, empty, contains `"mock"`, or begins with `"sk_test"`.
 2. **JWT Secret Validation**: The server refuses to boot if `JWT_SECRET` is unset or uses the default development placeholder secret.
+
+## 6. Admin portal & first admin
+
+There is **no default admin account or password** (not even with demo data). Create the first admin explicitly:
+
+```bash
+# app stopped, same DATABASE_URL / FIXHUB_USE_POSTGRES as the app
+npm run admin:create -- --email you@example.com --name "Your Name"     # prompts for the password (hidden)
+```
+
+Options: `--promote` (existing customer/technician -> admin), `--reset-password` (existing admin), `--password-stdin` (automation).
+Password policy: 12+ characters with upper/lower case, a digit and a symbol. On platforms without a shell set
+`ADMIN_BOOTSTRAP_EMAIL` + `ADMIN_BOOTSTRAP_PASSWORD` for a single boot, sign in at `/admin`, change the password, then remove both variables.
+
+Related environment variables: `ADMIN_REQUIRE_REAUTH` (default on; password re-entry for destructive admin actions) and
+`PAYOUT_APPROVAL_REQUIRED` (`true` = payouts wait for admin approval). See the README "Admin portal" section for details.
