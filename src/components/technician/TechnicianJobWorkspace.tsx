@@ -18,6 +18,7 @@ import {
   Check,
   X
 } from 'lucide-react';
+import { formatNaira } from '../../utils/format';
 
 interface TechnicianJobWorkspaceProps {
   job: RepairJob;
@@ -199,7 +200,7 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
             <StatusBadge status={job.status} size="lg" />
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Work Order: <span className="font-mono text-cyan-300 font-bold">{job.id}</span> • Customer Payment: <strong className="text-emerald-400">₦{job.finalAmount.toLocaleString()}</strong>
+            Work Order: <span className="font-mono text-cyan-300 font-bold">{job.id}</span> • Customer Payment: <strong className="text-emerald-400">{formatNaira(job.finalAmount)}</strong>
           </p>
         </div>
 
@@ -400,7 +401,7 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
             <div className="bg-white p-3.5 rounded-xl border border-amber-200 text-xs space-y-1.5">
               <div className="flex items-center justify-between font-bold text-slate-900">
                 <span>{job.additionalDiagnosis.title}</span>
-                <span className="text-amber-900 font-extrabold">+₦{job.additionalDiagnosis.additionalCostNaira.toLocaleString()}</span>
+                <span className="text-amber-900 font-extrabold">+{formatNaira(job.additionalDiagnosis.additionalCostNaira)}</span>
               </div>
               <p className="text-slate-600 italic">"{job.additionalDiagnosis.description}"</p>
             </div>
@@ -559,7 +560,7 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
                     <p className="font-bold text-slate-900">{part.partName}</p>
                     <p className="text-[11px] text-slate-500 font-mono">SN: {part.serialNumber}</p>
                   </div>
-                  <span className="font-bold text-slate-900">₦{part.priceNaira.toLocaleString()}</span>
+                  <span className="font-bold text-slate-900">{formatNaira(part.priceNaira)}</span>
                 </div>
               ))}
             </div>
@@ -684,7 +685,7 @@ export const TechnicianJobWorkspace: React.FC<TechnicianJobWorkspaceProps> = ({
                           className="w-full text-left p-2 rounded-lg border border-slate-200 hover:border-purple-300 hover:bg-purple-50/50 flex items-center justify-between text-xs transition-colors"
                         >
                           <span className="font-bold text-slate-800">{pName}</span>
-                          <span className="text-purple-700 font-bold">₦{pPrice.toLocaleString()}</span>
+                          <span className="text-purple-700 font-bold">{formatNaira(pPrice)}</span>
                         </button>
                       );
                     })}

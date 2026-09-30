@@ -21,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { CONTROLLED_PARTS_QUALITIES } from './QuoteBuilderModal';
+import { formatNaira } from '../../utils/format';
 
 export const PartsCatalogView: React.FC = () => {
   const { user } = useAuth();
@@ -205,7 +206,7 @@ export const PartsCatalogView: React.FC = () => {
         </div>
         <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs">
           <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Total Catalog Value</span>
-          <p className="text-xl font-black text-blue-700 mt-1">₦{totalInventoryValue.toLocaleString()}</p>
+          <p className="text-xl font-black text-blue-700 mt-1">{formatNaira(totalInventoryValue)}</p>
         </div>
         <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs">
           <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Reserved in Quotes</span>
@@ -297,7 +298,7 @@ export const PartsCatalogView: React.FC = () => {
                     </div>
 
                     <div className="text-right shrink-0">
-                      <span className="text-base font-black text-blue-700">₦{unitPrice.toLocaleString()}</span>
+                      <span className="text-base font-black text-blue-700">{formatNaira(unitPrice)}</span>
                       <div className="flex items-center justify-end gap-1 mt-0.5">
                         <span className="text-[10px] font-semibold text-slate-400">v{part.priceVersion || 1}</span>
                         <button
@@ -465,7 +466,7 @@ export const PartsCatalogView: React.FC = () => {
                   <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs flex justify-between items-center">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-900 text-sm">₦{h.priceNaira.toLocaleString()}</span>
+                        <span className="font-bold text-slate-900 text-sm">{formatNaira(h.priceNaira)}</span>
                         <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 text-[10px] font-bold">
                           v{h.version}
                         </span>

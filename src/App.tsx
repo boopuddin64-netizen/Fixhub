@@ -10,6 +10,8 @@ import { RepairRequestWizard } from './components/customer/RepairRequestWizard';
 import { SavedDevicesManager } from './components/customer/SavedDevicesManager';
 import { QuoteComparisonView } from './components/customer/QuoteComparisonView';
 import { ActiveRepairTracker } from './components/customer/ActiveRepairTracker';
+import { isHistoryStatus } from './utils/repairTimeline';
+import { ConnectionBanner } from './components/common/ConnectionBanner';
 import { PaystackCheckoutModal } from './components/customer/PaystackCheckoutModal';
 import { VerifiedReviewModal } from './components/customer/VerifiedReviewModal';
 import { WarrantyPassportView } from './components/customer/WarrantyPassportView';
@@ -63,28 +65,60 @@ function MainAppContent() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [technicians, setTechnicians] = useState<TechnicianProfile[]>([]);
 
+  // Connection state: a failed poll keeps the last good data on screen (it used to wipe the lists to []) and shows a banner.
+  const [loadFailing, setLoadFailing] = useState<boolean>(false);
+  const [isOnline, setIsOnline] = useState<boolean>(typeof navigator === 'undefined' ? true : navigator.onLine !== false);
+  const [retrying, setRetrying] = useState<boolean>(false);
+  const [dataLoaded, setDataLoaded] = useState<boolean>(false);
+
+  useEffect(() => {
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
+  }, []);
+
   const loadData = useCallback(async () => {
     try {
       if (!user) {
-        const techList = await ApiClient.getTechnicians().catch(() => []);
-        setTechnicians(techList);
+        const techList = await ApiClient.getTechnicians().catch(() => null);
+        if (Array.isArray(techList)) setTechnicians(techList);
         return;
       }
 
-      const [jobList, reqList, notifList, techList] = await Promise.all([
-        ApiClient.getJobs().catch(() => []),
-        ApiClient.getRepairRequests().catch(() => []),
-        ApiClient.getNotifications().catch(() => []),
-        ApiClient.getTechnicians().catch(() => []),
+      const results = await Promise.allSettled([
+        ApiClient.getJobs(),
+        ApiClient.getRepairRequests(),
+        ApiClient.getNotifications(),
+        ApiClient.getTechnicians(),
       ]);
-      setJobs(Array.isArray(jobList) ? jobList : []);
-      setRequests(Array.isArray(reqList) ? reqList : []);
-      setNotifications(Array.isArray(notifList) ? notifList : []);
-      setTechnicians(Array.isArray(techList) ? techList : []);
+      const [jobList, reqList, notifList, techList] = results;
+      if (jobList.status === 'fulfilled' && Array.isArray(jobList.value)) setJobs(jobList.value);
+      if (reqList.status === 'fulfilled' && Array.isArray(reqList.value)) setRequests(reqList.value);
+      if (notifList.status === 'fulfilled' && Array.isArray(notifList.value)) setNotifications(notifList.value);
+      if (techList.status === 'fulfilled' && Array.isArray(techList.value)) setTechnicians(techList.value);
+      // The banner reflects the core data (jobs + requests); a failing optional feed alone should not alarm the user
+      const coreFailed = jobList.status === 'rejected' || reqList.status === 'rejected';
+      setLoadFailing(coreFailed);
+      if (!coreFailed) setDataLoaded(true);
     } catch (err) {
       console.error('Failed to load application state:', err);
+      setLoadFailing(true);
     }
   }, [user]);
+
+  const retryLoad = useCallback(async () => {
+    setRetrying(true);
+    try {
+      await loadData();
+    } finally {
+      setRetrying(false);
+    }
+  }, [loadData]);
 
   useEffect(() => {
     loadData();
@@ -97,6 +131,8 @@ function MainAppContent() {
       setJobs([]);
       setRequests([]);
       setNotifications([]);
+      setDataLoaded(false);
+      setLoadFailing(false);
     }
   }, [user]);
 
@@ -228,7 +264,7 @@ function MainAppContent() {
   const safeTechnicians = Array.isArray(technicians) ? technicians : [];
   const safeNotifications = Array.isArray(notifications) ? notifications : [];
 
-  const activeJobs = safeJobs.filter((j) => j.status !== 'COMPLETED' && j.status !== 'CANCELLED');
+  const activeJobs = safeJobs.filter((j) => !isHistoryStatus(j.status));
   const activeJob = safeJobs.find((j) => j.id === selectedJobId) || activeJobs[0] || safeJobs[0];
   const activeRequest = safeRequests.find((r) => r.id === selectedRequestId) || safeRequests[0];
   const activeJobTech = activeJob ? safeTechnicians.find((t) => t.userId === activeJob.technicianId) : null;
@@ -246,6 +282,9 @@ function MainAppContent() {
 
         {/* Email Verification Banner */}
         <EmailVerificationBanner />
+
+        {/* Offline / load-failure banner with retry */}
+        <ConnectionBanner isOnline={isOnline} loadFailing={loadFailing && !!user} retrying={retrying} onRetry={retryLoad} />
 
         {/* Main Container */}
         <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 pb-28 sm:pb-32 pb-[calc(7rem+env(safe-area-inset-bottom))]">
@@ -291,6 +330,7 @@ function MainAppContent() {
               />
             ) : currentTab === 'repairs' ? (
               <CustomerRepairsView
+                loading={!dataLoaded && !loadFailing}
                 jobs={jobs}
                 requests={requests}
                 technicians={technicians}

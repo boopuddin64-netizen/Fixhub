@@ -18,6 +18,7 @@ import {
   Shield,
   ThumbsDown,
 } from 'lucide-react';
+import { formatNaira } from '../../utils/format';
 
 interface QuoteComparisonViewProps {
   request: RepairRequest;
@@ -180,7 +181,7 @@ export const QuoteComparisonView: React.FC<QuoteComparisonViewProps> = ({
             </div>
             <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-sm font-bold text-slate-900">
               <span>Total Binding Price:</span>
-              <span className="text-blue-700 text-base">₦{selectedQuote.totalAmount.toLocaleString()}</span>
+              <span className="text-blue-700 text-base">{formatNaira(selectedQuote.totalAmount)}</span>
             </div>
           </div>
         </div>
@@ -350,11 +351,11 @@ export const QuoteComparisonView: React.FC<QuoteComparisonViewProps> = ({
                                 <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
                                   <span>{qualityFormatted}</span>
                                   {quantity > 1 && <span>• Qty: {quantity}</span>}
-                                  <span>• ₦{unitPrice.toLocaleString()} ea</span>
+                                  <span>• {formatNaira(unitPrice)} ea</span>
                                 </div>
                               </div>
                               <span className="font-bold text-slate-800 shrink-0">
-                                ₦{subtotal.toLocaleString()}
+                                {formatNaira(subtotal)}
                               </span>
                             </div>
                           );
@@ -363,29 +364,29 @@ export const QuoteComparisonView: React.FC<QuoteComparisonViewProps> = ({
                     ) : (
                       <div className="flex justify-between">
                         <span>Parts Cost:</span>
-                        <span className="font-semibold text-slate-800">₦{quote.partsCost.toLocaleString()}</span>
+                        <span className="font-semibold text-slate-800">{formatNaira(quote.partsCost)}</span>
                       </div>
                     )}
 
                     <div className="flex justify-between pt-0.5">
                       <span>Labor & Bench:</span>
-                      <span className="font-semibold text-slate-800">₦{quote.laborCost.toLocaleString()}</span>
+                      <span className="font-semibold text-slate-800">{formatNaira(quote.laborCost)}</span>
                     </div>
                     {quote.diagnosticCost > 0 && (
                       <div className="flex justify-between">
                         <span>Diagnostic Fee:</span>
-                        <span className="font-semibold text-slate-800">₦{quote.diagnosticCost.toLocaleString()}</span>
+                        <span className="font-semibold text-slate-800">{formatNaira(quote.diagnosticCost)}</span>
                       </div>
                     )}
                     {quote.otherCost && quote.otherCost > 0 ? (
                       <div className="flex justify-between">
                         <span>Other / Misc:</span>
-                        <span className="font-semibold text-slate-800">₦{quote.otherCost.toLocaleString()}</span>
+                        <span className="font-semibold text-slate-800">{formatNaira(quote.otherCost)}</span>
                       </div>
                     ) : null}
                     <div className="pt-1.5 border-t border-slate-200 flex justify-between items-center text-sm font-bold text-slate-900">
                       <span>Total Guaranteed Price:</span>
-                      <span className="text-blue-700 text-base">₦{quote.totalAmount.toLocaleString()}</span>
+                      <span className="text-blue-700 text-base">{formatNaira(quote.totalAmount)}</span>
                     </div>
                   </div>
 
@@ -462,7 +463,7 @@ export const QuoteComparisonView: React.FC<QuoteComparisonViewProps> = ({
             <div className="p-3.5 bg-slate-50 rounded-xl space-y-2 text-xs border border-slate-200">
               <div className="flex justify-between font-bold text-slate-900 text-sm">
                 <span>Binding Price:</span>
-                <span className="text-blue-700">₦{quoteToConfirm.totalAmount.toLocaleString()}</span>
+                <span className="text-blue-700">{formatNaira(quoteToConfirm.totalAmount)}</span>
               </div>
               <div className="flex justify-between text-slate-600">
                 <span>Part Quality:</span>

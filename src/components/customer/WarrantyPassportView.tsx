@@ -12,6 +12,7 @@ import {
   AlertCircle,
   ExternalLink
 } from 'lucide-react';
+import { formatNaira } from '../../utils/format';
 
 export const WarrantyPassportView: React.FC = () => {
   const [warranties, setWarranties] = useState<WarrantyRecord[]>([]);
@@ -143,7 +144,7 @@ export const WarrantyPassportView: React.FC = () => {
                   </div>
                   <div>
                     <h4 className="font-bold text-sm text-slate-900">{job.deviceBrand} {job.deviceModel}</h4>
-                    <p className="text-xs text-slate-500">Fixed: {(job.issues || []).join(', ')} • ₦{(job.finalAmount || 0).toLocaleString()}</p>
+                    <p className="text-xs text-slate-500">Fixed: {(job.issues || []).join(', ')} • {formatNaira((job.finalAmount || 0))}</p>
                   </div>
                 </div>
                 <span className="text-xs font-bold text-slate-600">

@@ -33,6 +33,7 @@ import {
   ShieldAlert,
   RefreshCw,
 } from 'lucide-react';
+import { formatNaira } from '../../utils/format';
 
 interface TechnicianProfileViewProps {}
 
@@ -1142,7 +1143,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
                         Eligible for Payout
                       </span>
                       <span className="text-xl font-extrabold text-emerald-950">
-                        ₦{(financesData?.summary?.availablePayoutNaira ?? 0).toLocaleString()}
+                        {formatNaira((financesData?.summary?.availablePayoutNaira ?? 0))}
                       </span>
                     </div>
 
@@ -1151,7 +1152,7 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
                         Earnings Held
                       </span>
                       <span className="text-xl font-extrabold text-amber-950">
-                        ₦{(financesData?.summary?.heldEarningsNaira ?? 0).toLocaleString()}
+                        {formatNaira((financesData?.summary?.heldEarningsNaira ?? 0))}
                       </span>
                     </div>
                   </div>
@@ -1170,10 +1171,10 @@ export const TechnicianProfileView: React.FC<TechnicianProfileViewProps> = () =>
                             <div>
                               <p className="font-bold text-slate-800">Job #{e.repairId}</p>
                               <p className="text-slate-500 text-[10px]">
-                                Gross: ₦{e.grossAmountNaira.toLocaleString()} • Status: {e.status === 'HELD' ? 'Held' : e.status === 'ELIGIBLE_FOR_PAYOUT' ? 'Eligible' : e.status}
+                                Gross: {formatNaira(e.grossAmountNaira)} • Status: {e.status === 'HELD' ? 'Held' : e.status === 'ELIGIBLE_FOR_PAYOUT' ? 'Eligible' : e.status}
                               </p>
                             </div>
-                            <span className="font-extrabold text-emerald-600">+₦{e.netEarningsNaira.toLocaleString()}</span>
+                            <span className="font-extrabold text-emerald-600">+{formatNaira(e.netEarningsNaira)}</span>
                           </div>
                         ))}
                       </div>

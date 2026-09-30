@@ -1,3 +1,4 @@
+import { isValidNgPhone, phoneFieldError, PHONE_FORMAT_HINT } from '../../utils/format';
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { ApiClient } from '../../api/client';
@@ -208,6 +209,11 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
       setErrorMsg('You must agree to the Terms of Service and Privacy Policy to register.');
       return;
     }
+    const custPhoneProblem = phoneFieldError(custPhone);
+    if (custPhoneProblem) {
+      setErrorMsg(custPhoneProblem);
+      return;
+    }
     if (custPassword.length < 8 || !/\d/.test(custPassword)) {
       setErrorMsg('Password must be at least 8 characters long and contain at least one number.');
       return;
@@ -248,6 +254,11 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
     setErrorMsg(null);
     if (!termsAccepted) {
       setErrorMsg('You must agree to the Terms of Service and Privacy Policy to register.');
+      return;
+    }
+    const techPhoneProblem = phoneFieldError(techPhone);
+    if (techPhoneProblem) {
+      setErrorMsg(techPhoneProblem);
       return;
     }
     if (techPassword.length < 8 || !/\d/.test(techPassword)) {
@@ -474,7 +485,7 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
 
         {/* Error Notification with Smart Registration Suggestion */}
         {errorMsg && (
-          <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs space-y-2">
+          <div role="alert" aria-live="assertive" className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs space-y-2">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               <span>{errorMsg}</span>
@@ -774,12 +785,19 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
                 <label className="font-bold text-slate-300 block mb-1">Phone Number (WhatsApp/SMS)</label>
                 <input
                   type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
                   value={custPhone}
                   onChange={(e) => setCustPhone(e.target.value)}
+                  aria-invalid={custPhone.trim() !== '' && !isValidNgPhone(custPhone)}
+                  aria-describedby="cust-phone-hint"
                   required
-                  placeholder="+234 803 123 4567"
+                  placeholder="0803 123 4567"
                   className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                <p id="cust-phone-hint" className={`mt-1 text-[11px] ${custPhone.trim() !== '' && !isValidNgPhone(custPhone) ? 'text-rose-400' : 'text-slate-400'}`}>
+                  {custPhone.trim() !== '' && !isValidNgPhone(custPhone) ? 'Not a valid Nigerian mobile number yet. ' : ''}{PHONE_FORMAT_HINT}
+                </p>
               </div>
             </div>
 
@@ -1034,12 +1052,19 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
                 <label className="font-bold text-slate-300 block mb-1">Store Phone Number</label>
                 <input
                   type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
                   value={techPhone}
                   onChange={(e) => setTechPhone(e.target.value)}
+                  aria-invalid={techPhone.trim() !== '' && !isValidNgPhone(techPhone)}
+                  aria-describedby="tech-phone-hint"
                   required
-                  placeholder="+234 802 987 6543"
+                  placeholder="0802 987 6543"
                   className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
+                <p id="tech-phone-hint" className={`mt-1 text-[11px] ${techPhone.trim() !== '' && !isValidNgPhone(techPhone) ? 'text-rose-400' : 'text-slate-400'}`}>
+                  {techPhone.trim() !== '' && !isValidNgPhone(techPhone) ? 'Not a valid Nigerian mobile number yet. ' : ''}{PHONE_FORMAT_HINT}
+                </p>
               </div>
 
               <div>

@@ -3,6 +3,7 @@ import { Smartphone, Wrench, ChevronRight, MessageSquare, ShieldCheck, MapPin, S
 import { RepairJob, RepairRequest } from '../../types';
 import { RepairStatus } from './RepairStatus';
 import { RepairTimeline } from './RepairTimeline';
+import { formatNaira } from '../../utils/format';
 
 interface RepairCardProps {
   type: 'job' | 'request';
@@ -94,7 +95,7 @@ export const RepairCard: React.FC<RepairCardProps> = ({
 
       {/* Progress Timeline */}
       <div className="pt-2 border-t border-slate-100">
-        <RepairTimeline status={status} />
+        <RepairTimeline status={status} statusHistory={isJob ? (job as any).statusHistory : undefined} />
       </div>
 
       {/* Footer & Actions */}
@@ -102,7 +103,7 @@ export const RepairCard: React.FC<RepairCardProps> = ({
         <div>
           {isJob ? (
             <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200/60">
-              ₦{job.totalAmountNaira.toLocaleString()}
+              {formatNaira(job.totalAmountNaira)}
             </span>
           ) : isRequest ? (
             <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200/60">
