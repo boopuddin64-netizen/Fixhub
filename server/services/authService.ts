@@ -762,7 +762,10 @@ export class AuthService {
       const clientId =
         process.env.GOOGLE_CLIENT_ID ||
         process.env.VITE_GOOGLE_CLIENT_ID ||
-        '56408372166-fdcat8gp2ildbktlu1q5u3ab9pad5t0b.apps.googleusercontent.com';
+        '';
+      if (!clientId) {
+        return { success: false, error: 'Google sign-in is not configured.' };
+      }
       try {
         const cleanToken = token.trim();
         const isJwt = cleanToken.split('.').length === 3;

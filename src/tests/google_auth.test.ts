@@ -17,7 +17,10 @@ export async function runGoogleAuthTests(): Promise<{ passed: number; failed: nu
   }
 
   const originalFetch = globalThis.fetch;
-  const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '56408372166-fdcat8gp2ildbktlu1q5u3ab9pad5t0b.apps.googleusercontent.com';
+  if (!process.env.GOOGLE_CLIENT_ID && !process.env.VITE_GOOGLE_CLIENT_ID) {
+    process.env.GOOGLE_CLIENT_ID = 'test-client-id.apps.googleusercontent.com';
+  }
+  const clientId = (process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID) as string;
   const createdUserIds: string[] = [];
 
   // Setup mock fetch for Google endpoints
