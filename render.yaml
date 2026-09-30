@@ -12,7 +12,6 @@ services:
     buildCommand: bun install --frozen-lockfile && bun run build
     startCommand: node dist/server.cjs
     healthCheckPath: /health
-    maxShutdownDelaySeconds: 30     # SIGTERM -> server flushes state + releases the writer lock in well under 30s
     envVars:
       # --- runtime / build
       - key: NODE_ENV
