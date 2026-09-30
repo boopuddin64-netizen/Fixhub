@@ -22,6 +22,11 @@ export class PostgresDatabase {
   public pool!: Pool;
   private memDb: IMemoryDb | null = null;
   private isMemory = false;
+  /**
+   * Resolves once the schema has been applied (and seed data written). The server awaits this before
+   * it starts listening so a fresh database boots deterministically. Rejects if the schema cannot be applied.
+   */
+  public ready: Promise<void> = Promise.resolve();
 
   private constructor() {
     this.initPool();
@@ -62,7 +67,9 @@ export class PostgresDatabase {
         }
         this.isMemory = false;
         console.log('Connected to PostgreSQL database instance.');
-        this.executeSchema();
+        this.ready = this.executeSchema();
+        // Avoid an unhandled rejection if nobody awaits `ready` (server.ts awaits it and exits on failure).
+        this.ready.catch((e) => console.error('Database schema initialisation failed:', e?.message || e));
       } catch (err) {
         console.warn('Failed connecting to live PostgreSQL, falling back to embedded PostgreSQL engine:', err);
         this.initMemoryDb();
@@ -85,10 +92,15 @@ export class PostgresDatabase {
 
     const { Pool: MemPool } = this.memDb.adapters.createPg();
     this.pool = new MemPool();
-    this.executeSchema();
+    // In-memory engine: executeSchema runs synchronously up to completion for this branch.
+    this.ready = this.executeSchema();
+    this.ready.catch((e) => console.error('In-memory schema initialisation failed:', e?.message || e));
   }
 
-  public executeSchema() {
+  /** Advisory-lock key so that several instances booting at once do not run the DDL concurrently. */
+  private static readonly SCHEMA_LOCK_KEY = 727463001;
+
+  public async executeSchema(): Promise<void> {
     const schemaPath = path.resolve(safeDirname, 'schema.sql');
     let schemaSql = '';
     if (fs.existsSync(schemaPath)) {
@@ -101,43 +113,58 @@ export class PostgresDatabase {
       }
     }
 
-    if (schemaSql) {
-      // Strip comments and execute DDL statements in DB
-      const strippedSql = schemaSql
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .split('\n')
-        .map((line) => line.replace(/--.*$/, '').trim())
-        .join('\n');
+    if (!schemaSql) {
+      if (process.env.NODE_ENV === 'production' && !this.memDb) {
+        throw new Error('schema.sql not found: refusing to start production without a database schema.');
+      }
+      return;
+    }
 
+    // Strip comments
+    const strippedSql = schemaSql
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n')
+      .map((line) => line.replace(/--.*$/, '').trim())
+      .join('\n');
+
+    if (this.memDb) {
+      // pg-mem: statement-by-statement (its parser is stricter), synchronous.
       const cleanSql = strippedSql
         .split(';')
         .map((s) => s.trim())
         .filter((s) => s.length > 0);
-
       for (const statement of cleanSql) {
         try {
-          if (this.memDb) {
-            this.memDb.public.none(statement);
-          } else if (this.pool) {
-            this.pool.query(statement).catch((e) => {
-              if (!e.message.includes('already exists')) {
-                console.warn('Schema execution warning:', e.message);
-              }
-            });
-          }
+          this.memDb.public.none(statement);
         } catch (e: any) {
           // Ignore table already exists or minor extension warnings
-          if (!e.message.includes('already exists')) {
-            console.warn('Schema execution warning:', e.message);
+          if (!String(e?.message).includes('already exists')) {
+            console.warn('Schema execution warning:', e?.message);
           }
         }
       }
-
-      this.seedInitialData();
+      await this.seedInitialData();
+      return;
     }
+
+    // Real PostgreSQL: run the whole file as ONE query on ONE connection, awaited, under an advisory
+    // lock. (Previously each statement was fired un-awaited on a separate pooled connection, which
+    // raced: "relation does not exist" errors, deadlocks and missing tables on a fresh database.)
+    const client = await this.pool.connect();
+    try {
+      await client.query('SELECT pg_advisory_lock($1)', [PostgresDatabase.SCHEMA_LOCK_KEY]);
+      try {
+        await client.query(strippedSql);
+      } finally {
+        await client.query('SELECT pg_advisory_unlock($1)', [PostgresDatabase.SCHEMA_LOCK_KEY]).catch(() => {});
+      }
+    } finally {
+      client.release();
+    }
+    await this.seedInitialData();
   }
 
-  public seedInitialData() {
+  public async seedInitialData(): Promise<void> {
     try {
       const seed = getInitialSeedData();
       for (const user of seed.users) {
@@ -150,7 +177,7 @@ export class PostgresDatabase {
             );
           } catch (_) {}
         } else {
-          this.pool.query(
+          await this.pool.query(
             `INSERT INTO users (id, email, phone, name, role, avatar_url, password_hash, created_at)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              ON CONFLICT (id) DO NOTHING`,
@@ -164,7 +191,7 @@ export class PostgresDatabase {
               user.passwordHash,
               user.createdAt,
             ]
-          ).catch(() => {});
+          );
         }
       }
     } catch (err) {

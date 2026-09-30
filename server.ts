@@ -7,6 +7,12 @@ import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './server/routes/api';
 import { validateProductionSecrets } from './server/config/envValidator';
 import { db } from './server/db';
+import { buildCorsOptions } from './server/config/cors';
+import { pgDb } from './server/db/pgClient';
+import { getJwtSecret } from './server/services/authService';
+import { globalErrorHandler, installProcessSafeguards } from './server/middleware/errorHandler';
+
+installProcessSafeguards();
 
 // Production Environment & Secret Validation - Fail fast before booting server
 export function validateProductionStartup(
@@ -47,13 +53,16 @@ export function validateProductionStartup(
 }
 
 async function startServer() {
-  // Production Secret & Database Validation - Warn on missing secrets, don't crash container
-  try {
-    validateProductionStartup(process.env, false);
-  } catch (err: any) {
-    console.warn('⚠️ Production environment configuration warning:', err.message || err);
-    console.warn('⚠️ Server will continue booting to ensure Cloud Run container health checks pass on port 3000.');
+  // Production Secret & Database Validation - fail fast: a misconfigured production deploy must not
+  // boot (default JWT secret / mock Paystack key / missing DB would be exploitable). validateProductionStartup
+  // logs the reason and exits with a non-zero status.
+  validateProductionStartup(process.env, true);
+  if (process.env.NODE_ENV === 'production') {
+    getJwtSecret(); // throws (and the startServer catch below exits) if unusable
   }
+
+  // Wait for the database schema to be applied before accepting traffic (rejects -> process exits 1).
+  await pgDb.ready;
 
   const app = express();
   const PORT = 3000;
@@ -72,54 +81,8 @@ async function startServer() {
     })
   );
 
-  // Robust CORS Configuration
-  const customAllowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
-    : [];
-
-  app.use(
-    cors({
-      origin: (origin, callback) => {
-        // Allow requests with no origin (mobile WebKit, same-origin, curl, server-to-server)
-        if (!origin) {
-          return callback(null, true);
-        }
-
-        // In non-production, allow all origins
-        if (process.env.NODE_ENV !== 'production') {
-          return callback(null, true);
-        }
-
-        // Allow explicit custom origins
-        if (customAllowedOrigins.includes(origin)) {
-          return callback(null, true);
-        }
-
-        // Allow all *.ai.studio, *.run.app, and localhost origins
-        try {
-          const parsed = new URL(origin);
-          const hostname = parsed.hostname.toLowerCase();
-          if (
-            hostname === 'fixhub.ai.studio' ||
-            hostname.endsWith('.ai.studio') ||
-            hostname.endsWith('.run.app') ||
-            hostname === 'localhost' ||
-            hostname === '127.0.0.1'
-          ) {
-            return callback(null, true);
-          }
-        } catch {
-          // If URL parsing fails, continue to check
-        }
-
-        // Safe fallback: allow rather than hard-failing mobile clients
-        return callback(null, true);
-      },
-      credentials: true,
-      methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-    })
-  );
+  // CORS: strict allow-list from ALLOWED_ORIGINS / APP_URL (+ localhost in non-production). See server/config/cors.ts
+  app.use(cors(buildCorsOptions(process.env)));
 
   app.use(express.json({
     limit: '10mb',
@@ -186,11 +149,8 @@ async function startServer() {
     });
   }
 
-  // Global Error Handler
-  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error('Unhandled Server Error:', err);
-    res.status(500).json({ error: 'Internal Server Error', message: err.message || 'Unknown error' });
-  });
+  // Global Error Handler (client errors keep their status, everything else is a generic 500)
+  app.use(globalErrorHandler);
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Fix Hub Server running on http://0.0.0.0:${PORT}`);
@@ -199,4 +159,6 @@ async function startServer() {
 
 startServer().catch((err) => {
   console.error('Failed to start Fix Hub server:', err);
+  // Never keep a half-started server alive (e.g. bad production config or schema failure).
+  process.exit(1);
 });

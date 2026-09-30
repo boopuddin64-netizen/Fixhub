@@ -58,7 +58,13 @@ export class PaystackClient {
     return process.env.PAYSTACK_SECRET_KEY || 'sk_test_mock_fixhub_development_key';
   }
 
-  private static getPaymentMode(): 'sandbox' | 'live' {
+  /**
+   * Payment mode. In production this is ALWAYS 'live' (an explicit PAYMENT_MODE=sandbox is ignored and
+   * rejected at boot by the env validator), so a non-OK Paystack answer can never be turned into a
+   * simulated success. Outside production it defaults to 'sandbox' unless PAYMENT_MODE=live.
+   */
+  public static getPaymentMode(): 'sandbox' | 'live' {
+    if (process.env.NODE_ENV === 'production') return 'live';
     const mode = (process.env.PAYMENT_MODE || 'sandbox').toLowerCase();
     return mode === 'live' ? 'live' : 'sandbox';
   }
@@ -267,6 +273,11 @@ export class PaystackClient {
     }
 
     const secretKey = this.getSecretKey();
+
+    // Never accept webhooks signed with the public default/mock key in production.
+    if (process.env.NODE_ENV === 'production' && this.isSimulatedTestKey(secretKey)) {
+      return false;
+    }
 
     try {
       const computedHash = crypto

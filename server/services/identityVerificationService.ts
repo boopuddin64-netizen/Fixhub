@@ -243,8 +243,19 @@ export class IdentityVerificationService {
     // 2. Query Live Registry or Authenticated Verification Directory
     const identitypassKey = process.env.IDENTITYPASS_API_KEY || process.env.PREMBLY_API_KEY;
     let resolvedRegistryName = '';
+    const isProduction = process.env.NODE_ENV === 'production';
+    const hasRealProviderKey = Boolean(identitypassKey && !identitypassKey.includes('mock') && !identitypassKey.startsWith('test_'));
 
-    if (identitypassKey && !identitypassKey.includes('mock') && !identitypassKey.startsWith('test_')) {
+    // Fail closed in production: without a real provider key (or if the provider is unreachable) an ID
+    // must NEVER be auto-approved and the local demo registry / "matches your own name" fallback is not used.
+    if (isProduction && !hasRealProviderKey) {
+      return {
+        success: false,
+        error: 'Government ID verification is temporarily unavailable. Please try again later.',
+      };
+    }
+
+    if (hasRealProviderKey) {
       try {
         let endpoint = '';
         let body: any = {};
@@ -282,10 +293,23 @@ export class IdentityVerificationService {
         }
       } catch (err: any) {
         console.warn('[IdentityVerificationService] Live national ID query error:', err.message);
+        if (isProduction) {
+          return {
+            success: false,
+            error: 'Government ID verification is temporarily unavailable. Please try again later.',
+          };
+        }
       }
     }
 
-    // Check authentic verified directory for test/sandbox environments
+    if (!resolvedRegistryName && isProduction) {
+      return {
+        success: false,
+        error: `Government ID (${this.maskIdNumber(cleanId)}) could not be verified against the national identity database.`,
+      };
+    }
+
+    // Check authentic verified directory for test/sandbox environments (never reached in production)
     if (!resolvedRegistryName) {
       const normalizedKey = cleanId.replace(/[^A-Z0-9]/g, '');
       const record = VERIFIED_IDENTITY_REGISTRY[normalizedKey] || VERIFIED_IDENTITY_REGISTRY[cleanId];
@@ -362,7 +386,13 @@ export class IdentityVerificationService {
     let resolvedCompanyName = '';
     let classification = cleanCac.startsWith('RC') ? 'Company (RC)' : 'Business Name (BN)';
 
-    if (identitypassKey && !identitypassKey.includes('mock') && !identitypassKey.startsWith('test_')) {
+    const cacHasRealKey = Boolean(identitypassKey && !identitypassKey.includes('mock') && !identitypassKey.startsWith('test_'));
+    if (process.env.NODE_ENV === 'production' && !cacHasRealKey) {
+      // Fail closed: the built-in demo CAC registry must not approve businesses in production.
+      return { success: false, error: 'CAC verification is temporarily unavailable. Please try again later.' };
+    }
+
+    if (cacHasRealKey) {
       try {
         const response = await fetch('https://api.myidentitypass.com/api/v1/biometrics/merchant/data/verification/cac', {
           method: 'POST',

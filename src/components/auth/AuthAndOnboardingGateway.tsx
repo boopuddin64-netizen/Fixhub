@@ -479,7 +479,7 @@ export const AuthAndOnboardingGateway: React.FC<AuthAndOnboardingGatewayProps> =
               <AlertTriangle className="w-4 h-4 shrink-0" />
               <span>{errorMsg}</span>
             </div>
-            {authMode === 'login' && (errorMsg.includes('not found') || errorMsg.includes('Invalid credentials')) && (
+            {authMode === 'login' && (errorMsg.includes('not found') || errorMsg.includes('Invalid credentials') || errorMsg.includes('Invalid email/phone or password')) && (
               <button
                 type="button"
                 onClick={() => {

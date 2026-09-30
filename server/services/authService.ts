@@ -5,7 +5,29 @@ import { db } from '../db';
 import { User, UserRole, CustomerProfile, TechnicianProfile } from '../../src/types/index';
 import { sendSms } from './smsService';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fixhub-dev-secret-key-production-change-me';
+/** bcrypt work factor for newly created hashes (existing cost-8 hashes keep verifying and are not rewritten). */
+const BCRYPT_COST = 12;
+
+// Pre-computed hash used to keep response time similar for unknown users (limits account enumeration by timing).
+const DUMMY_HASH = bcrypt.hashSync('fixhub-dummy-password', BCRYPT_COST);
+
+const DEFAULT_DEV_JWT_SECRET = 'fixhub-dev-secret-key-production-change-me';
+
+/**
+ * Returns the JWT signing secret. In production a missing / default / weak secret is a hard error
+ * (the public default value would let anyone mint valid admin tokens). Outside production the dev
+ * default is still used for convenience.
+ */
+export function getJwtSecret(env: NodeJS.ProcessEnv = process.env): string {
+  const secret = env.JWT_SECRET?.trim();
+  if (env.NODE_ENV === 'production') {
+    if (!secret || secret === DEFAULT_DEV_JWT_SECRET || secret.toLowerCase().includes('dev-secret') || secret.length < 32) {
+      throw new Error('FATAL: A secure JWT_SECRET (minimum 32 characters, not the default) is required in production.');
+    }
+    return secret;
+  }
+  return secret || DEFAULT_DEV_JWT_SECRET;
+}
 
 export interface AuthSession {
   token: string;
@@ -26,7 +48,7 @@ export class AuthService {
         isBorrowedDevice,
         sessionVersion,
       },
-      JWT_SECRET,
+      getJwtSecret(),
       { algorithm: 'HS256', expiresIn }
     );
   }
@@ -35,7 +57,7 @@ export class AuthService {
     if (!token || typeof token !== 'string') return null;
     if (this.isTokenRevoked(token)) return null;
     try {
-      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as any;
+      const decoded = jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] }) as any;
       if (!decoded || !decoded.id) return null;
       const user = db.users.find((u) => u.id === decoded.id);
       if (!user) return null;
@@ -104,7 +126,7 @@ export class AuthService {
       return { success: false, error: 'User not found.' };
     }
 
-    user.passwordHash = bcrypt.hashSync(newPassword, 8);
+    user.passwordHash = bcrypt.hashSync(newPassword, BCRYPT_COST);
     (user as any).sessionVersion = ((user as any).sessionVersion || 1) + 1;
     this.resetTokens.delete(code);
     db.save();
@@ -139,7 +161,7 @@ export class AuthService {
       };
     }
 
-    user.passwordHash = bcrypt.hashSync(newPassword, 8);
+    user.passwordHash = bcrypt.hashSync(newPassword, BCRYPT_COST);
     (user as any).sessionVersion = ((user as any).sessionVersion || 1) + 1;
     db.save();
 
@@ -401,15 +423,16 @@ export class AuthService {
       (u) => u.email.toLowerCase() === cleanIdentifier || u.phone.replace(/\s+/g, '') === cleanIdentifier.replace(/\s+/g, '')
     );
 
-    if (!user) {
-      return { error: 'Invalid credentials. User not found.' };
+    // A password is ALWAYS required on this path. Social (Google) logins go through
+    // AuthService.socialLogin / POST /auth/social-login, which verify a provider token instead.
+    if (typeof password !== 'string' || password.length === 0) {
+      return { error: 'Password is required.' };
     }
-
-    if (password) {
-      const valid = bcrypt.compareSync(password, user.passwordHash);
-      if (!valid) {
-        return { error: 'Invalid password. Please check and retry.' };
-      }
+    // Same message for "unknown user" and "wrong password" (no account enumeration); a dummy bcrypt
+    // comparison keeps timing similar when the user does not exist.
+    const passwordOk = bcrypt.compareSync(password, user?.passwordHash || DUMMY_HASH);
+    if (!user || !user.passwordHash || !passwordOk) {
+      return { error: 'Invalid email/phone or password.' };
     }
 
     if (user.role === 'technician') {
@@ -462,7 +485,7 @@ export class AuthService {
     }
 
     const userId = `usr_cust_${Date.now()}`;
-    const passwordHash = bcrypt.hashSync(data.password, 8);
+    const passwordHash = bcrypt.hashSync(data.password, BCRYPT_COST);
     const now = new Date().toISOString();
 
     const newUser = {
@@ -560,7 +583,7 @@ export class AuthService {
     }
 
     const userId = `usr_tech_${Date.now()}`;
-    const passwordHash = bcrypt.hashSync(data.password, 8);
+    const passwordHash = bcrypt.hashSync(data.password, BCRYPT_COST);
     const now = new Date().toISOString();
 
     const newUser = {

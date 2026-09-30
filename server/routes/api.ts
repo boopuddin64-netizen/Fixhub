@@ -13,7 +13,10 @@ import { PaystackClient } from '../services/paystackClient';
 import { IdentityVerificationService } from '../services/identityVerificationService';
 import { getBankCodeByName, getBankNameByCode } from '../data/nigerianBanks';
 import { calculateDistanceKm } from '../services/technicianMatchingService';
-import { authRateLimiter, paymentRateLimiter, webhookRateLimiter } from '../middleware/rateLimiters';
+import { BankOtpService, BANK_OTP_TTL_MS } from '../services/bankOtpService';
+import { sendSms } from '../services/smsService';
+import { makeAsyncSafe } from '../utils/asyncRouter';
+import { authRateLimiter, codeAttemptRateLimiter, codeSendRateLimiter, paymentRateLimiter, webhookRateLimiter } from '../middleware/rateLimiters';
 import {
   UserRole,
   RepairLifecycleStatus,
@@ -110,7 +113,7 @@ export function geocodeCustomerLocation(customerLocation: any) {
   }
 }
 
-export const apiRouter = Router();
+export const apiRouter = makeAsyncSafe(Router());
 
 // 0. HEALTH CHECK ENDPOINT (Includes DB connectivity check)
 apiRouter.get('/health', async (req: Request, res: Response) => {
@@ -139,13 +142,22 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
+/** The only route that may authenticate with ?token= (media elements cannot set headers). */
+const QUERY_TOKEN_ROUTE = /^\/repairs\/attachments\/[A-Za-z0-9._-]+$/;
+
 export function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   let token: string | undefined;
 
   if (authHeader && authHeader.startsWith('Bearer ')) {
     token = authHeader.substring(7);
-  } else if (req.query && typeof req.query.token === 'string') {
+  } else if (
+    req.method === 'GET' &&
+    typeof req.query?.token === 'string' &&
+    QUERY_TOKEN_ROUTE.test(req.path)
+  ) {
+    // Query-string tokens leak via logs/Referer/history, so they are accepted ONLY for streaming
+    // attachment media (<audio>/<img> elements cannot send an Authorization header).
     token = req.query.token;
   }
 
@@ -234,7 +246,11 @@ apiRouter.post('/auth/login', authRateLimiter, (req: Request, res: Response) => 
     return res.status(400).json({ error: 'Email or phone number is required.' });
   }
 
-  const result = AuthService.login(sanitizeString(emailOrPhone, 120), password ? String(password) : undefined, !!isBorrowedDevice);
+  if (typeof password !== 'string' || password.length === 0) {
+    return res.status(400).json({ error: 'Password is required.' });
+  }
+
+  const result = AuthService.login(sanitizeString(emailOrPhone, 120), password, !!isBorrowedDevice);
   if ('error' in result) {
     return res.status(400).json({ error: result.error });
   }
@@ -313,7 +329,7 @@ apiRouter.post('/auth/logout', requireAuth, (req: AuthenticatedRequest, res: Res
   return res.json({ success: true, message: 'Successfully logged out and revoked authentication session.' });
 });
 
-apiRouter.post('/auth/forgot-password', authRateLimiter, async (req: Request, res: Response) => {
+apiRouter.post('/auth/forgot-password', authRateLimiter, codeSendRateLimiter, async (req: Request, res: Response) => {
   const { emailOrPhone } = req.body;
   if (!isNonEmptyString(emailOrPhone)) {
     return res.status(400).json({ error: 'Email or phone number is required.' });
@@ -323,7 +339,7 @@ apiRouter.post('/auth/forgot-password', authRateLimiter, async (req: Request, re
   return res.json({ success: result.success, message: result.message });
 });
 
-apiRouter.post('/auth/reset-password', authRateLimiter, (req: Request, res: Response) => {
+apiRouter.post('/auth/reset-password', authRateLimiter, codeAttemptRateLimiter, (req: Request, res: Response) => {
   const { code, newPassword } = req.body;
   if (!isNonEmptyString(code) || !isNonEmptyString(newPassword)) {
     return res.status(400).json({ error: 'Reset code and new password are required.' });
@@ -356,12 +372,12 @@ apiRouter.post('/auth/change-password', requireAuth, authRateLimiter, (req: Auth
   return res.json({ success: true, message: result.message || 'Password changed successfully.' });
 });
 
-apiRouter.post('/auth/verify-email/request', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/auth/verify-email/request', codeSendRateLimiter, requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   const result = await AuthService.requestEmailVerification(req.user!.id);
   return res.json({ success: result.success, message: result.message });
 });
 
-apiRouter.post('/auth/verify-email/confirm', (req: Request, res: Response) => {
+apiRouter.post('/auth/verify-email/confirm', codeAttemptRateLimiter, (req: Request, res: Response) => {
   const { code } = req.body;
   if (!isNonEmptyString(code)) {
     return res.status(400).json({ error: 'Verification code is required.' });
@@ -375,15 +391,18 @@ apiRouter.post('/auth/verify-email/confirm', (req: Request, res: Response) => {
   return res.json({ success: true, message: 'Email address verified successfully.' });
 });
 
-apiRouter.post('/auth/verify-phone/request', authRateLimiter, async (req: Request, res: Response) => {
+apiRouter.post('/auth/verify-phone/request', authRateLimiter, codeSendRateLimiter, async (req: Request, res: Response) => {
   const { phoneOrUserId, userId } = req.body;
   if (!isNonEmptyString(phoneOrUserId)) {
     return res.status(400).json({ error: 'Phone number or user ID is required.' });
   }
 
-  let authenticatedUserId: string | undefined = typeof userId === 'string' ? userId.trim() : undefined;
+  // The body `userId` is client-supplied and must NOT be trusted as an identity (it let anyone trigger
+  // SMS to / confirm codes for another user). Only a verified bearer token identifies the caller.
+  void userId;
+  let authenticatedUserId: string | undefined;
   const authHeader = req.headers.authorization;
-  if (!authenticatedUserId && authHeader && authHeader.startsWith('Bearer ')) {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
     const session = AuthService.verifyToken(token);
     if (session?.id) {
@@ -395,15 +414,18 @@ apiRouter.post('/auth/verify-phone/request', authRateLimiter, async (req: Reques
   return res.json(result);
 });
 
-apiRouter.post('/auth/verify-phone/confirm', authRateLimiter, (req: Request, res: Response) => {
+apiRouter.post('/auth/verify-phone/confirm', authRateLimiter, codeAttemptRateLimiter, (req: Request, res: Response) => {
   const { phoneOrUserId, code, userId } = req.body;
   if (!isNonEmptyString(phoneOrUserId) || !isNonEmptyString(code)) {
     return res.status(400).json({ error: 'Phone/User ID and verification code are required.' });
   }
 
-  let authenticatedUserId: string | undefined = typeof userId === 'string' ? userId.trim() : undefined;
+  // The body `userId` is client-supplied and must NOT be trusted as an identity (it let anyone trigger
+  // SMS to / confirm codes for another user). Only a verified bearer token identifies the caller.
+  void userId;
+  let authenticatedUserId: string | undefined;
   const authHeader = req.headers.authorization;
-  if (!authenticatedUserId && authHeader && authHeader.startsWith('Bearer ')) {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
     const session = AuthService.verifyToken(token);
     if (session?.id) {
@@ -788,38 +810,68 @@ apiRouter.delete('/customer/devices/:id', requireAuth, requireRole(['customer'])
  * 3. TECHNICIAN DISCOVERY & MATCHING (Public / Lead Matching)
  * ----------------------------------------------------------- */
 export function sanitizeTechnicianForPublic(tech: TechnicianProfile): Omit<TechnicianProfile, 'bankDetails' | 'trustScore'> {
-  const { bankDetails, trustScore, ...publicTech } = tech;
+  const { bankDetails, trustScore, bankChangeVerification: _bcv, ...publicTech } = tech as any;
   return publicTech;
+}
+
+/** Owner-facing view: full profile (incl. own bank details) but never any OTP/verification secrets. */
+export function sanitizeTechnicianForOwner(tech: TechnicianProfile): TechnicianProfile {
+  const { bankChangeVerification: _bcv, ...rest } = tech as any;
+  return rest as TechnicianProfile;
 }
 
 apiRouter.get('/technicians', (_req: Request, res: Response) => {
   return res.json(db.technicianProfiles.map(sanitizeTechnicianForPublic));
 });
 
+// NOTE: literal /technicians/* routes must be registered BEFORE /technicians/:id, otherwise
+// Express matches the parameterised route first (e.g. /technicians/earnings).
+apiRouter.get('/technicians/earnings', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
+  const technicianId = req.user!.id;
+  const earnings = db.technicianEarnings.filter((e) => e.technicianId === technicianId);
+  const payouts = db.payouts.filter((p) => p.technicianId === technicianId);
+
+  const heldNaira = earnings
+    .filter((e) => e.status === 'HELD')
+    .reduce((sum, e) => sum + e.netEarningsNaira, 0);
+
+  const eligibleGrossNaira = earnings
+    .filter((e) => e.status === 'ELIGIBLE_FOR_PAYOUT')
+    .reduce((sum, e) => sum + e.netEarningsNaira, 0);
+
+  const lockedInPayoutsNaira = payouts
+    .filter((p) => p.status === 'PENDING' || p.status === 'PROCESSING')
+    .reduce((sum, p) => sum + p.amountNaira, 0);
+
+  const availablePayoutNaira = Math.max(0, eligibleGrossNaira - lockedInPayoutsNaira);
+
+  const completedPayoutsNaira = payouts
+    .filter((p) => p.status === 'COMPLETED')
+    .reduce((sum, p) => sum + p.amountNaira, 0);
+
+  return res.json({
+    earnings,
+    payouts,
+    summary: {
+      heldEarningsNaira: heldNaira,
+      availablePayoutNaira,
+      lockedInProcessingNaira: lockedInPayoutsNaira,
+      totalCompletedPayoutsNaira: completedPayoutsNaira,
+      commissionRatePercent: PaymentService.COMMISSION_RATE * 100,
+    },
+  });
+});
+
 apiRouter.get('/technicians/:id', (req: Request, res: Response) => {
-  const techId = req.params.id;
-  let tech = db.technicianProfiles.find((t) => t.userId === techId || (t as any).id === techId);
+  // Read-only: this public endpoint must never create users or profiles.
+  const techId = String(req.params.id);
+  const tech = db.technicianProfiles.find((t) => t.userId === techId || (t as any).id === techId);
   if (!tech) {
-    let user = db.users.find((u) => u.id === techId || (u.email && u.email.toLowerCase() === techId.toLowerCase()));
-    if (!user) {
-      user = {
-        id: techId,
-        email: techId.includes('@') ? techId : `tech_${techId}@fixhub.local`,
-        name: techId.includes('@') ? techId.split('@')[0] : 'Fixhub Technician',
-        phone: '',
-        role: 'technician',
-        createdAt: new Date().toISOString(),
-        emailVerified: true,
-        phoneVerified: false,
-        passwordHash: '',
-      };
-      db.users.push(user);
-    }
-    tech = AuthService.ensureTechnicianProfile(user);
+    return res.status(404).json({ error: 'Technician not found.' });
   }
-  const parts = db.technicianParts.filter((p) => p.technicianId === tech!.userId);
-  const reviews = db.reviews.filter((r) => r.technicianId === tech!.userId);
-  return res.json({ technician: sanitizeTechnicianForPublic(tech!), parts, reviews });
+  const parts = db.technicianParts.filter((p) => p.technicianId === tech.userId);
+  const reviews = db.reviews.filter((r) => r.technicianId === tech.userId);
+  return res.json({ technician: sanitizeTechnicianForPublic(tech), parts, reviews });
 });
 
 apiRouter.post('/technicians/match', (req: Request, res: Response) => {
@@ -1080,7 +1132,7 @@ apiRouter.post('/repairs/attachments/upload', requireAuth, requireRole(['custome
       if (lowerMime.includes('png')) attachExt = 'png';
       else if (lowerMime.includes('webp')) attachExt = 'webp';
       else if (lowerMime.includes('gif')) attachExt = 'gif';
-      else if (lowerMime.includes('svg')) attachExt = 'svg';
+      else if (lowerMime.includes('svg')) attachExt = 'svg'; // rejected below
       else attachExt = 'jpg';
     } else if (type === 'AUDIO') {
       if (lowerMime.includes('mp4') || lowerMime.includes('m4a') || lowerMime.includes('aac')) attachExt = 'm4a';
@@ -1090,21 +1142,16 @@ apiRouter.post('/repairs/attachments/upload', requireAuth, requireRole(['custome
       else attachExt = 'webm';
     }
 
-    // Inspect SVG attachments for embedded scripts / malicious tags (Stored XSS mitigation)
-    if (lowerMime.includes('svg') || attachExt === 'svg') {
-      const textContent = buffer.toString('utf8');
-      if (
-        /<script/i.test(textContent) ||
-        /javascript:/i.test(textContent) ||
-        /onload=/i.test(textContent) ||
-        /onerror=/i.test(textContent) ||
-        /<foreignObject/i.test(textContent) ||
-        /<iframe/i.test(textContent)
-      ) {
-        return res.status(400).json({
-          error: 'Security violation: Malicious scripts or executable markup detected in SVG attachment.',
-        });
-      }
+    // SVG (and any markup) is an active-content format: it can carry script, event handlers, <animate>,
+    // entity-encoded javascript: URLs, etc. A regex blacklist cannot make it safe, so SVG uploads are
+    // rejected outright — by declared MIME/extension AND by sniffing the bytes (client MIME is untrusted).
+    const head = buffer.subarray(0, 2048).toString('utf8').replace(/^\uFEFF/, '').trimStart().toLowerCase();
+    const looksLikeMarkup =
+      head.startsWith('<') && (/<svg[\s>]/.test(head) || /<!doctype/.test(head) || /<html[\s>]/.test(head) || /<script[\s>]/.test(head) || /^<\?xml/.test(head));
+    if (lowerMime.includes('svg') || lowerMime.includes('xml') || lowerMime.includes('html') || attachExt === 'svg' || looksLikeMarkup) {
+      return res.status(415).json({
+        error: 'SVG and markup files are not allowed. Please upload a JPEG, PNG, WebP or GIF image.',
+      });
     }
 
     const filename = `${attachId}.${attachExt}`;
@@ -1170,14 +1217,27 @@ apiRouter.get('/repairs/attachments/:filename', requireAuth, (req: Authenticated
     return res.status(403).json({ error: 'Forbidden: You do not have permission to access this attachment.' });
   }
 
+  // Uploads are untrusted user content: never let the browser sniff or render them as a document.
   const ext = path.extname(safeFilename).toLowerCase();
-  if (ext === '.webm') res.type('audio/webm');
-  else if (ext === '.ogg') res.type('audio/ogg');
-  else if (ext === '.m4a' || ext === '.mp4') res.type('audio/mp4');
-  else if (ext === '.wav') res.type('audio/wav');
-  else if (ext === '.jpg' || ext === '.jpeg') res.type('image/jpeg');
-  else if (ext === '.png') res.type('image/png');
-  else if (ext === '.webp') res.type('image/webp');
+  const SAFE_TYPES: Record<string, string> = {
+    '.webm': 'audio/webm',
+    '.ogg': 'audio/ogg',
+    '.m4a': 'audio/mp4',
+    '.mp4': 'audio/mp4',
+    '.wav': 'audio/wav',
+    '.3gp': 'audio/3gpp',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.webp': 'image/webp',
+    '.gif': 'image/gif',
+  };
+  // Anything else (incl. legacy .svg files uploaded before this fix) is served as an opaque download.
+  res.setHeader('Content-Type', SAFE_TYPES[ext] || 'application/octet-stream');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Disposition', `attachment; filename="${safeFilename.replace(/[^A-Za-z0-9._-]/g, '_')}"`);
+  res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'; style-src 'none'; script-src 'none'");
+  res.setHeader('Cache-Control', 'private, max-age=0');
 
   res.sendFile(filePath);
 });
@@ -2016,42 +2076,6 @@ apiRouter.post('/payments/refund', requireAuth, requireRole(['admin']), async (r
   return res.json(result);
 });
 
-apiRouter.get('/technicians/earnings', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
-  const technicianId = req.user!.id;
-  const earnings = db.technicianEarnings.filter((e) => e.technicianId === technicianId);
-  const payouts = db.payouts.filter((p) => p.technicianId === technicianId);
-
-  const heldNaira = earnings
-    .filter((e) => e.status === 'HELD')
-    .reduce((sum, e) => sum + e.netEarningsNaira, 0);
-
-  const eligibleGrossNaira = earnings
-    .filter((e) => e.status === 'ELIGIBLE_FOR_PAYOUT')
-    .reduce((sum, e) => sum + e.netEarningsNaira, 0);
-
-  const lockedInPayoutsNaira = payouts
-    .filter((p) => p.status === 'PENDING' || p.status === 'PROCESSING')
-    .reduce((sum, p) => sum + p.amountNaira, 0);
-
-  const availablePayoutNaira = Math.max(0, eligibleGrossNaira - lockedInPayoutsNaira);
-
-  const completedPayoutsNaira = payouts
-    .filter((p) => p.status === 'COMPLETED')
-    .reduce((sum, p) => sum + p.amountNaira, 0);
-
-  return res.json({
-    earnings,
-    payouts,
-    summary: {
-      heldEarningsNaira: heldNaira,
-      availablePayoutNaira,
-      lockedInProcessingNaira: lockedInPayoutsNaira,
-      totalCompletedPayoutsNaira: completedPayoutsNaira,
-      commissionRatePercent: PaymentService.COMMISSION_RATE * 100,
-    },
-  });
-});
-
 apiRouter.post('/technicians/payouts/request', requireAuth, requireRole(['technician']), async (req: AuthenticatedRequest, res: Response) => {
   const { amountNaira, destinationAccount } = req.body;
   if (!amountNaira || Number(amountNaira) <= 0) {
@@ -2746,11 +2770,10 @@ apiRouter.put('/technicians/profile', requireAuth, requireRole(['technician']), 
     }
 
     const hadExistingBank = !!(tech.bankDetails && tech.bankDetails.accountNumber);
-    const bankVerification = (tech as any).bankChangeVerification;
 
     // If bank details were already set up, require valid security verification
     if (hadExistingBank) {
-      const isVerified = bankVerification && bankVerification.verified && (Date.now() - (bankVerification.verifiedAt || 0) < 30 * 60 * 1000);
+      const isVerified = BankOtpService.isUnlocked(req.user!.id);
       if (!isVerified) {
         return res.status(403).json({
           error: 'Security verification required: Modifying an existing payout bank account requires identity verification for fraud prevention.',
@@ -2785,60 +2808,65 @@ apiRouter.put('/technicians/profile', requireAuth, requireRole(['technician']), 
     };
     tech.verificationStatus.payoutVerified = true;
     // Clear the one-time verification
-    delete (tech as any).bankChangeVerification;
+    BankOtpService.clear(req.user!.id);
+    delete (tech as any).bankChangeVerification; // legacy field, never populated any more
   }
 
   db.save();
-  return res.json({ success: true, profile: tech, user });
+  return res.json({ success: true, profile: sanitizeTechnicianForOwner(tech), user });
 });
 
 // Request security verification code to modify existing payout bank account
-apiRouter.post('/technicians/bank/request-change-otp', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/technicians/bank/request-change-otp', authRateLimiter, requireAuth, requireRole(['technician']), async (req: AuthenticatedRequest, res: Response) => {
   const user = db.users.find((u) => u.id === req.user!.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  const tech = AuthService.ensureTechnicianProfile(user);
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const issued = BankOtpService.issue(user.id);
+  if (!issued.ok) {
+    return res.status(429).json({ error: `Please wait ${issued.retryAfterSeconds}s before requesting another code.` });
+  }
 
-  (tech as any).bankChangeVerification = {
-    code,
-    expiresAt: Date.now() + 10 * 60 * 1000, // 10 mins
-    verified: false,
-  };
-
-  db.save();
   const destination = user.email || user.phone || 'registered technician account';
+  const isProd = process.env.NODE_ENV === 'production';
+
+  if (isProd) {
+    // Deliver out-of-band; the code is NEVER returned in the HTTP response in production.
+    const sms = user.phone
+      ? await sendSms(user.phone, `Your Fixhub security code is ${issued.code}. It expires in ${BANK_OTP_TTL_MS / 60000} minutes. Never share it.`)
+      : { success: false, error: 'No phone number on file.' };
+    if (!sms.success) {
+      BankOtpService.clear(user.id);
+      return res.status(502).json({ error: 'We could not deliver your verification code. Please try again shortly.' });
+    }
+    return res.json({ success: true, message: 'A 6-digit security verification code has been sent to your registered phone number.' });
+  }
+
+  // Non-production only: surface the code so local development/testing works without an SMS provider.
   return res.json({
     success: true,
     message: `A 6-digit security verification code has been generated for ${destination}.`,
-    devCode: code,
+    devCode: issued.code,
   });
 });
 
 // Verify security code to unlock payout bank modification
-apiRouter.post('/technicians/bank/verify-change-otp', requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/technicians/bank/verify-change-otp', authRateLimiter, requireAuth, requireRole(['technician']), (req: AuthenticatedRequest, res: Response) => {
   const user = db.users.find((u) => u.id === req.user!.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  const tech = AuthService.ensureTechnicianProfile(user);
-  const { otp } = req.body;
-  const currentVerification = (tech as any).bankChangeVerification;
-
-  if (!currentVerification || !currentVerification.code) {
-    return res.status(400).json({ error: 'No active bank verification request found. Please request a new code.' });
+  const result = BankOtpService.verify(user.id, req.body?.otp);
+  if (!result.ok) {
+    switch (result.reason) {
+      case 'NO_REQUEST':
+        return res.status(400).json({ error: 'No active bank verification request found. Please request a new code.' });
+      case 'EXPIRED':
+        return res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
+      case 'LOCKED':
+        return res.status(429).json({ error: 'Too many incorrect attempts. Please request a new verification code.' });
+      default:
+        return res.status(400).json({ error: `Incorrect 6-digit verification code. ${result.attemptsLeft} attempt(s) left.` });
+    }
   }
-
-  if (Date.now() > currentVerification.expiresAt) {
-    return res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
-  }
-
-  if (currentVerification.code !== String(otp || '').trim()) {
-    return res.status(400).json({ error: 'Incorrect 6-digit verification code. Please check and try again.' });
-  }
-
-  currentVerification.verified = true;
-  currentVerification.verifiedAt = Date.now();
-  db.save();
 
   return res.json({
     success: true,
@@ -2896,7 +2924,7 @@ apiRouter.post('/technicians/verify/government-id', requireAuth, requireRole(['t
       message: result.message,
       verifiedName: result.verifiedName,
       idNumberMasked: result.idNumberMasked,
-      profile: tech,
+      profile: sanitizeTechnicianForOwner(tech),
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message || 'Error processing government ID verification.' });
@@ -2949,7 +2977,7 @@ apiRouter.post('/technicians/verify/cac', requireAuth, requireRole(['technician'
       companyName: result.companyName,
       rcNumber: result.rcNumber,
       classification: result.classification,
-      profile: tech,
+      profile: sanitizeTechnicianForOwner(tech),
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message || 'Error processing CAC verification.' });

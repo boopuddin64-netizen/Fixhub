@@ -9,3 +9,4 @@ data/*.json
 *.local
 .env*
 !.env.example
+data/attachments/
